@@ -251,6 +251,8 @@ namespace NetworkLib::Contents
 		// SleepTime이 모자르면 다른 스레드에 일감 넘김
 		DWORD					m_PrevSleepTime = INFINITE;
 
+		NetworkLib::Core::Monitoring::ContentsThreadMonitoringTargets m_monitoringTargets;
+
 	public:
 		inline static std::vector<CContentsThread *> s_arrContentsThreads;
 	};

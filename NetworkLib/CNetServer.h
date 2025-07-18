@@ -209,7 +209,7 @@ namespace NetworkLib::Core::Net::Server
 		LONG m_isStop = FALSE;
 
 		// 모니터링 항목
-		NetworkLib::Core::Monitoring::ServerMonitoringTargets m_serverMonitoringTargets;
+		NetworkLib::Core::Monitoring::ServerMonitoringTargets m_monitoringTargets;
 	};
 
 	extern CNetServer *g_NetServer;
