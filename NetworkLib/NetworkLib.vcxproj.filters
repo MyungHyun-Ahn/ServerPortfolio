@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Core">
+      <UniqueIdentifier>{022989d2-0b71-49e0-b0a4-e5537ed5103b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Net">
+      <UniqueIdentifier>{2134cfc9-00ff-4374-b544-c12dbb3cdbc1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DataStructures">
+      <UniqueIdentifier>{bb2ee1f7-66f1-452a-b3e5-99bdec8efd2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Task">
+      <UniqueIdentifier>{1b653d80-92cc-4ebd-9815-156fd9efdf79}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Define">
+      <UniqueIdentifier>{a2e8758a-8e14-41e9-a373-7ef829274de0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Contents">
+      <UniqueIdentifier>{d6d080ba-809e-401a-bfb9-563c0f646637}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Lan">
+      <UniqueIdentifier>{9a4ba671-eb74-441c-9c7b-0fbaf47bb0a6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Utils">
+      <UniqueIdentifier>{aaa14cec-8052-45d8-892b-848bfe46284b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Monitoring">
+      <UniqueIdentifier>{64c85d08-2ef4-440a-9112-055924319479}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CNetServer.h">
+      <Filter>Core\Net</Filter>
+    </ClInclude>
+    <ClInclude Include="CRecvBuffer.h">
+      <Filter>DataStructures</Filter>
+    </ClInclude>
+    <ClInclude Include="CRingBuffer.h">
+      <Filter>DataStructures</Filter>
+    </ClInclude>
+    <ClInclude Include="CSerializableBuffer.h">
+      <Filter>DataStructures</Filter>
+    </ClInclude>
+    <ClInclude Include="CSerializableBufferView.h">
+      <Filter>DataStructures</Filter>
+    </ClInclude>
+    <ClInclude Include="COverlappedAllocator.h">
+      <Filter>DataStructures</Filter>
+    </ClInclude>
+    <ClInclude Include="BaseTask.h">
+      <Filter>Task</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="NetLibPch.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="NetLibDefine.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="CBaseContents.h">
+      <Filter>Contents</Filter>
+    </ClInclude>
+    <ClInclude Include="SystemTask.h">
+      <Filter>Task</Filter>
+    </ClInclude>
+    <ClInclude Include="NetSetting.h">
+      <Filter>Core\Net</Filter>
+    </ClInclude>
+    <ClInclude Include="CContentsThread.h">
+      <Filter>Contents</Filter>
+    </ClInclude>
+    <ClInclude Include="CLanClient.h">
+      <Filter>Core\Lan</Filter>
+    </ClInclude>
+    <ClInclude Include="LanSetting.h">
+      <Filter>Core\Lan</Filter>
+    </ClInclude>
+    <ClInclude Include="CoreUtils.h">
+      <Filter>Core\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="PrivateHeader\CAccessor.h">
+      <Filter>Core\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="PrivateHeader\MonitoringTarget.h">
+      <Filter>Core\Monitoring</Filter>
+    </ClInclude>
+    <ClInclude Include="PrivateHeader\CSystemMonitor.h">
+      <Filter>Core\Monitoring</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="CNetServer.cpp">
+      <Filter>Core\Net</Filter>
+    </ClCompile>
+    <ClCompile Include="NetLibPch.cpp">
+      <Filter>Define</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>Define</Filter>
+    </ClCompile>
+    <ClCompile Include="CBaseContents.cpp">
+      <Filter>Contents</Filter>
+    </ClCompile>
+    <ClCompile Include="SystemTask.cpp">
+      <Filter>Task</Filter>
+    </ClCompile>
+    <ClCompile Include="NetSetting.cpp">
+      <Filter>Core\Net</Filter>
+    </ClCompile>
+    <ClCompile Include="CLanClient.cpp">
+      <Filter>Core\Lan</Filter>
+    </ClCompile>
+    <ClCompile Include="LanSetting.cpp">
+      <Filter>Core\Lan</Filter>
+    </ClCompile>
+    <ClCompile Include="PrivateHeader\CSystemMonitor.cpp">
+      <Filter>Core\Monitoring</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
