@@ -87,9 +87,6 @@
     <ClInclude Include="PrivateHeader\MonitoringTarget.h">
       <Filter>Core\Monitoring</Filter>
     </ClInclude>
-    <ClInclude Include="PrivateHeader\CSystemMonitor.h">
-      <Filter>Core\Monitoring</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CNetServer.cpp">
@@ -115,9 +112,6 @@
     </ClCompile>
     <ClCompile Include="LanSetting.cpp">
       <Filter>Core\Lan</Filter>
-    </ClCompile>
-    <ClCompile Include="PrivateHeader\CSystemMonitor.cpp">
-      <Filter>Core\Monitoring</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

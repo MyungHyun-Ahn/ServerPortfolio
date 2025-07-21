@@ -186,7 +186,6 @@
     <ClInclude Include="NetSetting.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PrivateHeader\CAccessor.h" />
-    <ClInclude Include="PrivateHeader\CSystemMonitor.h" />
     <ClInclude Include="PrivateHeader\MonitoringTarget.h" />
     <ClInclude Include="SystemTask.h" />
   </ItemGroup>
@@ -203,7 +202,6 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="PrivateHeader\CSystemMonitor.cpp" />
     <ClCompile Include="SystemTask.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -2,6 +2,7 @@
 
 namespace NetworkLib::Core::Utils
 {
+	using namespace NetworkLib::Contents;
 	using namespace NetworkLib::Core::Monitoring;
 	using namespace NetworkLib::Core::Net::Server;
 
@@ -14,7 +15,7 @@ namespace NetworkLib::Core::Utils
 
 		inline static ContentsThreadMonitoringTargets &GetContentsThreadMonitoringTargets()
 		{
-			return g_NetServer->
+			return CContentsThread::s_monitoringTargets;
 		}
 	};
 }

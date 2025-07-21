@@ -134,8 +134,8 @@ namespace NetworkLib::Core::Net::Server
 		NetworkLib::Contents::CBaseContents * m_pCurrentContent = nullptr;
 
 		inline static MHLib::memory::CTLSMemoryPoolManager<CNetSession, 16, 4> s_sSessionPool = MHLib::memory::CTLSMemoryPoolManager<CNetSession, 16, 4>();
-		inline static LONG RELEASE_FLAG = 0x80000000;
-		inline static LONG ENQUEUE_FLAG = 0x80000000;
+		inline static constexpr LONG RELEASE_FLAG = 0x80000000;
+		inline static constexpr LONG ENQUEUE_FLAG = 0x80000000;
 
 		inline static DataStructures::COverlappedAllocator<> s_OverlappedPool;
 	};

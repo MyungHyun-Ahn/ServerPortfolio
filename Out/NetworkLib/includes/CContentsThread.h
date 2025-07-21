@@ -5,6 +5,11 @@ namespace NetworkLib::Core::Net::Server
 	class CNetServer;
 }
 
+namespace NetworkLib::Core::Utils
+{
+	class CAccessor;
+}
+
 namespace NetworkLib::Contents
 {
 
@@ -12,6 +17,8 @@ namespace NetworkLib::Contents
 	{
 	public:
 		friend class NetworkLib::Core::Net::Server::CNetServer;
+		friend class NetworkLib::Core::Utils::CAccessor;
+
 		CContentsThread() { InitializeSRWLock(&m_lockTimerEventQ); }
 		~CContentsThread() { CloseHandle(m_ThreadHandle); }
 
@@ -251,7 +258,7 @@ namespace NetworkLib::Contents
 		// SleepTime이 모자르면 다른 스레드에 일감 넘김
 		DWORD					m_PrevSleepTime = INFINITE;
 
-	public:
+		inline static NetworkLib::Core::Monitoring::ContentsThreadMonitoringTargets s_monitoringTargets;
 		inline static std::vector<CContentsThread *> s_arrContentsThreads;
 	};
 }
