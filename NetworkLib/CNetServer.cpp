@@ -6,6 +6,7 @@
 #include "CNetServer.h"
 #include "CBaseContents.h"
 #include "PrivateHeader/CAccessor.h"
+#include "PrivateHeader/CCoreLibInit.h"
 
 namespace NetworkLib::Core::Net::Server
 {
@@ -54,7 +55,7 @@ namespace NetworkLib::Core::Net::Server
 			}
 
 			view->IncreaseRef();
-			// InterlockedIncrement(&g_monitor.m_lRecvTPS);
+			InterlockedIncrement(&g_NetServer->m_monitoringTargets.recvTPS);
 			{
 				// PROFILE_BEGIN(0, "RECV_MSG ENQUEUE");
 				m_RecvMsgQueue.Enqueue(view);
@@ -187,8 +188,8 @@ namespace NetworkLib::Core::Net::Server
 		m_iSendCount = min(sendUseSize, Utils::WSASEND_MAX_BUFFER_COUNT);
 		// WSASEND_MAX_BUFFER_COUNT 만큼 1초에 몇번 보내는지 카운트
 		// 이 수치가 높다면 더 늘릴 것
-		// if (m_iSendCount == WSASEND_MAX_BUFFER_COUNT)
-		//	InterlockedIncrement(&g_monitor.m_lMaxSendCount);
+		if (m_iSendCount == Utils::WSASEND_MAX_BUFFER_COUNT)
+			InterlockedIncrement(&g_NetServer->m_monitoringTargets.maxSendCount);
 
 		int count;
 		for (count = 0; count < m_iSendCount; count++)
@@ -204,19 +205,6 @@ namespace NetworkLib::Core::Net::Server
 				}
 			}
 
-			if (!sBuffer->GetIsEnqueueHeader())
-			{
-				sBuffer->m_isEnqueueHeader = true;
-				Utils::Net::Header *header = (Utils::Net::Header *)sBuffer->GetBufferPtr();
-				header->code = PACKET_CODE; // 코드
-				header->len = sBuffer->GetDataSize();
-				header->randKey = 0;
-				header->checkSum = CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
-
-				// CheckSum 부터 암호화하기 위해
-				CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
-			}
-
 			wsaBuf[count].buf = sBuffer->GetBufferPtr();
 			wsaBuf[count].len = sBuffer->GetFullSize();
 
@@ -226,7 +214,7 @@ namespace NetworkLib::Core::Net::Server
 		InterlockedAnd(&m_iSendFlag, TRUE);
 
 		ZeroMemory((m_pMyOverlappedStartAddr + 2), sizeof(OVERLAPPED));
-		// InterlockedIncrement(&g_monitor.m_iSendCallCount);
+		InterlockedIncrement(&g_NetServer->m_monitoringTargets.sendCallTPS);
 		{
 			// PROFILE_BEGIN(0, "WSASend");
 			retVal = WSASend(m_sSessionSocket, wsaBuf, m_iSendCount, nullptr, 0, (LPOVERLAPPED)(m_pMyOverlappedStartAddr + 2), NULL);
@@ -248,7 +236,7 @@ namespace NetworkLib::Core::Net::Server
 			}
 			else
 			{
-				// InterlockedIncrement(&g_monitor.m_iSendPendingCount);
+				InterlockedIncrement(&g_NetServer->m_monitoringTargets.sendPendingCount);
 				if (m_iCacelIoCalled)
 				{
 					CancelIoEx((HANDLE)m_sSessionSocket, nullptr);
@@ -490,7 +478,7 @@ namespace NetworkLib::Core::Net::Server
 		while (true)
 		{
 			// 세션 전부 끊고
-			if (m_iSessionCount == 0)
+			if (m_monitoringTargets.sessionCount == 0)
 			{
 				m_bIsWorkerRun = FALSE;
 				PostQueuedCompletionStatus(m_hIOCPHandle, 0, 0, 0);
@@ -520,6 +508,19 @@ namespace NetworkLib::Core::Net::Server
 				ReleaseSession(pSession);
 			}
 			return;
+		}
+
+		if (!sBuffer->GetIsEnqueueHeader())
+		{
+			sBuffer->m_isEnqueueHeader = true;
+			Utils::Net::Header *header = (Utils::Net::Header *)sBuffer->GetBufferPtr();
+			header->code = PACKET_CODE; // 코드
+			header->len = sBuffer->GetDataSize();
+			header->randKey = 0;
+			header->checkSum = CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
+
+			// CheckSum 부터 암호화하기 위해
+			CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
 		}
 
 		if (pSession->SendPacket(sBuffer))
@@ -556,6 +557,19 @@ namespace NetworkLib::Core::Net::Server
 				ReleaseSession(pSession, TRUE);
 			}
 			return;
+		}
+
+		if (!sBuffer->GetIsEnqueueHeader())
+		{
+			sBuffer->m_isEnqueueHeader = true;
+			Utils::Net::Header *header = (Utils::Net::Header *)sBuffer->GetBufferPtr();
+			header->code = PACKET_CODE; // 코드
+			header->len = sBuffer->GetDataSize();
+			header->randKey = 0;
+			header->checkSum = CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
+
+			// CheckSum 부터 암호화하기 위해
+			CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
 		}
 
 		if (!pSession->SendPacket(sBuffer))
@@ -640,7 +654,7 @@ namespace NetworkLib::Core::Net::Server
 		OnClientLeave(freeSessionId);
 
 		CNetSession::Free(pSession);
-		InterlockedDecrement(&m_iSessionCount);
+		InterlockedDecrement(&m_monitoringTargets.sessionCount);
 		m_stackDisconnectIndex.Push(index);
 
 		return TRUE;
@@ -658,7 +672,7 @@ namespace NetworkLib::Core::Net::Server
 			pSession->m_pCurrentContent->LeaveJobEnqueue(freeSessionId);
 
 		CNetSession::Free(pSession);
-		InterlockedDecrement(&m_iSessionCount);
+		InterlockedDecrement(&m_monitoringTargets.sessionCount);
 		m_stackDisconnectIndex.Push(index);
 
 		return TRUE;
@@ -711,7 +725,7 @@ namespace NetworkLib::Core::Net::Server
 
 	BOOL CNetServer::AcceptExCompleted(CNetSession *pSession) noexcept
 	{
-		// InterlockedIncrement(&g_monitor.m_lAcceptTPS);
+		InterlockedIncrement(&m_monitoringTargets.acceptTPS);
 
 		int retVal;
 		int errVal;
@@ -756,8 +770,7 @@ namespace NetworkLib::Core::Net::Server
 
 		pSession->Init(combineId);
 
-		InterlockedIncrement(&m_iSessionCount);
-		// InterlockedIncrement64(&g_monitor.m_lAcceptTotal);
+		InterlockedIncrement(&m_monitoringTargets.sessionCount);
 		m_arrPSessions[index] = pSession;
 
 		// 서버 중단 상태면 연결 끊기

@@ -144,6 +144,7 @@ namespace NetworkLib::Core::Net::Server
 	class CNetServer
 	{
 	public:
+		friend class CNetSession;
 		friend class NetworkLib::Contents::CBaseContents;
 		friend class Utils::CAccessor;
 		// friend struct ContentsFrameEvent;
@@ -151,7 +152,7 @@ namespace NetworkLib::Core::Net::Server
 		BOOL Start(const CHAR *openIP, const USHORT port) noexcept;
 		void Stop();
 
-		inline LONG GetSessionCount() const noexcept { return m_iSessionCount; }
+		inline LONG GetSessionCount() const noexcept { return m_monitoringTargets.sessionCount; }
 
 		void SendPacket(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer) noexcept;
 		// Send 시도는 하지 않음
@@ -183,7 +184,6 @@ namespace NetworkLib::Core::Net::Server
 
 	private:
 		// Session
-		LONG					m_iSessionCount = 0;
 		LONG64					m_iCurrentID = 0;
 
 		USHORT					m_usMaxSessionCount;

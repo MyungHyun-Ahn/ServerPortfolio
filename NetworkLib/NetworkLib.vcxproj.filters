@@ -87,6 +87,9 @@
     <ClInclude Include="PrivateHeader\MonitoringTarget.h">
       <Filter>Core\Monitoring</Filter>
     </ClInclude>
+    <ClInclude Include="PrivateHeader\CCoreLibInit.h">
+      <Filter>Core\Utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CNetServer.cpp">
@@ -113,5 +116,10 @@
     <ClCompile Include="LanSetting.cpp">
       <Filter>Core\Lan</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Tools\CopyHeader.bat">
+      <Filter>Core\Utils</Filter>
+    </None>
   </ItemGroup>
 </Project>

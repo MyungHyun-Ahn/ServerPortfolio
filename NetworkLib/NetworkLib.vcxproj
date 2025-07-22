@@ -98,7 +98,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -122,7 +122,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -141,7 +141,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -165,7 +165,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -186,6 +186,7 @@
     <ClInclude Include="NetSetting.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PrivateHeader\CAccessor.h" />
+    <ClInclude Include="PrivateHeader\CCoreLibInit.h" />
     <ClInclude Include="PrivateHeader\MonitoringTarget.h" />
     <ClInclude Include="SystemTask.h" />
   </ItemGroup>
@@ -203,6 +204,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="SystemTask.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Tools\CopyHeader.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

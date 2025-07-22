@@ -649,7 +649,6 @@ namespace NetworkLib::Core::Lan::Client
 
 		BOOL CLanClientManager::Start() noexcept
 		{
-			int retVal;
 			int errVal;
 
 			// CreateWorkerThread
