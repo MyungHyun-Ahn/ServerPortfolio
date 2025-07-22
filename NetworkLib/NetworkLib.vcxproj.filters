@@ -116,10 +116,8 @@
     <ClCompile Include="LanSetting.cpp">
       <Filter>Core\Lan</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\Tools\CopyHeader.bat">
-      <Filter>Core\Utils</Filter>
-    </None>
+    <ClCompile Include="CContentsThread.cpp">
+      <Filter>Contents</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

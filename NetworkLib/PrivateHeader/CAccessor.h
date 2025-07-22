@@ -8,12 +8,13 @@ namespace NetworkLib::Core::Utils
 
 	class CAccessor
 	{
-		inline static ServerMonitoringTargets &GetServerMonitoringTargets()
+	public:
+		inline static ServerMonitoringTargets *GetServerMonitoringTargets()
 		{
 			return g_NetServer->m_monitoringTargets;
 		}
 
-		inline static ContentsThreadMonitoringTargets &GetContentsThreadMonitoringTargets()
+		inline static ContentsThreadMonitoringTargets *GetContentsThreadMonitoringTargets()
 		{
 			return CContentsThread::s_monitoringTargets;
 		}

@@ -24,23 +24,12 @@ namespace MHLib::utils
 		~CMonitoringManager() = default;
 
 	public:
-		void Init(std::wstring &processName, std::vector<std::wstring> &nicNames, HANDLE hProcess = INVALID_HANDLE_VALUE, int width = 700, int height = 900)
+		void Init(int width = 700, int height = 900)
 		{
-			if (hProcess == INVALID_HANDLE_VALUE)
-			{
-				m_hProcess = GetCurrentProcess();
-			}
-
 			HWND console = GetConsoleWindow();
 			RECT r;
 			GetWindowRect(console, &r);
 			MoveWindow(console, r.left, r.top, width, height, TRUE);
-
-			time_t startTime = time(nullptr);
-			localtime_s(&m_startTime, &startTime);
-
-			InitSystemMonitor();
-			InitPDHMonitor(processName, nicNames);
 		}
 
 		void PrintMonitor()

@@ -98,7 +98,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -141,7 +141,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -192,6 +192,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CBaseContents.cpp" />
+    <ClCompile Include="CContentsThread.cpp" />
     <ClCompile Include="CLanClient.cpp" />
     <ClCompile Include="CNetServer.cpp" />
     <ClCompile Include="LanSetting.cpp" />
@@ -204,9 +205,6 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="SystemTask.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\Tools\CopyHeader.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

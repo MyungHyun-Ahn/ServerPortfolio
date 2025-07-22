@@ -1,10 +1,14 @@
 #pragma once
+
+// 사용자 입장에서 해당 헤더만 include 하면 사용할 수 있게 만들고 싶기 때문
+#include "NetLibDefine.h"
+#include "LanSetting.h"
+#include "CoreUtils.h"
+
 namespace NetworkLib::Core::Lan::Client
 {
 #pragma once
 
-	namespace LAN_CLIENT
-	{
 		using namespace NetworkLib;
 		using namespace NetworkLib::DataStructures;
 		using namespace NetworkLib::Core::Utils;
@@ -199,5 +203,4 @@ namespace NetworkLib::Core::Lan::Client
 		};
 
 		extern CLanClientManager *g_netClientMgr;
-	};
 }

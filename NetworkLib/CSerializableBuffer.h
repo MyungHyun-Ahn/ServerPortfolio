@@ -1,11 +1,18 @@
 #pragma once
 
+namespace NetworkLib::Core::Net::Server
+{
+	class CNetServer;
+}
+
 namespace NetworkLib::DataStructures
 {
 	template<SERVER_TYPE serverType, DWORD bufferSize = 512>
 	class CSerializableBuffer
 	{
 	public:
+		friend class NetworkLib::Core::Net::Server::CNetServer;
+
 		enum class DEFINE : int
 		{
 			HEADER_SIZE = (serverType == SERVER_TYPE::LAN) ? HEADER_SIZE::LAN : HEADER_SIZE::NET,
@@ -432,9 +439,6 @@ namespace NetworkLib::DataStructures
 		int m_MaxSize = (int)DEFINE::PACKET_MAX_SIZE;
 
 		LONG			m_iRefCount = 0;
-
-
-	public:
 		BOOL			m_isEnqueueHeader = 0;
 		UINT64			m_uiSessionId = 0;
 

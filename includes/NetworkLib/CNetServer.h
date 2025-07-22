@@ -1,5 +1,10 @@
 #pragma once
 
+// 사용자 입장에서 CNetServer.h 만 include 해도 사용할 수 있도록 하기 위함
+#include "CoreUtils.h"
+#include "NetSetting.h"
+#include "CContentsThread.h"
+
 namespace NetworkLib::Core::Utils
 {
 	class CAccessor;
@@ -10,6 +15,12 @@ namespace NetworkLib::Contents
 {
 	class CBaseContents;
 }
+
+namespace NetworkLib::Core::Monitoring
+{
+	class ServerMonitoringTargets;
+}
+
 
 namespace NetworkLib::Core::Net::Server
 {
@@ -152,8 +163,6 @@ namespace NetworkLib::Core::Net::Server
 		BOOL Start(const CHAR *openIP, const USHORT port) noexcept;
 		void Stop();
 
-		inline LONG GetSessionCount() const noexcept { return m_monitoringTargets.sessionCount; }
-
 		void SendPacket(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer) noexcept;
 		// Send 시도는 하지 않음
 		void EnqueuePacket(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer) noexcept;
@@ -209,7 +218,7 @@ namespace NetworkLib::Core::Net::Server
 		LONG m_isStop = FALSE;
 
 		// 모니터링 항목
-		NetworkLib::Core::Monitoring::ServerMonitoringTargets m_monitoringTargets;
+		NetworkLib::Core::Monitoring::ServerMonitoringTargets *m_monitoringTargets;
 	};
 
 	extern CNetServer *g_NetServer;

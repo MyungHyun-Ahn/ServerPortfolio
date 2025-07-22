@@ -1,13 +1,8 @@
 #include "pch.h"
-#include "NetLibDefine.h"
-#include "LanSetting.h"
-#include "CoreUtils.h"
 #include "CLanClient.h"
 
 namespace NetworkLib::Core::Lan::Client
 {
-	namespace LAN_CLIENT
-	{
 		using namespace NetworkLib;
 		using namespace NetworkLib::DataStructures;
 		using namespace NetworkLib::Core::Utils;
@@ -786,5 +781,4 @@ namespace NetworkLib::Core::Lan::Client
 
 			return 0;
 		}
-	};
 }

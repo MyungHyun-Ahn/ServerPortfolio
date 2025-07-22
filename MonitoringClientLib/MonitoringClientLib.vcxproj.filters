@@ -10,24 +10,63 @@
     <Filter Include="Define">
       <UniqueIdentifier>{604e257b-1256-49c0-b427-1f9ca2aeec30}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Monitoring">
+      <UniqueIdentifier>{6e6d0d68-fe38-4408-b7ed-50a2551c1959}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MonitoringProtocol.h">
       <Filter>Protocol</Filter>
     </ClInclude>
-    <ClInclude Include="CMonitorClient.h">
+    <ClInclude Include="CMonitoringClient.h">
       <Filter>Client</Filter>
     </ClInclude>
     <ClInclude Include="pch.h">
       <Filter>Define</Filter>
     </ClInclude>
+    <ClInclude Include="MonitoringLibPch.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="MonitoringSetting.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="CGenPacket.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="PrivateHeader\CSystemMonitor.h">
+      <Filter>Monitoring</Filter>
+    </ClInclude>
+    <ClInclude Include="..\includes\MHLib\utils\CMonitoringManager.h">
+      <Filter>Monitoring</Filter>
+    </ClInclude>
+    <ClInclude Include="CMonitor.h">
+      <Filter>Monitoring</Filter>
+    </ClInclude>
+    <ClInclude Include="PrivateHeader\CServerMonitor.h">
+      <Filter>Monitoring</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CMonitorClient.cpp">
+    <ClCompile Include="CMonitoringClient.cpp">
       <Filter>Client</Filter>
     </ClCompile>
     <ClCompile Include="pch.cpp">
       <Filter>Define</Filter>
+    </ClCompile>
+    <ClCompile Include="MonitoringLibPch.cpp">
+      <Filter>Define</Filter>
+    </ClCompile>
+    <ClCompile Include="MonitoringSetting.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="CGenPacket.cpp">
+      <Filter>Protocol</Filter>
+    </ClCompile>
+    <ClCompile Include="PrivateHeader\CSystemMonitor.cpp">
+      <Filter>Monitoring</Filter>
+    </ClCompile>
+    <ClCompile Include="PrivateHeader\CServerMonitor.cpp">
+      <Filter>Monitoring</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
