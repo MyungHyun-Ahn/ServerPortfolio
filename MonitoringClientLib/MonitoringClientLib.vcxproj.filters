@@ -4,5 +4,30 @@
     <Filter Include="Protocol">
       <UniqueIdentifier>{9242ecbc-1b8d-4780-85f5-80c1fd1e0167}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Client">
+      <UniqueIdentifier>{7633166f-65e0-4a82-a9d4-664553e101f0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Define">
+      <UniqueIdentifier>{604e257b-1256-49c0-b427-1f9ca2aeec30}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="MonitoringProtocol.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="CMonitorClient.h">
+      <Filter>Client</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="CMonitorClient.cpp">
+      <Filter>Client</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>Define</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

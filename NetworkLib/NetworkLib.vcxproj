@@ -109,7 +109,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)MHLib\includes\;%(AdditionalIncludeDirectories);$(SolutionDir)\MHLib\includes\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)MHLib\includes\;%(AdditionalIncludeDirectories);$(SolutionDir)\includes\</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -122,7 +122,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -152,7 +152,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(SolutionDir)MHLib\includes\;%(AdditionalIncludeDirectories);$(SolutionDir)\MHLib\includes\</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)MHLib\includes\;%(AdditionalIncludeDirectories);$(SolutionDir)\includes\</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -165,7 +165,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)Out\NetworkLib\includes\NetworkLib</Command>
+      <Command>$(SolutionDir)Tools\CopyHeader.bat $(ProjectDir) $(SolutionDir)includes\NetworkLib</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
