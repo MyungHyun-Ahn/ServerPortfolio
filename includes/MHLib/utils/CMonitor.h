@@ -1,6 +1,6 @@
 #pragma once
 
-namespace MonitoringClientLib::Monitoring
+namespace MHLib::utils
 {
 	class CMonitor
 	{
@@ -14,6 +14,7 @@ namespace MonitoringClientLib::Monitoring
 			Update();
 			PrintConsole();
 			Send();
+			Reset();
 		}
 
 	protected:

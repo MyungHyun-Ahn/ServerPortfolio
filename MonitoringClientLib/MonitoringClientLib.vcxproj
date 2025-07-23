@@ -19,9 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\includes\MHLib\utils\CMonitor.h" />
     <ClInclude Include="..\includes\MHLib\utils\CMonitoringManager.h" />
     <ClInclude Include="CGenPacket.h" />
-    <ClInclude Include="CMonitor.h" />
     <ClInclude Include="CMonitoringClient.h" />
     <ClInclude Include="MonitoringLibPch.h" />
     <ClInclude Include="MonitoringProtocol.h" />

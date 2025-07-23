@@ -1,6 +1,4 @@
 #include "pch.h"
-#include "CoreUtils.h"
-#include "PrivateHeader/MonitoringTarget.h"
 #include "CNetServer.h"
 #include "CBaseContents.h"
 
@@ -8,16 +6,16 @@ namespace NetworkLib::Contents
 {
 	void CBaseContents::MoveJobEnqueue(UINT64 sessionID, void *pObject) noexcept
 	{
-		NetworkLib::Core::Net::Server::CNetSession *pSession
-			= NetworkLib::Core::Net::Server::g_NetServer->m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
+		CNetSession *pSession
+			= g_NetServer->m_arrPSessions[GetSessionIndex(sessionID)];
 
 		InterlockedIncrement(&pSession->m_iIOCountAndRelease);
-		if ((pSession->m_iIOCountAndRelease & NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
-			== NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
+		if ((pSession->m_iIOCountAndRelease & CNetSession::RELEASE_FLAG)
+			== CNetSession::RELEASE_FLAG)
 		{
 			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+				g_NetServer->ReleaseSession(pSession);
 			}
 			return;
 		}
@@ -26,7 +24,7 @@ namespace NetworkLib::Contents
 		{
 			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+				g_NetServer->ReleaseSession(pSession);
 			}
 			return;
 		}
@@ -54,7 +52,7 @@ namespace NetworkLib::Contents
 			m_MoveJobQ.Dequeue(&moveJob);
 
 			// 세션 찾기
-			NetworkLib::Core::Net::Server::CNetSession *pSession = NetworkLib::Core::Net::Server::g_NetServer->m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(moveJob->sessionId)];
+			CNetSession *pSession = g_NetServer->m_arrPSessions[GetSessionIndex(moveJob->sessionId)];
 
 			// 여기까진 유효한 세션일 것
 			// objectPtr == nullptr이면 OnEnter 받은 쪽에서 생성
@@ -68,7 +66,7 @@ namespace NetworkLib::Contents
 
 			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+				g_NetServer->ReleaseSession(pSession);
 			}
 		}
 	}
@@ -89,16 +87,16 @@ namespace NetworkLib::Contents
 		for (auto &it : m_umapSessions)
 		{
 			UINT64 sessionId = it.first;
-			int sessionIdx = NetworkLib::Core::Utils::GetSessionIndex(sessionId);
-			NetworkLib::Core::Net::Server::CNetSession *pSession = NetworkLib::Core::Net::Server::g_NetServer->m_arrPSessions[sessionIdx];
+			int sessionIdx = GetSessionIndex(sessionId);
+			CNetSession *pSession = g_NetServer->m_arrPSessions[sessionIdx];
 
 			InterlockedIncrement(&pSession->m_iIOCountAndRelease);
-			if ((pSession->m_iIOCountAndRelease & NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
-				== NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
+			if ((pSession->m_iIOCountAndRelease & CNetSession::RELEASE_FLAG)
+				== CNetSession::RELEASE_FLAG)
 			{
 				if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 				{
-					NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+					g_NetServer->ReleaseSession(pSession);
 				}
 				continue;
 			}
@@ -107,7 +105,7 @@ namespace NetworkLib::Contents
 			{
 				if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 				{
-					NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+					g_NetServer->ReleaseSession(pSession);
 				}
 				continue;
 			}
@@ -115,7 +113,7 @@ namespace NetworkLib::Contents
 			LONG recvMsgCount = pSession->m_RecvMsgQueue.GetUseSize();
 			for (int i = 0; i < recvMsgCount; i++)
 			{
-				DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *pMsg;
+				CSerializableBuffer<SERVER_TYPE::NET> *pMsg;
 				{
 					PROFILE_BEGIN(0, "RECV_MSQ DEQUEUE");
 					pSession->m_RecvMsgQueue.Dequeue(&pMsg);
@@ -124,28 +122,28 @@ namespace NetworkLib::Contents
 				if (ret == RECV_RET::RECV_MOVE)
 				{
 					if (pMsg->DecreaseRef() == 0)
-						DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(pMsg);
+						CSerializableBuffer<SERVER_TYPE::NET>::Free(pMsg);
 					break;
 				}
 				if (ret == RECV_RET::RECV_FALSE)
 				{
-					NetworkLib::Core::Net::Server::g_NetServer->Disconnect(sessionId);
+					g_NetServer->Disconnect(sessionId);
 
 					if (pMsg->DecreaseRef() == 0)
-						DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(pMsg);
+						CSerializableBuffer<SERVER_TYPE::NET>::Free(pMsg);
 					break;
 				}
 
 				if (pMsg->DecreaseRef() == 0)
-					DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(pMsg);
+					CSerializableBuffer<SERVER_TYPE::NET>::Free(pMsg);
 			}
 
 			if (recvMsgCount != 0)
-				NetworkLib::Core::Net::Server::g_NetServer->SendPQCS(pSession);
+				g_NetServer->SendPQCS(pSession);
 
 			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+				g_NetServer->ReleaseSession(pSession);
 			}
 		}
 	}

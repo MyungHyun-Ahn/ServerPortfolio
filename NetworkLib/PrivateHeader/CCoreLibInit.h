@@ -15,6 +15,7 @@ namespace NetworkLib::Core::Utils
 			timeBeginPeriod(1);
 			g_Logger = CLogger::GetInstance(); // SetMainDirectory와 SetLogLevel은 상속받은 Cpp 프로젝트에서 설정
 			g_ProfileMgr = CProfileManager::GetInstance();
+			
 		}
 
 

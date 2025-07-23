@@ -39,10 +39,10 @@
     <ClInclude Include="..\includes\MHLib\utils\CMonitoringManager.h">
       <Filter>Monitoring</Filter>
     </ClInclude>
-    <ClInclude Include="CMonitor.h">
+    <ClInclude Include="PrivateHeader\CServerMonitor.h">
       <Filter>Monitoring</Filter>
     </ClInclude>
-    <ClInclude Include="PrivateHeader\CServerMonitor.h">
+    <ClInclude Include="..\includes\MHLib\utils\CMonitor.h">
       <Filter>Monitoring</Filter>
     </ClInclude>
   </ItemGroup>

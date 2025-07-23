@@ -1,5 +1,4 @@
 #include "pch.h"
-#include "../CMonitor.h"
 #include "CSystemMonitor.h"
 
 #include "CLanClient.h"

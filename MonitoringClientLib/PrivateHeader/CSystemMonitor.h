@@ -4,8 +4,10 @@ namespace MonitoringClientLib::Monitoring
 {
 	using MHLib::utils::g_Logger;
 	using MHLib::utils::LOG_LEVEL;
+	using MHLib::utils::CMonitor;
+	using MHLib::utils::Singleton;
 
-	class CSystemMonitor : public CMonitor, public MHLib::utils::Singleton<CSystemMonitor>
+	class CSystemMonitor : public CMonitor, public Singleton<CSystemMonitor>
 	{
 	private:
 		CSystemMonitor() = default;

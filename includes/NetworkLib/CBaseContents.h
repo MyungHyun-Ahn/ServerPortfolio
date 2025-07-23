@@ -5,8 +5,20 @@ namespace NetworkLib::Core::Net::Server
 	class CNetServer;
 }
 
+namespace NetworkLib::Task
+{
+	struct ContentsFrameTask;
+}
+
 namespace NetworkLib::Contents
 {
+	using NetworkLib::Core::Net::Server::CNetSession;
+	using NetworkLib::Core::Net::Server::CNetServer;
+	using NetworkLib::Core::Net::Server::g_NetServer;
+	using NetworkLib::DataStructures::CSerializableBuffer;
+	using MHLib::memory::CTLSMemoryPoolManager;
+	using namespace NetworkLib::Core::Utils;
+
 	struct MOVE_JOB
 	{
 		UINT64 sessionId;
@@ -24,7 +36,7 @@ namespace NetworkLib::Contents
 			s_MoveJobPool.Free(freeJob);
 		}
 
-		inline static MHLib::memory::CTLSMemoryPoolManager<MOVE_JOB> s_MoveJobPool = MHLib::memory::CTLSMemoryPoolManager<MOVE_JOB>();
+		inline static CTLSMemoryPoolManager<MOVE_JOB> s_MoveJobPool = CTLSMemoryPoolManager<MOVE_JOB>();
 
 	};
 
@@ -39,8 +51,8 @@ namespace NetworkLib::Contents
 	class CBaseContents
 	{
 	public:
-		friend class NetworkLib::Core::Net::Server::CNetServer;
-		friend struct ContentsFrameEvent;
+		friend class CNetServer;
+		friend struct NetworkLib::Task::ContentsFrameTask;
 		friend class CMonitor;
 
 		CBaseContents() noexcept

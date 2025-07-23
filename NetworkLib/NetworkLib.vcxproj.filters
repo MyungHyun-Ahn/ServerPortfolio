@@ -90,6 +90,9 @@
     <ClInclude Include="PrivateHeader\CCoreLibInit.h">
       <Filter>Core\Utils</Filter>
     </ClInclude>
+    <ClInclude Include="ContentsFrameTask.h">
+      <Filter>Task</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CNetServer.cpp">
@@ -118,6 +121,9 @@
     </ClCompile>
     <ClCompile Include="CContentsThread.cpp">
       <Filter>Contents</Filter>
+    </ClCompile>
+    <ClCompile Include="ContentsFrameTask.cpp">
+      <Filter>Task</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
