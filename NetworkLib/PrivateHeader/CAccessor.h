@@ -2,21 +2,17 @@
 
 namespace NetworkLib::Core::Utils
 {
-	using namespace NetworkLib::Contents;
-	using namespace NetworkLib::Core::Monitoring;
-	using namespace NetworkLib::Core::Net::Server;
-
 	class CAccessor
 	{
 	public:
-		inline static ServerMonitoringTargets *GetServerMonitoringTargets()
+		inline static NetworkLib::Core::Monitoring::ServerMonitoringTargets *GetServerMonitoringTargets()
 		{
-			return g_NetServer->m_monitoringTargets;
+			return NetworkLib::Core::Net::Server::g_NetServer->m_monitoringTargets;
 		}
 
-		inline static ContentsThreadMonitoringTargets *GetContentsThreadMonitoringTargets()
+		inline static NetworkLib::Core::Monitoring::ContentsThreadMonitoringTargets *GetContentsThreadMonitoringTargets()
 		{
-			return CContentsThread::s_monitoringTargets;
+			return NetworkLib::Contents::CContentsThread::s_monitoringTargets;
 		}
 	};
 }

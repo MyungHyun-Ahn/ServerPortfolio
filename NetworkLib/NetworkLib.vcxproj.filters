@@ -126,4 +126,12 @@
       <Filter>Task</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Tools\CopyHeader.bat">
+      <Filter>Core\Utils</Filter>
+    </None>
+    <None Include="..\Tools\CopyLib.bat">
+      <Filter>Core\Utils</Filter>
+    </None>
+  </ItemGroup>
 </Project>

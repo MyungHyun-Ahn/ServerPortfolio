@@ -2,12 +2,7 @@
 
 namespace MonitoringClientLib::Monitoring
 {
-	using MHLib::utils::g_Logger;
-	using MHLib::utils::LOG_LEVEL;
-	using MHLib::utils::CMonitor;
-	using MHLib::utils::Singleton;
-
-	class CSystemMonitor : public CMonitor, public Singleton<CSystemMonitor>
+	class CSystemMonitor : public MHLib::utils::CMonitor, public MHLib::utils::Singleton<CSystemMonitor>
 	{
 	private:
 		CSystemMonitor() = default;

@@ -2,8 +2,6 @@
 
 namespace NetworkLib::Core::Utils
 {
-	using namespace MHLib::utils;
-
 	class CCoreLibInit
 	{
 	public:
@@ -13,9 +11,9 @@ namespace NetworkLib::Core::Utils
 		{
 			// 정밀한 프레임을 위해
 			timeBeginPeriod(1);
-			g_Logger = CLogger::GetInstance(); // SetMainDirectory와 SetLogLevel은 상속받은 Cpp 프로젝트에서 설정
-			g_ProfileMgr = CProfileManager::GetInstance();
-			
+			MHLib::utils::g_Logger = MHLib::utils::CLogger::GetInstance(); // SetMainDirectory와 SetLogLevel은 상속받은 Cpp 프로젝트에서 설정
+			MHLib::utils::g_ProfileMgr = MHLib::utils::CProfileManager::GetInstance();
+			MHLib::utils::g_MonitoringMgr = MHLib::utils::CMonitoringManager::GetInstance(); // SetConsoleSize는 Cpp 프로젝트에서
 		}
 
 

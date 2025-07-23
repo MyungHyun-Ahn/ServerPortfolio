@@ -12,13 +12,6 @@ namespace NetworkLib::Task
 
 namespace NetworkLib::Contents
 {
-	using NetworkLib::Core::Net::Server::CNetSession;
-	using NetworkLib::Core::Net::Server::CNetServer;
-	using NetworkLib::Core::Net::Server::g_NetServer;
-	using NetworkLib::DataStructures::CSerializableBuffer;
-	using MHLib::memory::CTLSMemoryPoolManager;
-	using namespace NetworkLib::Core::Utils;
-
 	struct MOVE_JOB
 	{
 		UINT64 sessionId;
@@ -36,7 +29,7 @@ namespace NetworkLib::Contents
 			s_MoveJobPool.Free(freeJob);
 		}
 
-		inline static CTLSMemoryPoolManager<MOVE_JOB> s_MoveJobPool = CTLSMemoryPoolManager<MOVE_JOB>();
+		inline static MHLib::memory::CTLSMemoryPoolManager<MOVE_JOB> s_MoveJobPool = MHLib::memory::CTLSMemoryPoolManager<MOVE_JOB>();
 
 	};
 
@@ -51,9 +44,9 @@ namespace NetworkLib::Contents
 	class CBaseContents
 	{
 	public:
-		friend class CNetServer;
+		friend class NetworkLib::Core::Net::Server::CNetServer;
 		friend struct NetworkLib::Task::ContentsFrameTask;
-		friend class CMonitor;
+		friend class MHLib::utils::CMonitor;
 
 		CBaseContents() noexcept
 		{
@@ -75,7 +68,7 @@ namespace NetworkLib::Contents
 
 		virtual void OnEnter(const UINT64 sessionID, void *pObject) noexcept = 0;
 		virtual void OnLeave(const UINT64 sessionID) noexcept = 0;
-		virtual RECV_RET OnRecv(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *message, int delayFrame) noexcept = 0;
+		virtual RECV_RET OnRecv(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *message, int delayFrame) noexcept = 0;
 		virtual void OnLoopEnd() noexcept = 0;
 
 	protected:
@@ -83,7 +76,7 @@ namespace NetworkLib::Contents
 		inline static LONG s_CurrentContentsID = 0;
 
 		// 이 컨텐츠 루프를 끝내고 싶으면 m_pTimerEvent의 flag 를 끄면 루프를 돌고 파괴
-		Task::TimerTask *m_pTimerEvent;
+		NetworkLib::Task::TimerTask *m_pTimerEvent;
 
 		// Player 생성 요청, 삭제 요청 등이 넘어옴
 		MHLib::containers::CLFQueue<MOVE_JOB *> m_MoveJobQ; // Move Job Queue

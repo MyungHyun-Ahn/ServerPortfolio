@@ -69,7 +69,7 @@ namespace NetworkLib::Core::Net::Server
 		// 인큐할 때 직렬화 버퍼의 포인터를 인큐
 
 
-		inline bool SendPacket(DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *message) noexcept
+		inline bool SendPacket(NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *message) noexcept
 		{
 			message->IncreaseRef();
 			{
@@ -110,7 +110,7 @@ namespace NetworkLib::Core::Net::Server
 		// Release + IoCount
 		LONG m_iIOCountAndRelease = RELEASE_FLAG;
 		LONG m_iSendCount = 0;
-		DataStructures::CRingBuffer<4096> m_RecvBuffer;
+		NetworkLib::DataStructures::CRingBuffer<4096> m_RecvBuffer;
 		// CRecvBuffer *m_pRecvBuffer = nullptr;
 		SOCKET m_sSessionSocket;
 		UINT64 m_uiSessionID;
@@ -125,18 +125,18 @@ namespace NetworkLib::Core::Net::Server
 		char		m_dummy01[2]; // 패딩 계산용
 		// 최대 무조건 1개 -> 있거나 없거나
 		// CSerializableBufferView<FALSE> *m_pDelayedBuffer = nullptr;
-		MHLib::containers::CLFQueue<DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *> m_lfSendBufferQueue;
+		MHLib::containers::CLFQueue<NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *> m_lfSendBufferQueue;
 		// m_pMyOverlappedStartAddr
 		//  + 0 : ACCEPTEX
 		//  + 1 : RECV
 		//  + 2 : SEND
 		OVERLAPPED *m_pMyOverlappedStartAddr = nullptr;
-		DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *m_arrPSendBufs[Utils::WSASEND_MAX_BUFFER_COUNT]; // 8 * 32 = 256
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *m_arrPSendBufs[NetworkLib::Core::Utils::WSASEND_MAX_BUFFER_COUNT]; // 8 * 32 = 256
 
 		LONG m_iCacelIoCalled = FALSE;
 
 		// Recv 큐
-		MHLib::containers::CLFQueue<DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *> m_RecvMsgQueue;
+		MHLib::containers::CLFQueue<NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *> m_RecvMsgQueue;
 		// LONG m_ContentStatus = FALSE;
 
 		// 총 460바이트
@@ -148,7 +148,7 @@ namespace NetworkLib::Core::Net::Server
 		inline static constexpr LONG RELEASE_FLAG = 0x80000000;
 		inline static constexpr LONG ENQUEUE_FLAG = 0x80000000;
 
-		inline static DataStructures::COverlappedAllocator<> s_OverlappedPool;
+		inline static NetworkLib::DataStructures::COverlappedAllocator<> s_OverlappedPool;
 	};
 
 
@@ -157,15 +157,15 @@ namespace NetworkLib::Core::Net::Server
 	public:
 		friend class CNetSession;
 		friend class NetworkLib::Contents::CBaseContents;
-		friend class Utils::CAccessor;
+		friend class NetworkLib::Core::Utils::CAccessor;
 		// friend struct ContentsFrameEvent;
 
 		BOOL Start(const CHAR *openIP, const USHORT port) noexcept;
 		void Stop();
 
-		void SendPacket(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer) noexcept;
+		void SendPacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept;
 		// Send 시도는 하지 않음
-		void EnqueuePacket(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer) noexcept;
+		void EnqueuePacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept;
 		void SendPQCS(const CNetSession *pSession);
 
 		BOOL Disconnect(const UINT64 sessionID, BOOL isPQCS = FALSE) noexcept;

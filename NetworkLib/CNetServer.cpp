@@ -15,38 +15,38 @@ namespace NetworkLib::Core::Net::Server
 		int currentUseSize = m_RecvBuffer.GetUseSize();
 		while (currentUseSize > 0)
 		{
-			if (currentUseSize < sizeof(Utils::Net::Header))
+			if (currentUseSize < sizeof(NetworkLib::Core::Utils::Net::Header))
 				break;
 
-			Utils::Net::Header packetHeader;
-			m_RecvBuffer.Peek((char *)&packetHeader, sizeof(Utils::Net::Header));
+			NetworkLib::Core::Utils::Net::Header packetHeader;
+			m_RecvBuffer.Peek((char *)&packetHeader, sizeof(NetworkLib::Core::Utils::Net::Header));
 
 			if (packetHeader.code != PACKET_CODE)
 			{
 				g_NetServer->Disconnect(m_uiSessionID);
 				return;
 			}
-			if (packetHeader.len > (int)DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::DEFINE::PACKET_MAX_SIZE - sizeof(Utils::Net::Header) || packetHeader.len >= 65535 || packetHeader.len >= m_RecvBuffer.GetCapacity())
+			if (packetHeader.len > (int)NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::DEFINE::PACKET_MAX_SIZE - sizeof(NetworkLib::Core::Utils::Net::Header) || packetHeader.len >= 65535 || packetHeader.len >= m_RecvBuffer.GetCapacity())
 			{
 				g_NetServer->Disconnect(m_uiSessionID);
 				return;
 			}
-			if (m_RecvBuffer.GetUseSize() < sizeof(Utils::Net::Header) + packetHeader.len)
+			if (m_RecvBuffer.GetUseSize() < sizeof(NetworkLib::Core::Utils::Net::Header) + packetHeader.len)
 				break;
 
-			DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *view = DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Alloc();
-			m_RecvBuffer.MoveFront(sizeof(Utils::Net::Header));
-			view->EnqueueHeader((char *)&packetHeader, sizeof(Utils::Net::Header));
+			NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *view = NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Alloc();
+			m_RecvBuffer.MoveFront(sizeof(NetworkLib::Core::Utils::Net::Header));
+			view->EnqueueHeader((char *)&packetHeader, sizeof(NetworkLib::Core::Utils::Net::Header));
 
 			m_RecvBuffer.Dequeue(view->GetContentBufferPtr(), packetHeader.len);
 			view->MoveWritePos(packetHeader.len);
 
-			CEncryption::Decoding(view->GetBufferPtr() + 4, view->GetFullSize() - 4, packetHeader.randKey);
-			BYTE dataCheckSum = CEncryption::CalCheckSum(view->GetContentBufferPtr(), view->GetDataSize());
-			BYTE headerCheckSum = *(view->GetBufferPtr() + offsetof(Utils::Net::Header, checkSum));
+			MHLib::scurity::CEncryption::Decoding(view->GetBufferPtr() + 4, view->GetFullSize() - 4, packetHeader.randKey);
+			BYTE dataCheckSum = MHLib::scurity::CEncryption::CalCheckSum(view->GetContentBufferPtr(), view->GetDataSize());
+			BYTE headerCheckSum = *(view->GetBufferPtr() + offsetof(NetworkLib::Core::Utils::Net::Header, checkSum));
 			if (dataCheckSum != headerCheckSum)
 			{
-				DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(view);
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(view);
 				g_NetServer->Disconnect(m_uiSessionID);
 				return;
 			}
@@ -73,7 +73,7 @@ namespace NetworkLib::Core::Net::Server
 		{
 			if (m_arrPSendBufs[count]->DecreaseRef() == 0)
 			{
-				DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(m_arrPSendBufs[count]);
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(m_arrPSendBufs[count]);
 			}
 		}
 
@@ -191,7 +191,7 @@ namespace NetworkLib::Core::Net::Server
 		int count;
 		for (count = 0; count < m_iSendCount; count++)
 		{
-			DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer;
+			NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer;
 			// 못꺼낸 것
 			{
 				PROFILE_BEGIN(0, "SEND_MSQ DEQUEUE");
@@ -251,7 +251,7 @@ namespace NetworkLib::Core::Net::Server
 		{
 			if (m_arrPSendBufs[count]->DecreaseRef() == 0)
 			{
-				DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(m_arrPSendBufs[count]);
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(m_arrPSendBufs[count]);
 			}
 		}
 
@@ -260,7 +260,7 @@ namespace NetworkLib::Core::Net::Server
 		LONG useBufferSize = m_lfSendBufferQueue.GetUseSize();
 		for (int i = 0; i < useBufferSize; i++)
 		{
-			DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *pBuffer;
+			NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *pBuffer;
 			// 못꺼낸 것
 			{
 				PROFILE_BEGIN(0, "SEND_MSQ DEQUEUE");
@@ -274,7 +274,7 @@ namespace NetworkLib::Core::Net::Server
 			// RefCount를 낮추고 0이라면 보낸 거 삭제
 			if (pBuffer->DecreaseRef() == 0)
 			{
-				DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(pBuffer);
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(pBuffer);
 			}
 		}
 
@@ -287,7 +287,7 @@ namespace NetworkLib::Core::Net::Server
 		useBufferSize = m_RecvMsgQueue.GetUseSize();
 		for (int i = 0; i < useBufferSize; i++)
 		{
-			DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *pBuffer;
+			NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *pBuffer;
 			{
 				PROFILE_BEGIN(0, "RECV_MSQ DEQUEUE");
 				if (!m_RecvMsgQueue.Dequeue(&pBuffer))
@@ -297,7 +297,7 @@ namespace NetworkLib::Core::Net::Server
 			}
 
 			if (pBuffer->DecreaseRef() == 0)
-				DataStructures::CSerializableBuffer<SERVER_TYPE::NET>::Free(pBuffer);
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(pBuffer);
 		}
 
 		m_sSessionSocket = INVALID_SOCKET;
@@ -320,7 +320,7 @@ namespace NetworkLib::Core::Net::Server
 		WSAData wsaData;
 
 		m_monitoringTargets = new NetworkLib::Core::Monitoring::ServerMonitoringTargets;
-		Contents::CContentsThread::s_monitoringTargets = new NetworkLib::Core::Monitoring::ContentsThreadMonitoringTargets;
+		NetworkLib::Contents::CContentsThread::s_monitoringTargets = new NetworkLib::Core::Monitoring::ContentsThreadMonitoringTargets;
 
 		m_usMaxSessionCount = MAX_SESSION_COUNT;
 
@@ -487,9 +487,9 @@ namespace NetworkLib::Core::Net::Server
 		}
 	}
 
-	void CNetServer::SendPacket(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer) noexcept
+	void CNetServer::SendPacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept
 	{
-		CNetSession *pSession = m_arrPSessions[Utils::GetSessionIndex(sessionID)];
+		CNetSession *pSession = m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
 
 		InterlockedIncrement(&pSession->m_iIOCountAndRelease);
 		if ((pSession->m_iIOCountAndRelease & CNetSession::RELEASE_FLAG) == CNetSession::RELEASE_FLAG)
@@ -513,14 +513,14 @@ namespace NetworkLib::Core::Net::Server
 		if (!sBuffer->GetIsEnqueueHeader())
 		{
 			sBuffer->m_isEnqueueHeader = true;
-			Utils::Net::Header *header = (Utils::Net::Header *)sBuffer->GetBufferPtr();
+			NetworkLib::Core::Utils::Net::Header *header = (NetworkLib::Core::Utils::Net::Header *)sBuffer->GetBufferPtr();
 			header->code = PACKET_CODE; // 코드
 			header->len = sBuffer->GetDataSize();
 			header->randKey = 0;
-			header->checkSum = CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
+			header->checkSum = MHLib::scurity::CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
 
 			// CheckSum 부터 암호화하기 위해
-			CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
+			MHLib::scurity::CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
 		}
 
 		if (pSession->SendPacket(sBuffer))
@@ -535,7 +535,7 @@ namespace NetworkLib::Core::Net::Server
 	}
 
 	// Sector 락이 잡힌 경우에만 PQCS
-	void CNetServer::EnqueuePacket(const UINT64 sessionID, DataStructures::CSerializableBuffer<SERVER_TYPE::NET> *sBuffer) noexcept
+	void CNetServer::EnqueuePacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept
 	{
 		CNetSession *pSession = m_arrPSessions[Utils::GetSessionIndex(sessionID)];
 
@@ -562,14 +562,14 @@ namespace NetworkLib::Core::Net::Server
 		if (!sBuffer->GetIsEnqueueHeader())
 		{
 			sBuffer->m_isEnqueueHeader = true;
-			Utils::Net::Header *header = (Utils::Net::Header *)sBuffer->GetBufferPtr();
+			NetworkLib::Core::Utils::Net::Header *header = (NetworkLib::Core::Utils::Net::Header *)sBuffer->GetBufferPtr();
 			header->code = PACKET_CODE; // 코드
 			header->len = sBuffer->GetDataSize();
 			header->randKey = 0;
-			header->checkSum = CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
+			header->checkSum = MHLib::scurity::CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
 
 			// CheckSum 부터 암호화하기 위해
-			CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
+			MHLib::scurity::CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
 		}
 
 		if (!pSession->SendPacket(sBuffer))
@@ -583,12 +583,12 @@ namespace NetworkLib::Core::Net::Server
 
 	void CNetServer::SendPQCS(const CNetSession *pSession)
 	{
-		PostQueuedCompletionStatus(m_hIOCPHandle, 0, (ULONG_PTR)pSession, (LPOVERLAPPED)DataStructures::IOOperation::SENDPOST);
+		PostQueuedCompletionStatus(m_hIOCPHandle, 0, (ULONG_PTR)pSession, (LPOVERLAPPED)NetworkLib::DataStructures::IOOperation::SENDPOST);
 	}
 
 	BOOL CNetServer::Disconnect(const UINT64 sessionID, BOOL isPQCS) noexcept
 	{
-		CNetSession *pSession = m_arrPSessions[Utils::GetSessionIndex(sessionID)];
+		CNetSession *pSession = m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
 
 		// ReleaseFlag가 이미 켜진 상황
 		InterlockedIncrement(&pSession->m_iIOCountAndRelease);
@@ -641,12 +641,12 @@ namespace NetworkLib::Core::Net::Server
 		if (isPQCS)
 		{
 			PostQueuedCompletionStatus(m_hIOCPHandle, 0
-				, (ULONG_PTR)pSession, (LPOVERLAPPED)DataStructures::IOOperation::RELEASE_SESSION);
+				, (ULONG_PTR)pSession, (LPOVERLAPPED)NetworkLib::DataStructures::IOOperation::RELEASE_SESSION);
 			return TRUE;
 		}
 
 		closesocket(pSession->m_sSessionSocket);
-		USHORT index = Utils::GetSessionIndex(pSession->m_uiSessionID);
+		USHORT index = NetworkLib::Core::Utils::GetSessionIndex(pSession->m_uiSessionID);
 		UINT64 freeSessionId = pSession->m_uiSessionID;
 
 		if (pSession->m_pCurrentContent != nullptr)
@@ -662,7 +662,7 @@ namespace NetworkLib::Core::Net::Server
 
 	BOOL CNetServer::ReleaseSessionPQCS(CNetSession *pSession) noexcept
 	{
-		USHORT index = Utils::GetSessionIndex(pSession->m_uiSessionID);
+		USHORT index = NetworkLib::Core::Utils::GetSessionIndex(pSession->m_uiSessionID);
 		closesocket(pSession->m_sSessionSocket);
 		UINT64 freeSessionId = pSession->m_uiSessionID;
 
@@ -766,7 +766,7 @@ namespace NetworkLib::Core::Net::Server
 			return FALSE;
 		}
 
-		UINT64 combineId = Utils::CombineSessionIndex(index, InterlockedIncrement64(&m_iCurrentID));
+		UINT64 combineId = NetworkLib::Core::Utils::CombineSessionIndex(index, InterlockedIncrement64(&m_iCurrentID));
 
 		pSession->Init(combineId);
 
@@ -798,12 +798,12 @@ namespace NetworkLib::Core::Net::Server
 				, INFINITE);
 
 
-			DataStructures::IOOperation oper;
+			NetworkLib::DataStructures::IOOperation oper;
 			if ((UINT64)lpOverlapped >= 3)
 			{
 				if ((UINT64)lpOverlapped < 0xFFFF)
 				{
-					oper = (DataStructures::IOOperation)(UINT64)lpOverlapped;
+					oper = (NetworkLib::DataStructures::IOOperation)(UINT64)lpOverlapped;
 				}
 				else
 				{
@@ -827,7 +827,7 @@ namespace NetworkLib::Core::Net::Server
 				}
 			}
 			// 소켓 정상 종료
-			else if (dwTransferred == 0 && oper != DataStructures::IOOperation::ACCEPTEX && (UINT)oper < 3)
+			else if (dwTransferred == 0 && oper != NetworkLib::DataStructures::IOOperation::ACCEPTEX && (UINT)oper < 3)
 			{
 				// Disconnect(pSession->m_uiSessionID);
 			}
@@ -835,7 +835,7 @@ namespace NetworkLib::Core::Net::Server
 			{
 				switch (oper)
 				{
-				case DataStructures::IOOperation::ACCEPTEX:
+				case NetworkLib::DataStructures::IOOperation::ACCEPTEX:
 				{
 					// Accept가 성공한 세션 포인터를 얻어옴
 					INT index = CNetSession::s_OverlappedPool.GetAcceptExIndex((ULONG_PTR)lpOverlapped);
@@ -870,24 +870,24 @@ namespace NetworkLib::Core::Net::Server
 					break;
 				}
 				break;
-				case DataStructures::IOOperation::RECV:
+				case NetworkLib::DataStructures::IOOperation::RECV:
 				{
 					pSession->RecvCompleted(dwTransferred);
 					pSession->PostRecv();
 				}
 				break;
-				case DataStructures::IOOperation::SEND:
+				case NetworkLib::DataStructures::IOOperation::SEND:
 				{
 					pSession->SendCompleted(dwTransferred);
 				}
 				break;
-				case DataStructures::IOOperation::SENDPOST:
+				case NetworkLib::DataStructures::IOOperation::SENDPOST:
 				{
 					pSession->PostSend();
 					continue;
 				}
 				break;
-				case DataStructures::IOOperation::RELEASE_SESSION:
+				case NetworkLib::DataStructures::IOOperation::RELEASE_SESSION:
 				{
 					ReleaseSessionPQCS(pSession);
 					continue;

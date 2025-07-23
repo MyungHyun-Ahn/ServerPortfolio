@@ -5,7 +5,7 @@
 
 namespace NetworkLib::Task
 {
-	void ContentsFrameTask::SetEvent(CBaseContents *pBaseContent, int frame) noexcept
+	void ContentsFrameTask::SetEvent(NetworkLib::Contents::CBaseContents *pBaseContent, int frame) noexcept
 	{
 		m_pBaseContents = pBaseContent;
 		// TimerEvent의 종료를 제어하기 위함

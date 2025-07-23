@@ -18,59 +18,35 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\includes\MHLib\utils\CMonitor.h" />
-    <ClInclude Include="..\includes\MHLib\utils\CMonitoringManager.h" />
-    <ClInclude Include="CGenPacket.h" />
-    <ClInclude Include="CMonitoringClient.h" />
-    <ClInclude Include="MonitoringLibPch.h" />
-    <ClInclude Include="MonitoringProtocol.h" />
-    <ClInclude Include="MonitoringSetting.h" />
-    <ClInclude Include="pch.h" />
-    <ClInclude Include="PrivateHeader\CServerMonitor.h" />
-    <ClInclude Include="PrivateHeader\CSystemMonitor.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="CGenPacket.cpp" />
-    <ClCompile Include="CMonitoringClient.cpp" />
-    <ClCompile Include="MonitoringLibPch.cpp" />
-    <ClCompile Include="MonitoringSetting.cpp" />
-    <ClCompile Include="pch.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="PrivateHeader\CServerMonitor.cpp" />
-    <ClCompile Include="PrivateHeader\CSystemMonitor.cpp" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{902e932b-9a7b-4f07-b7dc-7053e18dee02}</ProjectGuid>
-    <RootNamespace>MonitoringClientLib</RootNamespace>
+    <ProjectGuid>{303c801f-15d8-424d-a452-43098c09a907}</ProjectGuid>
+    <RootNamespace>EchoServer</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -113,15 +89,14 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(SolutionDir)includes\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
-    <PostBuildEvent>
-      <Command>call "$(SolutionDir)Tools\CopyHeader.bat" "$(ProjectDir)" "$(SolutionDir)includes\MonitoringClientLib"
-call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(SolutionDir)" "$(SolutionDir)Tools\CopyMonitoringClientLibTargetList.txt"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -133,9 +108,9 @@ call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(SolutionDir)includes\;$(SolutionDir)NetworkLib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(SolutionDir)includes\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -143,10 +118,6 @@ call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
-    <PostBuildEvent>
-      <Command>call "$(SolutionDir)Tools\CopyHeader.bat" "$(ProjectDir)" "$(SolutionDir)includes\MonitoringClientLib"
-call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(SolutionDir)" "$(SolutionDir)Tools\CopyMonitoringClientLibTargetList.txt"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -155,15 +126,14 @@ call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(SolutionDir)includes\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
-    <PostBuildEvent>
-      <Command>call "$(SolutionDir)Tools\CopyHeader.bat" "$(ProjectDir)" "$(SolutionDir)includes\MonitoringClientLib"
-call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(SolutionDir)" "$(SolutionDir)Tools\CopyMonitoringClientLibTargetList.txt"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -175,9 +145,9 @@ call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(SolutionDir)includes\;$(SolutionDir)NetworkLib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(SolutionDir)includes\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -185,11 +155,24 @@ call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
-    <PostBuildEvent>
-      <Command>call "$(SolutionDir)Tools\CopyHeader.bat" "$(ProjectDir)" "$(SolutionDir)includes\MonitoringClientLib"
-call "$(SolutionDir)Tools\CopyLib.bat" "$(TargetDir)MonitoringClientLib.lib" "$(SolutionDir)" "$(SolutionDir)Tools\CopyMonitoringClientLibTargetList.txt"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
+  <ItemGroup>
+    <None Include="ServerConfig.conf" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="EchoServerPch.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="EchoServerPch.h" />
+    <ClInclude Include="pch.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

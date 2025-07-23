@@ -20,11 +20,26 @@ namespace MHLib::utils
 {
 	class CMonitoringManager : public Singleton<CMonitoringManager>
 	{
+		friend class Singleton<CMonitoringManager>;
+
 	private:
 		CMonitoringManager() = default;
 		~CMonitoringManager() = default;
 
 	public:
+		void SetConsoleSize(int width = 700, int height = 900)
+		{
+			HWND console = GetConsoleWindow();
+			RECT r;
+			GetWindowRect(console, &r);
+			MoveWindow(console, r.left, r.top, 700, 900, TRUE);
+		}
+
+		inline void RegisterMonitor(CMonitor *monitor)
+		{
+			m_Monitors.push_back(monitor);
+		}
+
 		void Update()
 		{
 			for (CMonitor *monitor : m_Monitors)
@@ -37,4 +52,5 @@ namespace MHLib::utils
 		std::vector<CMonitor *> m_Monitors;
 	};
 
+	inline CMonitoringManager *g_MonitoringMgr = nullptr;
 }

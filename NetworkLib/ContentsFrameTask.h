@@ -1,12 +1,11 @@
 #pragma once
 namespace NetworkLib::Task
 {
-	using NetworkLib::Contents::CBaseContents;
 	class ContentsFrameTask : public TimerTask
 	{
-		void SetEvent(CBaseContents *pBaseContent, int frame) noexcept;
+		void SetEvent(NetworkLib::Contents::CBaseContents *pBaseContent, int frame) noexcept;
 		void execute(int delayFrame) noexcept override;
 
-		CBaseContents *m_pBaseContents;
+		NetworkLib::Contents::CBaseContents *m_pBaseContents;
 	};
 }

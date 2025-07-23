@@ -31,12 +31,12 @@ namespace MonitoringClientLib::Monitoring
 
 	void CSystemMonitor::PrintConsole()
 	{
-
+		PrintSystemMonitorInfo();
 	}
 
 	void CSystemMonitor::Send()
 	{
-
+		SendSystemMonitorInfo();
 	}
 
 	// 시스템 모니터에서는 딱히 할일이 없음
@@ -186,42 +186,42 @@ namespace MonitoringClientLib::Monitoring
 		localtime_s(&m_currentTime, &currentTime);
 
 		// Cpu Usage
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"----------------------------------------");
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"----------------------------------------");
 		// 년 월 일 시 분 초
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tstart \t: %04d.%02d.%02d.%02d.%02d.%02d",
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tstart \t: %04d.%02d.%02d.%02d.%02d.%02d",
 			m_startTime.tm_year + 1900, m_startTime.tm_mon + 1, m_startTime.tm_mday,
 			m_startTime.tm_hour, m_startTime.tm_min, m_startTime.tm_sec);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tnow \t: %04d.%02d.%02d.%02d.%02d.%02d",
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tnow \t: %04d.%02d.%02d.%02d.%02d.%02d",
 			m_currentTime.tm_year + 1900, m_currentTime.tm_mon + 1, m_currentTime.tm_mday,
 			m_currentTime.tm_hour, m_currentTime.tm_min, m_currentTime.tm_sec);
 
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\t\t\tSystem info");
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\t\t\tSystem info");
 
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"Process memory usage");
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\ttotal \t: %u MB", m_stPmc.PrivateUsage / (1024 * 1024));
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tnon-paged pool \t: %u KB\n", m_ProcessNPMemoryVal.largeValue / (1024));
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"System memory usage");
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tavailable \t: %u MB", m_SystemAvailableMemoryVal.largeValue);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tnon-paged pool \t: %u MB\n", m_SystemNPMemoryVal.largeValue / (1024 * 1024));
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"Processor CPU usage");
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tTotal \t: %f", m_fProcessorTotal);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tUser \t: %f", m_fProcessorUser);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tKernel \t: %f\n", m_fProcessorKernel);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"Process CPU usage");
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tTotal \t: %f", m_fProcessTotal);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tUser \t: %f", m_fProcessUser);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tKernel \t: %f\n", m_fProcessKernel);
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"Network");
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"Process memory usage");
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\ttotal \t: %u MB", m_stPmc.PrivateUsage / (1024 * 1024));
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tnon-paged pool \t: %u KB\n", m_ProcessNPMemoryVal.largeValue / (1024));
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"System memory usage");
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tavailable \t: %u MB", m_SystemAvailableMemoryVal.largeValue);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tnon-paged pool \t: %u MB\n", m_SystemNPMemoryVal.largeValue / (1024 * 1024));
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"Processor CPU usage");
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tTotal \t: %f", m_fProcessorTotal);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tUser \t: %f", m_fProcessorUser);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tKernel \t: %f\n", m_fProcessorKernel);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"Process CPU usage");
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tTotal \t: %f", m_fProcessTotal);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tUser \t: %f", m_fProcessUser);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tKernel \t: %f\n", m_fProcessKernel);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"Network");
 		for (int i = 1; i <= m_NetworkSendKBVals.size(); i++)
 		{
-			g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tSend%d \t: %u KB", i, m_NetworkSendKBVals[i - 1].largeValue / (1024));
+			MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tSend%d \t: %u KB", i, m_NetworkSendKBVals[i - 1].largeValue / (1024));
 		}
 		for (int i = 1; i <= m_NetworkSendKBVals.size(); i++)
 		{
-			g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tRecv1 \t: %u KB", i, m_NetworkRecvKBVals[i - 1].largeValue / (1024));
+			MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tRecv1 \t: %u KB", i, m_NetworkRecvKBVals[i - 1].largeValue / (1024));
 		}
 
-		g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"\tRetransmission \t: %u\n", m_NetworkRetransmissionVal.largeValue);
+		MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"\tRetransmission \t: %u\n", m_NetworkRetransmissionVal.largeValue);
 	}
 
 	void CSystemMonitor::SendSystemMonitorInfo()
@@ -232,12 +232,12 @@ namespace MonitoringClientLib::Monitoring
 
 		int currentTime = time(NULL);
 
-		CSerializableBuffer<SERVER_TYPE::LAN> *pCpuTotalBuffer
-			= Protocol::CGenPacket::makePacketReqMonitoringUpdate(Protocol::MONITOR_DATA_UPDATE::MONITOR_CPU_TOTAL, m_fProcessTotal, currentTime);
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pCpuTotalBuffer
+			= MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringUpdate(MonitoringClientLib::Protocol::MONITOR_DATA_UPDATE::MONITOR_CPU_TOTAL, m_fProcessTotal, currentTime);
 		g_MonitoringClient->SendPacket(g_currentMonitoringClientSessionId, pCpuTotalBuffer);
 
-		CSerializableBuffer<SERVER_TYPE::LAN> *pNonpagedMemBuffer
-			= Protocol::CGenPacket::makePacketReqMonitoringUpdate(Protocol::MONITOR_DATA_UPDATE::MONITOR_NONPAGED_MEMORY
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pNonpagedMemBuffer
+			= MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringUpdate(MonitoringClientLib::Protocol::MONITOR_DATA_UPDATE::MONITOR_NONPAGED_MEMORY
 				, m_SystemNPMemoryVal.largeValue / (1024 * 1024), currentTime);
 		g_MonitoringClient->SendPacket(g_currentMonitoringClientSessionId, pNonpagedMemBuffer);
 
@@ -247,8 +247,8 @@ namespace MonitoringClientLib::Monitoring
 			sendKBTotal += m_NetworkSendKBVals[i - 1].largeValue / (1024);
 		}
 
-		CSerializableBuffer<SERVER_TYPE::LAN> *pNetworkSendBuffer
-			= Protocol::CGenPacket::makePacketReqMonitoringUpdate(Protocol::MONITOR_DATA_UPDATE::MONITOR_NETWORK_SEND
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pNetworkSendBuffer
+			= MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringUpdate(MonitoringClientLib::Protocol::MONITOR_DATA_UPDATE::MONITOR_NETWORK_SEND
 				, sendKBTotal, currentTime);
 		g_MonitoringClient->SendPacket(g_currentMonitoringClientSessionId, pNetworkSendBuffer);
 
@@ -258,26 +258,26 @@ namespace MonitoringClientLib::Monitoring
 			recvKBTotal += m_NetworkRecvKBVals[i - 1].largeValue / (1024);
 		}
 
-		CSerializableBuffer<SERVER_TYPE::LAN> *pNetworkRecvBuffer
-			= Protocol::CGenPacket::makePacketReqMonitoringUpdate(Protocol::MONITOR_DATA_UPDATE::MONITOR_NETWORK_RECV
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pNetworkRecvBuffer
+			= MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringUpdate(MonitoringClientLib::Protocol::MONITOR_DATA_UPDATE::MONITOR_NETWORK_RECV
 				, recvKBTotal, currentTime);
 		g_MonitoringClient->SendPacket(g_currentMonitoringClientSessionId, pNetworkRecvBuffer);
 
-		CSerializableBuffer<SERVER_TYPE::LAN> *pAvailableMemBuffer
-			= Protocol::CGenPacket::makePacketReqMonitoringUpdate(Protocol::MONITOR_DATA_UPDATE::MONITOR_AVAILABLE_MEMORY
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pAvailableMemBuffer
+			= MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringUpdate(MonitoringClientLib::Protocol::MONITOR_DATA_UPDATE::MONITOR_AVAILABLE_MEMORY
 				, m_SystemAvailableMemoryVal.largeValue, currentTime);
 		g_MonitoringClient->SendPacket(g_currentMonitoringClientSessionId, pAvailableMemBuffer);
 
 		// 아랫 부분 학원 제공 프로토콜이 GAME, CHAT, ... 이런식으로 서버가 특정되어 있음
 		// 나중에 직접 모니터링 프로토콜 설계할 때는 따로 다시 만들어야 함
 
-		CSerializableBuffer<SERVER_TYPE::LAN> *pGameServerCpuBuffer
-			= Protocol::CGenPacket::makePacketReqMonitoringUpdate(Protocol::MONITOR_DATA_UPDATE::GAME_SERVER_CPU
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pGameServerCpuBuffer
+			= MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringUpdate(MonitoringClientLib::Protocol::MONITOR_DATA_UPDATE::GAME_SERVER_CPU
 				, m_fProcessTotal, currentTime);
 		g_MonitoringClient->SendPacket(g_currentMonitoringClientSessionId, pGameServerCpuBuffer);
 
-		CSerializableBuffer<SERVER_TYPE::LAN> *pGameServerMemBuffer
-			= Protocol::CGenPacket::makePacketReqMonitoringUpdate(Protocol::MONITOR_DATA_UPDATE::GAME_SERVER_MEM
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pGameServerMemBuffer
+			= MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringUpdate(MonitoringClientLib::Protocol::MONITOR_DATA_UPDATE::GAME_SERVER_MEM
 				, m_stPmc.PrivateUsage / (1024 * 1024), currentTime);
 		g_MonitoringClient->SendPacket(g_currentMonitoringClientSessionId, pGameServerMemBuffer);
 	}

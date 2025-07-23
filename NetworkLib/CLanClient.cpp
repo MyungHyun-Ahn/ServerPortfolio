@@ -3,13 +3,6 @@
 
 namespace NetworkLib::Core::Lan::Client
 {
-		using namespace NetworkLib;
-		using namespace NetworkLib::DataStructures;
-		using namespace NetworkLib::Core::Utils;
-		using namespace MHLib::memory;
-		using namespace MHLib::utils;
-		using namespace MHLib::debug;
-
 		CLanClientManager *g_netClientMgr;
 
 		void CLanSession::Clear() noexcept
@@ -18,7 +11,7 @@ namespace NetworkLib::Core::Lan::Client
 			{
 				if (m_arrPSendBufs[count]->DecreaseRef() == 0)
 				{
-					CSerializableBuffer<SERVER_TYPE::LAN>::Free(m_arrPSendBufs[count]);
+					NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN>::Free(m_arrPSendBufs[count]);
 				}
 			}
 
@@ -27,26 +20,26 @@ namespace NetworkLib::Core::Lan::Client
 			LONG useBufferSize = m_lfSendBufferQueue.GetUseSize();
 			for (int i = 0; i < useBufferSize; i++)
 			{
-				CSerializableBuffer<SERVER_TYPE::LAN> *pBuffer;
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pBuffer;
 				// 못꺼낸 것
 				if (!m_lfSendBufferQueue.Dequeue(&pBuffer))
 				{
-					g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"LFQueue::Dequeue() Error");
+					MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"LFQueue::Dequeue() Error");
 					// 말도 안되는 상황
-					CCrashDump::Crash();
+					MHLib::debug::CCrashDump::Crash();
 				}
 
 				// RefCount를 낮추고 0이라면 보낸 거 삭제
 				if (pBuffer->DecreaseRef() == 0)
 				{
-					CSerializableBuffer<SERVER_TYPE::LAN>::Free(pBuffer);
+					NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN>::Free(pBuffer);
 				}
 			}
 
 			useBufferSize = m_lfSendBufferQueue.GetUseSize();
 			if (useBufferSize != 0)
 			{
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"LFQueue is not empty Error");
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"LFQueue is not empty Error");
 			}
 
 			m_sSessionSocket = INVALID_SOCKET;
@@ -67,7 +60,8 @@ namespace NetworkLib::Core::Lan::Client
 				Utils::Lan::Header packetHeader;
 				m_RecvBuffer.Peek((char *)&packetHeader, sizeof(Utils::Net::Header));
 
-				if (packetHeader.len > (int)DataStructures::CSerializableBuffer<SERVER_TYPE::LAN>::DEFINE::PACKET_MAX_SIZE - sizeof(Utils::Lan::Header) || packetHeader.len >= 65535 || packetHeader.len >= m_RecvBuffer.GetCapacity())
+				if (packetHeader.len > 
+					(int)NetworkLib::DataStructures::CSerializableBuffer<SERVER_TYPE::LAN>::DEFINE::PACKET_MAX_SIZE - sizeof(NetworkLib::Core::Utils::Lan::Header) || packetHeader.len >= 65535 || packetHeader.len >= m_RecvBuffer.GetCapacity())
 				{
 					g_netClientMgr->m_arrNetClients[m_ClientMgrIndex]->Disconnect(m_uiSessionID);
 					return;
@@ -76,9 +70,10 @@ namespace NetworkLib::Core::Lan::Client
 				if (m_RecvBuffer.GetUseSize() < sizeof(Utils::Lan::Header) + packetHeader.len)
 					break;
 
-				CSerializableBuffer<SERVER_TYPE::LAN> *view = CSerializableBuffer<SERVER_TYPE::LAN>::Alloc();
-				m_RecvBuffer.MoveFront(sizeof(Utils::Lan::Header));
-				view->EnqueueHeader((char *)&packetHeader, sizeof(Utils::Lan::Header));
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *view 
+					= NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN>::Alloc();
+				m_RecvBuffer.MoveFront(sizeof(NetworkLib::Core::Utils::Lan::Header));
+				view->EnqueueHeader((char *)&packetHeader, sizeof(NetworkLib::Core::Utils::Lan::Header));
 
 				m_RecvBuffer.Dequeue(view->GetContentBufferPtr(), packetHeader.len);
 				view->MoveWritePos(packetHeader.len);
@@ -92,7 +87,7 @@ namespace NetworkLib::Core::Lan::Client
 			}
 		}
 
-		bool CLanSession::SendPacket(CSerializableBuffer<SERVER_TYPE::LAN> *message) noexcept
+		bool CLanSession::SendPacket(NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *message) noexcept
 		{
 			// 여기서 올라간 RefCount는 SendCompleted에서 내려감
 			// 혹은 ReleaseSession
@@ -115,7 +110,7 @@ namespace NetworkLib::Core::Lan::Client
 				// RefCount를 낮추고 0이라면 보낸 거 삭제
 				if (m_arrPSendBufs[count]->DecreaseRef() == 0)
 				{
-					CSerializableBuffer<SERVER_TYPE::LAN>::Free(m_arrPSendBufs[count]);
+					NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN>::Free(m_arrPSendBufs[count]);
 				}
 			}
 
@@ -160,7 +155,7 @@ namespace NetworkLib::Core::Lan::Client
 				if (errVal != WSA_IO_PENDING)
 				{
 					if (errVal != WSAECONNABORTED && errVal != WSAECONNRESET && errVal != WSAEINTR)
-						g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"WSARecv() Error : %d", errVal);
+						MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSARecv() Error : %d", errVal);
 
 					// 사실 여기선 0이 될 일이 없음
 					// 반환값을 사용안해도 됨
@@ -223,9 +218,9 @@ namespace NetworkLib::Core::Lan::Client
 				return FALSE;
 			}
 
-			WSABUF wsaBuf[WSASEND_MAX_BUFFER_COUNT];
+			WSABUF wsaBuf[NetworkLib::Core::Utils::WSASEND_MAX_BUFFER_COUNT];
 
-			m_iSendCount = min(sendUseSize, WSASEND_MAX_BUFFER_COUNT);
+			m_iSendCount = min(sendUseSize, NetworkLib::Core::Utils::WSASEND_MAX_BUFFER_COUNT);
 			// WSASEND_MAX_BUFFER_COUNT 만큼 1초에 몇번 보내는지 카운트
 			// 이 수치가 높다면 더 늘릴 것
 			// if (m_iSendCount == WSASEND_MAX_BUFFER_COUNT)
@@ -234,13 +229,13 @@ namespace NetworkLib::Core::Lan::Client
 			int count;
 			for (count = 0; count < m_iSendCount; count++)
 			{
-				CSerializableBuffer<SERVER_TYPE::LAN> *pBuffer;
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *pBuffer;
 				// 못꺼낸 것
 				if (!m_lfSendBufferQueue.Dequeue(&pBuffer))
 				{
-					g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"LFQueue::Dequeue() Error");
+					MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"LFQueue::Dequeue() Error");
 					// 말도 안되는 상황
-					CCrashDump::Crash();
+					MHLib::debug::CCrashDump::Crash();
 				}
 
 				wsaBuf[count].buf = pBuffer->GetBufferPtr();
@@ -263,7 +258,7 @@ namespace NetworkLib::Core::Lan::Client
 				if (errVal != WSA_IO_PENDING)
 				{
 					if (errVal != WSAECONNABORTED && errVal != WSAECONNRESET && errVal != WSAEINTR)
-						g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"WSASend() Error : %d", errVal);
+						MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSASend() Error : %d", errVal);
 
 					// 사실 여기선 0이 될 일이 없음
 					// 반환값을 사용안해도 됨
@@ -302,9 +297,9 @@ namespace NetworkLib::Core::Lan::Client
 			return TRUE;
 		}
 
-		void CLanClient::SendPacket(const UINT64 sessionID, CSerializableBuffer<SERVER_TYPE::LAN> *sBuffer) noexcept
+		void CLanClient::SendPacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *sBuffer) noexcept
 		{
-			CLanSession *pSession = m_arrPSessions[GetSessionIndex(sessionID)];
+			CLanSession *pSession = m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
 
 			InterlockedIncrement(&pSession->m_iIOCountAndRelease);
 			// ReleaseFlag가 이미 켜진 상황
@@ -342,9 +337,9 @@ namespace NetworkLib::Core::Lan::Client
 			}
 		}
 
-		void CLanClient::EnqueuePacket(const UINT64 sessionID, CSerializableBuffer<SERVER_TYPE::LAN> *sBuffer) noexcept
+		void CLanClient::EnqueuePacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *sBuffer) noexcept
 		{
-			CLanSession *pSession = m_arrPSessions[GetSessionIndex(sessionID)];
+			CLanSession *pSession = m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
 
 			InterlockedIncrement(&pSession->m_iIOCountAndRelease);
 			// ReleaseFlag가 이미 켜진 상황
@@ -397,7 +392,7 @@ namespace NetworkLib::Core::Lan::Client
 
 		BOOL CLanClient::Disconnect(const UINT64 sessionID, BOOL isPQCS) noexcept
 		{
-			CLanSession *pSession = m_arrPSessions[GetSessionIndex(sessionID)];
+			CLanSession *pSession = m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
 			if (pSession == nullptr)
 				return FALSE;
 
@@ -453,11 +448,11 @@ namespace NetworkLib::Core::Lan::Client
 
 			if (isPQCS)
 			{
-				PostQueuedCompletionStatus(g_netClientMgr->m_hIOCPHandle, 0, (ULONG_PTR)pSession, (LPOVERLAPPED)IOOperation::RELEASE_SESSION);
+				PostQueuedCompletionStatus(g_netClientMgr->m_hIOCPHandle, 0, (ULONG_PTR)pSession, (LPOVERLAPPED)NetworkLib::DataStructures::IOOperation::RELEASE_SESSION);
 				return TRUE;
 			}
 
-			USHORT index = GetSessionIndex(pSession->m_uiSessionID);
+			USHORT index = NetworkLib::Core::Utils::GetSessionIndex(pSession->m_uiSessionID);
 			closesocket(pSession->m_sSessionSocket);
 			UINT64 freeSessionId = pSession->m_uiSessionID;
 			CLanSession::Free(pSession);
@@ -472,7 +467,7 @@ namespace NetworkLib::Core::Lan::Client
 
 		BOOL CLanClient::ReleaseSessionPQCS(CLanSession *pSession) noexcept
 		{
-			USHORT index = GetSessionIndex(pSession->m_uiSessionID);
+			USHORT index = NetworkLib::Core::Utils::GetSessionIndex(pSession->m_uiSessionID);
 			closesocket(pSession->m_sSessionSocket);
 			UINT64 freeSessionId = pSession->m_uiSessionID;
 			CLanSession::Free(pSession);
@@ -495,7 +490,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (pConnectSession->m_sSessionSocket == INVALID_SOCKET)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"PostAcceptEx socket() 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"PostAcceptEx socket() 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -507,7 +502,7 @@ namespace NetworkLib::Core::Lan::Client
 				if (retVal == SOCKET_ERROR)
 				{
 					errVal = WSAGetLastError();
-					g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"setsockopt(SO_SNDBUF) 실패 : %d", errVal);
+					MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_SNDBUF) 실패 : %d", errVal);
 					return FALSE;
 				}
 			}
@@ -518,7 +513,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (retVal == SOCKET_ERROR)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"setsockopt(SO_LINGER) 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_LINGER) 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -532,7 +527,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (retVal == SOCKET_ERROR)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"bind() 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"bind() 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -541,11 +536,11 @@ namespace NetworkLib::Core::Lan::Client
 			// 연결 실패 : FALSE
 			if (!m_stackDisconnectIndex.Pop(&index))
 			{
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"m_stackDisconnectIndex.Pop(&index) failed");
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"m_stackDisconnectIndex.Pop(&index) failed");
 				return FALSE;
 			}
 
-			UINT64 combineId = CombineSessionIndex(index, InterlockedIncrement64(&m_iCurrentID));
+			UINT64 combineId = NetworkLib::Core::Utils::CombineSessionIndex(index, InterlockedIncrement64(&m_iCurrentID));
 			pConnectSession->Init(combineId, m_ClientMgrIndex);
 
 			m_arrPSessions[index] = pConnectSession;
@@ -566,7 +561,7 @@ namespace NetworkLib::Core::Lan::Client
 				if (errVal != ERROR_IO_PENDING)
 				{
 					if (errVal != WSAECONNABORTED && errVal != WSAECONNRESET)
-						g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"AcceptEx() Error : %d", errVal);
+						MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"AcceptEx() Error : %d", errVal);
 
 					return FALSE;
 				}
@@ -585,7 +580,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (retVal == SOCKET_ERROR)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"setsockopt(SO_UPDATE_CONNECT_CONTEXT) 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_UPDATE_CONNECT_CONTEXT) 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -607,7 +602,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (retVal != 0)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"WSAStartup() 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAStartup() 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -615,7 +610,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (m_hIOCPHandle == NULL)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"CreateIoCompletionPort(생성) 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"CreateIoCompletionPort(생성) 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -624,7 +619,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (dummySocket == INVALID_SOCKET)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"WSASocket() 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSASocket() 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -633,7 +628,7 @@ namespace NetworkLib::Core::Lan::Client
 			if (retVal == SOCKET_ERROR)
 			{
 				errVal = WSAGetLastError();
-				g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"WSAIoctl(lpfnConnectEx) 실패 : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAIoctl(lpfnConnectEx) 실패 : %d", errVal);
 				return FALSE;
 			}
 
@@ -653,12 +648,12 @@ namespace NetworkLib::Core::Lan::Client
 				if (hWorkerThread == 0)
 				{
 					errVal = GetLastError();
-					g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", LOG_LEVEL::ERR, L"WorkerThread[%d] running fail.. : %d", i, errVal);
+					MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WorkerThread[%d] running fail.. : %d", i, errVal);
 					return FALSE;
 				}
 
 				m_arrWorkerThreads.push_back(hWorkerThread);
-				g_Logger->WriteLogConsole(LOG_LEVEL::SYSTEM, L"[SYSTEM] WorkerThread[%d] running..", i);
+				MHLib::utils::g_Logger->WriteLogConsole(MHLib::utils::LOG_LEVEL::SYSTEM, L"[SYSTEM] WorkerThread[%d] running..", i);
 			}
 
 			return TRUE;
@@ -689,12 +684,12 @@ namespace NetworkLib::Core::Lan::Client
 					, (PULONG_PTR)&pSession, (LPOVERLAPPED *)&lpOverlapped
 					, INFINITE);
 
-				IOOperation oper;
+				NetworkLib::DataStructures::IOOperation oper;
 				if ((UINT64)lpOverlapped >= 3)
 				{
 					if ((UINT64)lpOverlapped < 0xFFFF)
 					{
-						oper = (IOOperation)(UINT64)lpOverlapped;
+						oper = (NetworkLib::DataStructures::IOOperation)(UINT64)lpOverlapped;
 					}
 					else
 					{
@@ -718,7 +713,7 @@ namespace NetworkLib::Core::Lan::Client
 					}
 				}
 				// 소켓 정상 종료
-				else if (dwTransferred == 0 && oper != IOOperation::ACCEPTEX && (UINT)oper < 3)
+				else if (dwTransferred == 0 && oper != NetworkLib::DataStructures::IOOperation::ACCEPTEX && (UINT)oper < 3)
 				{
 					// Disconnect(pSession->m_uiSessionID);
 				}
@@ -726,7 +721,7 @@ namespace NetworkLib::Core::Lan::Client
 				{
 					switch (oper)
 					{
-					case IOOperation::ACCEPTEX:
+					case NetworkLib::DataStructures::IOOperation::ACCEPTEX:
 					{
 						InterlockedIncrement(&pSession->m_iIOCountAndRelease);
 						if (!m_arrNetClients[pSession->m_ClientMgrIndex]->ConnectExCompleted(pSession))
@@ -746,25 +741,25 @@ namespace NetworkLib::Core::Lan::Client
 						continue;
 					}
 					break;
-					case IOOperation::RECV:
+					case NetworkLib::DataStructures::IOOperation::RECV:
 					{
 						pSession->RecvCompleted(dwTransferred);
 						pSession->PostRecv();
 					}
 					break;
-					case IOOperation::SEND:
+					case NetworkLib::DataStructures::IOOperation::SEND:
 					{
 						pSession->SendCompleted(dwTransferred);
 						pSession->PostSend();
 					}
 					break;
-					case IOOperation::SENDPOST:
+					case NetworkLib::DataStructures::IOOperation::SENDPOST:
 					{
 						pSession->PostSend();
 						continue;
 					}
 					break;
-					case IOOperation::RELEASE_SESSION:
+					case NetworkLib::DataStructures::IOOperation::RELEASE_SESSION:
 					{
 						m_arrNetClients[pSession->m_ClientMgrIndex]->ReleaseSessionPQCS(pSession);
 						continue;

@@ -7,14 +7,6 @@
 
 namespace NetworkLib::Core::Lan::Client
 {
-#pragma once
-
-		using namespace NetworkLib;
-		using namespace NetworkLib::DataStructures;
-		using namespace NetworkLib::Core::Utils;
-		using namespace MHLib::memory;
-
-
 #pragma warning(disable : 6387) // ConnectEx Param 경고
 
 		class CLanClientManager;
@@ -59,7 +51,7 @@ namespace NetworkLib::Core::Lan::Client
 
 			void RecvCompleted(int size) noexcept;
 
-			bool SendPacket(CSerializableBuffer<SERVER_TYPE::LAN> *message) noexcept;
+			bool SendPacket(NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *message) noexcept;
 			void SendCompleted(int size) noexcept;
 
 			bool PostRecv() noexcept;
@@ -88,7 +80,7 @@ namespace NetworkLib::Core::Lan::Client
 			LONG m_iIOCountAndRelease = RELEASE_FLAG;
 			LONG m_iSendCount = 0;
 			
-			CRingBuffer<4096> m_RecvBuffer;
+			NetworkLib::DataStructures::CRingBuffer<4096> m_RecvBuffer;
 
 			// CRecvBuffer *m_pRecvBuffer = nullptr;
 			SOCKET m_sSessionSocket;
@@ -104,23 +96,23 @@ namespace NetworkLib::Core::Lan::Client
 			char		m_dummy01[2]; // 패딩 계산용
 			// 최대 무조건 1개 -> 있거나 없거나
 			// CSerializableBufferView<SERVER_TYPE::LAN> *m_pDelayedBuffer = nullptr;
-			CLFQueue<CSerializableBuffer<SERVER_TYPE::LAN> *> m_lfSendBufferQueue;
+			MHLib::containers::CLFQueue<NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *> m_lfSendBufferQueue;
 			// m_pMyOverlappedStartAddr
 			//  + 0 : ACCEPTEX
 			//  + 1 : RECV
 			//  + 2 : SEND
 			OVERLAPPED *m_pMyOverlappedStartAddr = nullptr;
-			CSerializableBuffer<SERVER_TYPE::LAN> *m_arrPSendBufs[WSASEND_MAX_BUFFER_COUNT]; // 8 * 32 = 256
+			NetworkLib::DataStructures::CSerializableBuffer<SERVER_TYPE::LAN> *m_arrPSendBufs[NetworkLib::Core::Utils::WSASEND_MAX_BUFFER_COUNT]; // 8 * 32 = 256
 
 			LONG m_iCacelIoCalled = FALSE;
 
 			INT m_ClientMgrIndex;
 
-			inline static CTLSMemoryPoolManager<CLanSession, 16, 4> s_sSessionPool = CTLSMemoryPoolManager<CLanSession, 16, 4>();
+			inline static MHLib::memory::CTLSMemoryPoolManager<CLanSession, 16, 4> s_sSessionPool = MHLib::memory::CTLSMemoryPoolManager<CLanSession, 16, 4>();
 			inline static constexpr LONG RELEASE_FLAG = 0x80000000;
 			inline static constexpr LONG ENQUEUE_FLAG = 0x80000000;
 
-			inline static COverlappedAllocator<> s_OverlappedPool;
+			inline static NetworkLib::DataStructures::COverlappedAllocator<> s_OverlappedPool;
 		};
 
 		class CLanClient
@@ -132,8 +124,8 @@ namespace NetworkLib::Core::Lan::Client
 
 			inline LONG GetSessionCount() const noexcept { return m_iSessionCount; }
 
-			void SendPacket(const UINT64 sessionID, CSerializableBuffer<SERVER_TYPE::LAN> *sBuffer) noexcept;
-			void EnqueuePacket(const UINT64 sessionID, CSerializableBuffer<SERVER_TYPE::LAN> *sBuffer) noexcept;
+			void SendPacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *sBuffer) noexcept;
+			void EnqueuePacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *sBuffer) noexcept;
 
 			BOOL Disconnect(const UINT64 sessionID, BOOL isPQCS = FALSE) noexcept;
 			BOOL ReleaseSession(CLanSession *pSession, BOOL isPQCS = FALSE) noexcept;
@@ -141,7 +133,7 @@ namespace NetworkLib::Core::Lan::Client
 
 			virtual void OnConnect(const UINT64 sessionID) noexcept = 0;
 			virtual void OnDisconnect(const UINT64 sessionID) noexcept = 0;
-			virtual void OnRecv(const UINT64 sessionID, CSerializableBuffer<SERVER_TYPE::LAN> *message) noexcept = 0;
+			virtual void OnRecv(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *message) noexcept = 0;
 
 			BOOL PostConnectEx(const CHAR *ip, const USHORT port) noexcept;
 			BOOL ConnectExCompleted(CLanSession *pSession) noexcept;
@@ -152,7 +144,7 @@ namespace NetworkLib::Core::Lan::Client
 			// Session
 			LONG					m_iSessionCount = 0;
 			LONG64					m_iCurrentID = 0;
-			CLFStack<USHORT>		m_stackDisconnectIndex;
+			MHLib::containers::CLFStack<USHORT>		m_stackDisconnectIndex;
 
 			INT			m_iMaxSessionCount;
 			CLanSession **m_arrPSessions;

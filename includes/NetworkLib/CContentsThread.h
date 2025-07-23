@@ -30,10 +30,10 @@ namespace NetworkLib::Contents
 		void Resume() noexcept;
 
 		static void RunAll() noexcept;
-		static void EnqueueEvent(Task::BaseTask *pTask);
+		static void EnqueueEvent(NetworkLib::Task::BaseTask *pTask);
 
 		// 자기 자신 스레드에게 Enqueue Event
-		void EnqueueEventMy(Task::BaseTask *pTask) noexcept;
+		void EnqueueEventMy(NetworkLib::Task::BaseTask *pTask) noexcept;
 
 	private:
 		static unsigned __stdcall ThreadFunc(void *pThis) noexcept;
@@ -56,12 +56,12 @@ namespace NetworkLib::Contents
 		HANDLE					m_ThreadHandle = INVALID_HANDLE_VALUE;
 		BOOL					m_RunningFlag = FALSE;
 
-		MHLib::containers::CLFQueue<Task::BaseTask *>	m_EnqueueEventQ;
+		MHLib::containers::CLFQueue<NetworkLib::Task::BaseTask *>	m_EnqueueEventQ;
 		LONG					m_EnqueueFlag = FALSE;
 		LONG					m_EnqueueComparand = FALSE;
 
 		// TimerEvent Queue
-		std::priority_queue<Task::TimerTask *, std::vector<Task::TimerTask *>, Task::TimerTaskComparator>	m_TimerEventQueue;
+		std::priority_queue<NetworkLib::Task::TimerTask *, std::vector<NetworkLib::Task::TimerTask *>, NetworkLib::Task::TimerTaskComparator>	m_TimerEventQueue;
 		SRWLOCK					m_lockTimerEventQ;
 
 		// SleepTime이 모자르면 다른 스레드에 일감 넘김
