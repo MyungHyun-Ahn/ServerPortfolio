@@ -162,8 +162,11 @@
   <ItemGroup>
     <ClCompile Include="CAuthContents.cpp" />
     <ClCompile Include="CEchoContents.cpp" />
+    <ClCompile Include="CEchoMonitor.cpp" />
+    <ClCompile Include="CEchoServer.cpp" />
     <ClCompile Include="CGenPacket.cpp" />
     <ClCompile Include="EchoServerPch.cpp" />
+    <ClCompile Include="EchoServerSetting.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -175,10 +178,13 @@
   <ItemGroup>
     <ClInclude Include="CAuthContents.h" />
     <ClInclude Include="CEchoContents.h" />
+    <ClInclude Include="CEchoMonitor.h" />
+    <ClInclude Include="CEchoServer.h" />
     <ClInclude Include="CGenPacket.h" />
     <ClInclude Include="CPlayer.h" />
     <ClInclude Include="EchoProtocol.h" />
     <ClInclude Include="EchoServerPch.h" />
+    <ClInclude Include="EchoServerSetting.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

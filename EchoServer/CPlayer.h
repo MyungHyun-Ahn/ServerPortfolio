@@ -15,7 +15,7 @@ namespace EchoServer::Objects
 	{
 	public:
 		INT64 m_iAccountNo;
-		DWORD m_dwPrecRecvTime;
+		DWORD m_dwPrevRecvTime;
 
 	private:
 		USE_TLS_POOL(CPlayer, s_PlayerPool)

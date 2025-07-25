@@ -6,8 +6,15 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetworkLib", "NetworkLib\NetworkLib.vcxproj", "{34E48A27-824D-4768-8AFF-B514E215FF4E}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MonitoringClientLib", "MonitoringClientLib\MonitoringClientLib.vcxproj", "{902E932B-9A7B-4F07-B7DC-7053E18DEE02}"
+	ProjectSection(ProjectDependencies) = postProject
+		{34E48A27-824D-4768-8AFF-B514E215FF4E} = {34E48A27-824D-4768-8AFF-B514E215FF4E}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EchoServer", "EchoServer\EchoServer.vcxproj", "{303C801F-15D8-424D-A452-43098C09A907}"
+	ProjectSection(ProjectDependencies) = postProject
+		{34E48A27-824D-4768-8AFF-B514E215FF4E} = {34E48A27-824D-4768-8AFF-B514E215FF4E}
+		{902E932B-9A7B-4F07-B7DC-7053E18DEE02} = {902E932B-9A7B-4F07-B7DC-7053E18DEE02}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

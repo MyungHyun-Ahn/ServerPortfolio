@@ -61,7 +61,7 @@ namespace NetworkLib::Contents
 			// 세션에 상태 설정
 			// pSession->flag = m_pBaseContent::State
 			OnEnter(moveJob->sessionId, moveJob->objectPtr);
-			pSession->m_pCurrentContent = this;
+			pSession->RegisterContents(this);
 
 			MOVE_JOB::Free(moveJob);
 

@@ -226,8 +226,4 @@ namespace NetworkLib::Contents
 			ProcessTimerEvent();
 		}
 	}
-
-
-
-
 }

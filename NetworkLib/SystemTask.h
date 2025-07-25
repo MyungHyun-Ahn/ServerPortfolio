@@ -1,4 +1,5 @@
 #pragma once
+
 namespace NetworkLib::Task
 {
 	struct MonitorTimerTask : public TimerTask

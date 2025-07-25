@@ -20,6 +20,15 @@
     <ClCompile Include="CEchoContents.cpp">
       <Filter>Contents</Filter>
     </ClCompile>
+    <ClCompile Include="CEchoServer.cpp">
+      <Filter>Server</Filter>
+    </ClCompile>
+    <ClCompile Include="EchoServerSetting.cpp">
+      <Filter>Server</Filter>
+    </ClCompile>
+    <ClCompile Include="CEchoMonitor.cpp">
+      <Filter>Monitor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -43,6 +52,15 @@
     <ClInclude Include="CPlayer.h">
       <Filter>Objects</Filter>
     </ClInclude>
+    <ClInclude Include="CEchoServer.h">
+      <Filter>Server</Filter>
+    </ClInclude>
+    <ClInclude Include="EchoServerSetting.h">
+      <Filter>Server</Filter>
+    </ClInclude>
+    <ClInclude Include="CEchoMonitor.h">
+      <Filter>Monitor</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Define">
@@ -62,6 +80,9 @@
     </Filter>
     <Filter Include="Tools">
       <UniqueIdentifier>{dd358aa0-fd62-4249-b783-de951c29076d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Monitor">
+      <UniqueIdentifier>{28876437-d7cd-4e3a-8309-d0e178f8c506}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

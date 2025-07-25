@@ -59,6 +59,10 @@ namespace NetworkLib::Contents
 		virtual RECV_RET OnRecv(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *message, int delayFrame) noexcept = 0;
 		virtual void OnLoopEnd() noexcept = 0;
 
+		// 모니터링용
+		inline LONG FPSReset() noexcept { return InterlockedExchange(&m_FPS, 0); }
+		inline LONG GetSessionCount() const noexcept { return m_umapSessions.size(); }
+
 	protected:
 		LONG m_ContentsID;
 		inline static LONG s_CurrentContentsID = 0;
