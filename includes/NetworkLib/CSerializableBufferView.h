@@ -230,10 +230,6 @@ namespace NetworkLib::DataStructures
 			return *this;
 		}
 
-		inline LONG IncreaseRef() noexcept { return InterlockedIncrement(&m_iRefCount); }
-		inline LONG DecreaseRef() noexcept { return InterlockedDecrement(&m_iRefCount); }
-
-
 	private:
 		char *m_pBuffer;
 		int m_iBufferSize = 0;
@@ -246,9 +242,8 @@ namespace NetworkLib::DataStructures
 		char m_delayedHeader[(int)CSerializableBuffer<isLanServer>::DEFINE::HEADER_SIZE];
 		USHORT m_iReadHeaderSize = 0;
 
-		LONG			m_iRefCount = 0;
 		UINT64			m_uiSessionId = 0;
-
+		USE_SMART_PTR
 		USE_TLS_POOL_WITH_INIT(CSerializableBufferView, s_sbufferPool, Clear)
 	};
 

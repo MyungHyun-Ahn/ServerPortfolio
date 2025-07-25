@@ -81,19 +81,15 @@ namespace NetworkLib::DataStructures
 		inline char *GetRearPtr() const noexcept { return m_PQueue + m_iRear; }
 		inline int GetRearOffset() const noexcept { return m_iRear; }
 
-		inline LONG IncreaseRef() noexcept { return InterlockedIncrement(&m_iRefCount); }
-		inline LONG DecreaseRef() noexcept { return InterlockedDecrement(&m_iRefCount); }
-
 	private:
 		char *m_PQueue = nullptr;
 
 		int				m_iCapacity = RECV_BUFFER_SIZE;
 		int				m_iFront = 0;
 		int				m_iRear = 0;
-		LONG			m_iRefCount = 0;
-
+		
+		USE_SMART_PTR
 		USE_TLS_POOL_WITH_INIT(CRecvBuffer, s_sbufferPool, Clear)
-
 		inline static MHLib::memory::CTLSPagePoolManager<RECV_BUFFER_SIZE, 2> s_PagePool = MHLib::memory::CTLSPagePoolManager<RECV_BUFFER_SIZE, 2>();
 	};
 }

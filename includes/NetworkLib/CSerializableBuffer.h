@@ -399,18 +399,6 @@ namespace NetworkLib::DataStructures
 		}
 
 	public:
-		inline LONG IncreaseRef() noexcept
-		{
-			return InterlockedIncrement(&m_iRefCount);
-		}
-		inline LONG DecreaseRef() noexcept
-		{
-			LONG back = InterlockedDecrement(&m_iRefCount);
-			if (back == -1)
-				__debugbreak();
-			return back;
-		}
-
 		inline void SetSessionId(UINT64 id) noexcept { m_uiSessionId = id; }
 		inline UINT64 GetSessionId() noexcept { return m_uiSessionId; }
 
@@ -421,10 +409,10 @@ namespace NetworkLib::DataStructures
 		int m_Rear = 0;
 		int m_MaxSize = (int)DEFINE::PACKET_MAX_SIZE;
 
-		LONG			m_iRefCount = 0;
 		BOOL			m_isEnqueueHeader = 0;
 		UINT64			m_uiSessionId = 0;
 
+		USE_SMART_PTR
 
 		USE_TLS_POOL_WITH_INIT(CSerializableBuffer, s_sbufferPool, Clear)
 		inline static MHLib::memory::CTLSPagePoolManager<(int)DEFINE::PACKET_MAX_SIZE, 16, false> s_sPagePool = MHLib::memory::CTLSPagePoolManager<(int)DEFINE::PACKET_MAX_SIZE, 16, false>();

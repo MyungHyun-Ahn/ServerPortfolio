@@ -11,6 +11,24 @@
 #include <windows.h>
 #include <concepts>
 
+// 스마트 포인터를 사용하기 위한 선언 세트
+#define USE_SMART_PTR												\
+	public:															\
+		inline LONG IncreaseRef() noexcept							\
+		{															\
+			return InterlockedIncrement(&m_iRefCount);				\
+		}															\
+		inline LONG DecreaseRef() noexcept							\
+		{															\
+			LONG back = InterlockedDecrement(&m_iRefCount);			\
+			if (back != 0)											\
+				__debugbreak();										\
+			return back;											\
+		}															\
+	private:														\
+		LONG m_iRefCount = 0;										
+		
+
 namespace MHLib::utils
 {
 	template<typename T>
