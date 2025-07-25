@@ -84,21 +84,6 @@ namespace NetworkLib::DataStructures
 		inline LONG IncreaseRef() noexcept { return InterlockedIncrement(&m_iRefCount); }
 		inline LONG DecreaseRef() noexcept { return InterlockedDecrement(&m_iRefCount); }
 
-		inline static CRecvBuffer *Alloc() noexcept
-		{
-			CRecvBuffer *pBuffer = s_sbufferPool.Alloc();
-			pBuffer->Clear();
-			return pBuffer;
-		}
-
-		inline static void Free(CRecvBuffer *delBuffer) noexcept
-		{
-			s_sbufferPool.Free(delBuffer);
-		}
-
-		inline static LONG GetPoolCapacity() noexcept { return s_sbufferPool.GetCapacity(); }
-		inline static LONG GetPoolUsage() noexcept { return s_sbufferPool.GetUseCount(); }
-
 	private:
 		char *m_PQueue = nullptr;
 
@@ -107,7 +92,7 @@ namespace NetworkLib::DataStructures
 		int				m_iRear = 0;
 		LONG			m_iRefCount = 0;
 
-		inline static MHLib::memory::CTLSMemoryPoolManager<CRecvBuffer, 16, 4> s_sbufferPool = MHLib::memory::CTLSMemoryPoolManager<CRecvBuffer, 16, 4>();
+		USE_TLS_POOL_WITH_INIT(CRecvBuffer, s_sbufferPool, Clear)
 		inline static MHLib::memory::CTLSPagePoolManager<RECV_BUFFER_SIZE, 2> s_PagePool = MHLib::memory::CTLSPagePoolManager<RECV_BUFFER_SIZE, 2>();
 	};
 }

@@ -57,22 +57,6 @@ namespace NetworkLib::Core::Lan::Client
 			bool PostRecv() noexcept;
 			bool PostSend(bool isPQCS = FALSE) noexcept;
 
-		public:
-			inline static CLanSession *Alloc() noexcept
-			{
-				CLanSession *pSession = s_sSessionPool.Alloc();
-				return pSession;
-			}
-
-			inline static void Free(CLanSession *delSession) noexcept
-			{
-				delSession->Clear();
-				s_sSessionPool.Free(delSession);
-			}
-
-			inline static LONG GetPoolCapacity() noexcept { return s_sSessionPool.GetCapacity(); }
-			inline static LONG GetPoolUsage() noexcept { return s_sSessionPool.GetUseCount(); }
-
 		private:
 			// 패딩 계산해서 세션 크기 최적화
 		// + Interlock 사용하는 변수들은 캐시라인 띄워놓기
@@ -108,7 +92,9 @@ namespace NetworkLib::Core::Lan::Client
 
 			INT m_ClientMgrIndex;
 
-			inline static MHLib::memory::CTLSMemoryPoolManager<CLanSession, 16, 4> s_sSessionPool = MHLib::memory::CTLSMemoryPoolManager<CLanSession, 16, 4>();
+
+			USE_TLS_POOL_WITH_INIT(CLanSession, s_sSessionPool, Clear)
+
 			inline static constexpr LONG RELEASE_FLAG = 0x80000000;
 			inline static constexpr LONG ENQUEUE_FLAG = 0x80000000;
 

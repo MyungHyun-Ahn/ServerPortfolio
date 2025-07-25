@@ -63,7 +63,7 @@ namespace NetworkLib::Contents
 			OnEnter(moveJob->sessionId, moveJob->objectPtr);
 			pSession->m_pCurrentContent = this;
 
-			MOVE_JOB::s_MoveJobPool.Free(moveJob);
+			MOVE_JOB::Free(moveJob);
 
 			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 			{

@@ -160,6 +160,9 @@
     <None Include="ServerConfig.conf" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CAuthContents.cpp" />
+    <ClCompile Include="CEchoContents.cpp" />
+    <ClCompile Include="CGenPacket.cpp" />
     <ClCompile Include="EchoServerPch.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="pch.cpp">
@@ -170,6 +173,11 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CAuthContents.h" />
+    <ClInclude Include="CEchoContents.h" />
+    <ClInclude Include="CGenPacket.h" />
+    <ClInclude Include="CPlayer.h" />
+    <ClInclude Include="EchoProtocol.h" />
     <ClInclude Include="EchoServerPch.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>

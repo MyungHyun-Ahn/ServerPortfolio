@@ -18,19 +18,7 @@ namespace NetworkLib::Contents
 		// nullptr 넘어오면 해당 컨텐츠에서 알아서 만들어야 함
 		void *objectPtr;
 
-		inline static MOVE_JOB *Alloc() noexcept
-		{
-			MOVE_JOB *pMoveJob = s_MoveJobPool.Alloc();
-			return pMoveJob;
-		}
-
-		inline static void Free(MOVE_JOB *freeJob) noexcept
-		{
-			s_MoveJobPool.Free(freeJob);
-		}
-
-		inline static MHLib::memory::CTLSMemoryPoolManager<MOVE_JOB> s_MoveJobPool = MHLib::memory::CTLSMemoryPoolManager<MOVE_JOB>();
-
+		USE_TLS_POOL(MOVE_JOB, s_MoveJobPool)
 	};
 
 	enum class RECV_RET

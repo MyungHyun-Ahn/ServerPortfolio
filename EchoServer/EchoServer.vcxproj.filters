@@ -5,11 +5,63 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="pch.cpp" />
-    <ClCompile Include="EchoServerPch.cpp" />
+    <ClCompile Include="pch.cpp">
+      <Filter>Define</Filter>
+    </ClCompile>
+    <ClCompile Include="EchoServerPch.cpp">
+      <Filter>Define</Filter>
+    </ClCompile>
+    <ClCompile Include="CGenPacket.cpp">
+      <Filter>Protocol</Filter>
+    </ClCompile>
+    <ClCompile Include="CAuthContents.cpp">
+      <Filter>Contents</Filter>
+    </ClCompile>
+    <ClCompile Include="CEchoContents.cpp">
+      <Filter>Contents</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pch.h" />
-    <ClInclude Include="EchoServerPch.h" />
+    <ClInclude Include="pch.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="EchoServerPch.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="CGenPacket.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="EchoProtocol.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="CAuthContents.h">
+      <Filter>Contents</Filter>
+    </ClInclude>
+    <ClInclude Include="CEchoContents.h">
+      <Filter>Contents</Filter>
+    </ClInclude>
+    <ClInclude Include="CPlayer.h">
+      <Filter>Objects</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Define">
+      <UniqueIdentifier>{87b6cc0f-312f-462c-a80f-fc2598f6b802}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Contents">
+      <UniqueIdentifier>{966faaf0-c773-4419-bfbd-7a5c61ee93f5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Objects">
+      <UniqueIdentifier>{56770b7e-9727-487e-8ba4-d03891707f77}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Server">
+      <UniqueIdentifier>{dc69c70b-66b0-48bb-b7c8-8cd4baf45c14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Protocol">
+      <UniqueIdentifier>{e8c2602f-e3c3-4935-90c6-2fce090fedc4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tools">
+      <UniqueIdentifier>{dd358aa0-fd62-4249-b783-de951c29076d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>

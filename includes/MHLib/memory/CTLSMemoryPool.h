@@ -2,6 +2,54 @@
 
 #include "CLFMemoryPool.h"
 
+#define DECLARE_ALLOC_FREE(Type, PoolName)														\
+	public:																						\
+		inline static Type *Alloc() noexcept													\
+		{																						\
+			Type *newObject = PoolName.Alloc();													\
+			return newObject;																	\
+		}																						\
+																								\
+																								\
+		inline static void Free(Type *delObject) noexcept										\
+		{																						\
+			PoolName.Free(delObject);															\
+		}																						\
+	private:
+
+#define DECLARE_ALLOC_FREE_WITH_INIT(Type, PoolName, InitFunc)														\
+	public:																						\
+		inline static Type *Alloc() noexcept													\
+		{																						\
+			Type *newObject = PoolName.Alloc();													\
+			newObject->InitFunc();																\
+			return newObject;																	\
+		}																						\
+																								\
+																								\
+		inline static void Free(Type *delObject) noexcept										\
+		{																						\
+			PoolName.Free(delObject);															\
+		}																						\
+	private:
+
+#define DECLARE_GET_POOL_INFO(Type, PoolName)													\
+	public:																						\
+		inline static LONG GetPoolCapacity() noexcept { return PoolName.GetCapacity(); }		\
+		inline static LONG GetPoolUsage() noexcept { return PoolName.GetUseCount(); }			\
+	private:
+
+
+#define USE_TLS_POOL(Type, PoolName)															\
+	DECLARE_ALLOC_FREE(Type, PoolName)															\
+	DECLARE_GET_POOL_INFO(Type, PoolName)														\
+	inline static MHLib::memory::CTLSMemoryPoolManager<Type> PoolName;
+
+#define USE_TLS_POOL_WITH_INIT(Type, PoolName, InitFunc)										\
+	DECLARE_ALLOC_FREE_WITH_INIT(Type, PoolName, InitFunc)										\
+	DECLARE_GET_POOL_INFO(Type, PoolName)														\
+	inline static MHLib::memory::CTLSMemoryPoolManager<Type> PoolName;
+
 namespace MHLib::memory
 {
 	using namespace MHLib::containers;

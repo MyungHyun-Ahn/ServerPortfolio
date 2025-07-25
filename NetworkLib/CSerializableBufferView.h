@@ -58,8 +58,6 @@ namespace NetworkLib::DataStructures
 			return m_iReadHeaderSize;
 		}
 
-
-
 		// 오프셋부터 쓰는 용도
 		bool Copy(char *buffer, int offset, int size) noexcept;
 		// 뒤로 이어서 쓰는 용도
@@ -80,21 +78,8 @@ namespace NetworkLib::DataStructures
 		bool WriteDelayedHeader(char *buffer, int size) noexcept;
 		bool GetDelayedHeader(char *buffer, int size) noexcept;
 
-		inline static CSerializableBufferView *Alloc() noexcept
-		{
-			CSerializableBufferView *pSBuffer = s_sbufferPool.Alloc();
-			return pSBuffer;
-		}
-
 	public:
 		inline int GetDataSize() const noexcept { return m_Rear - m_Front; }
-
-		inline static void Free(CSerializableBufferView *delSBuffer) noexcept
-		{
-			// 직접 할당 받은 버퍼가 아니라면 recv 버퍼는 nullptr이 아님
-			delSBuffer->Clear();
-			s_sbufferPool.Free(delSBuffer);
-		}
 
 		// operator
 	public:
@@ -245,9 +230,6 @@ namespace NetworkLib::DataStructures
 			return *this;
 		}
 
-		inline static LONG GetPoolCapacity() noexcept { return s_sbufferPool.GetCapacity(); }
-		inline static LONG GetPoolUsage() noexcept { return s_sbufferPool.GetUseCount(); }
-
 		inline LONG IncreaseRef() noexcept { return InterlockedIncrement(&m_iRefCount); }
 		inline LONG DecreaseRef() noexcept { return InterlockedDecrement(&m_iRefCount); }
 
@@ -267,8 +249,7 @@ namespace NetworkLib::DataStructures
 		LONG			m_iRefCount = 0;
 		UINT64			m_uiSessionId = 0;
 
-		// inline static CLFMemoryPool<CSerializableBufferView> s_sbufferPool = CLFMemoryPool<CSerializableBufferView>(5000, false);
-		inline static MHLib::memory::CTLSMemoryPoolManager <CSerializableBufferView, 8, 8, false> s_sbufferPool = MHLib::memory::CTLSMemoryPoolManager <CSerializableBufferView, 8, 8, false>();
+		USE_TLS_POOL_WITH_INIT(CSerializableBufferView, s_sbufferPool, Clear)
 	};
 
 	// offset은 거의 0만 쓸 듯?

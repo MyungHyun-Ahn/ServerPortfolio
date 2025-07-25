@@ -399,22 +399,6 @@ namespace NetworkLib::DataStructures
 		}
 
 	public:
-		inline static CSerializableBuffer *Alloc() noexcept
-		{
-			// 할당하고 초기화해서 반환
-			CSerializableBuffer *pSBuffer = s_sbufferPool.Alloc();
-			pSBuffer->Clear();
-			return pSBuffer;
-		}
-
-		inline static void Free(CSerializableBuffer *delSBuffer) noexcept
-		{
-			s_sbufferPool.Free(delSBuffer);
-		}
-
-		inline static LONG GetPoolCapacity() noexcept { return s_sbufferPool.GetCapacity(); }
-		inline static LONG GetPoolUsage() noexcept { return s_sbufferPool.GetUseCount(); }
-
 		inline LONG IncreaseRef() noexcept
 		{
 			return InterlockedIncrement(&m_iRefCount);
@@ -424,7 +408,6 @@ namespace NetworkLib::DataStructures
 			LONG back = InterlockedDecrement(&m_iRefCount);
 			if (back == -1)
 				__debugbreak();
-
 			return back;
 		}
 
@@ -442,7 +425,8 @@ namespace NetworkLib::DataStructures
 		BOOL			m_isEnqueueHeader = 0;
 		UINT64			m_uiSessionId = 0;
 
-		inline static MHLib::memory::CTLSMemoryPoolManager<CSerializableBuffer, 512, 2> s_sbufferPool = MHLib::memory::CTLSMemoryPoolManager<CSerializableBuffer, 512, 2>();
+
+		USE_TLS_POOL_WITH_INIT(CSerializableBuffer, s_sbufferPool, Clear)
 		inline static MHLib::memory::CTLSPagePoolManager<(int)DEFINE::PACKET_MAX_SIZE, 16, false> s_sPagePool = MHLib::memory::CTLSPagePoolManager<(int)DEFINE::PACKET_MAX_SIZE, 16, false>();
 	};
 }
