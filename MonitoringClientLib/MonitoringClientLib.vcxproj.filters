@@ -45,6 +45,9 @@
     <ClInclude Include="..\includes\MHLib\utils\CMonitor.h">
       <Filter>Monitoring</Filter>
     </ClInclude>
+    <ClInclude Include="RegisterMonitor.h">
+      <Filter>Monitoring</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CMonitoringClient.cpp">
@@ -66,6 +69,9 @@
       <Filter>Monitoring</Filter>
     </ClCompile>
     <ClCompile Include="PrivateHeader\CServerMonitor.cpp">
+      <Filter>Monitoring</Filter>
+    </ClCompile>
+    <ClCompile Include="RegisterMonitor.cpp">
       <Filter>Monitoring</Filter>
     </ClCompile>
   </ItemGroup>

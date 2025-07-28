@@ -5,6 +5,8 @@ namespace MonitoringClientLib::Monitoring
 {
 	class CServerMonitor : public MHLib::utils::CMonitor, public MHLib::utils::Singleton<CServerMonitor>
 	{
+		friend class Singleton<CServerMonitor>;
+
 	private:
 		CServerMonitor() = default;
 		virtual ~CServerMonitor() = default;
@@ -21,5 +23,7 @@ namespace MonitoringClientLib::Monitoring
 		LONG64 m_llSendTotal = 0;
 		LONG64 m_llRecvTotal = 0;
 	};
+
+	extern CServerMonitor *g_ServerMonitor;
 }
 

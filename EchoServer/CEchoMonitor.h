@@ -4,6 +4,8 @@ namespace EchoServer::Monitor
 {
 	class CEchoMonitor : public MHLib::utils::CMonitor, public MHLib::utils::Singleton<CEchoMonitor>
 	{
+		friend class Singleton<CEchoMonitor>;
+
 	private:
 		CEchoMonitor() = default;
 		virtual ~CEchoMonitor() = default;
@@ -18,5 +20,7 @@ namespace EchoServer::Monitor
 		LONG m_lAuthFPS = 0;
 		LONG m_lEchoFPS = 0;
 	};
+
+	extern CEchoMonitor *g_EchoMonitor;
 }
 

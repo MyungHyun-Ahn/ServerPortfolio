@@ -29,6 +29,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="PrivateHeader\CServerMonitor.h" />
     <ClInclude Include="PrivateHeader\CSystemMonitor.h" />
+    <ClInclude Include="RegisterMonitor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CGenPacket.cpp" />
@@ -41,6 +42,7 @@
     </ClCompile>
     <ClCompile Include="PrivateHeader\CServerMonitor.cpp" />
     <ClCompile Include="PrivateHeader\CSystemMonitor.cpp" />
+    <ClCompile Include="RegisterMonitor.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

@@ -4,6 +4,7 @@
 #include "PrivateHeader/MonitoringTarget.h"
 #include "PrivateHeader/CAccessor.h"
 #include "PrivateHeader/CCoreLibInit.h"
+#include "SystemTask.h"
 
 namespace NetworkLib::Core::Net::Server
 {
@@ -67,7 +68,7 @@ namespace NetworkLib::Core::Net::Server
 
 	void CNetSession::SendCompleted(int size) noexcept
 	{
-		// InterlockedAdd(&g_monitor.m_lSendTPS, m_iSendCount);
+		InterlockedAdd(&g_NetServer->m_monitoringTargets->sendTPS, m_iSendCount);
 
 		for (int count = 0; count < m_iSendCount; count++)
 		{
@@ -907,18 +908,12 @@ namespace NetworkLib::Core::Net::Server
 
 	void CNetServer::RegisterSystemTimerEvent()
 	{
-		// MonitorTimerEvent *pMonitorEvent = new MonitorTimerEvent;
-		// pMonitorEvent->SetEvent();
-		// CContentsThread::EnqueueEvent(pMonitorEvent);
-		// CContentThread::s_arrContentThreads[2]->EnqueueEventMy(pMonitorEvent);
+		NetworkLib::Task::MonitorTimerTask *pMonitorTask = new NetworkLib::Task::MonitorTimerTask;
+		pMonitorTask->SetEvent();
+		NetworkLib::Contents::CContentsThread::EnqueueEvent(pMonitorTask);
 
-		// KeyBoardTimerEvent *pKeyBoardEvent = new KeyBoardTimerEvent;
-		// pKeyBoardEvent->SetEvent();
-		// CContentsThread::EnqueueEvent(pKeyBoardEvent);
-		// CContentThread::s_arrContentThreads[2]->EnqueueEventMy(pKeyBoardEvent);
-
-		// SendAllTimerEvent *pSendAllEvent = new SendAllTimerEvent;
-		// pSendAllEvent->SetEvent();
-		// CContentThread::s_arrContentThreads[3]->EnqueueEventMy(pSendAllEvent);
+		NetworkLib::Task::KeyBoardTimerTask *pKeyBoardTask = new NetworkLib::Task::KeyBoardTimerTask;
+		pKeyBoardTask->SetEvent();
+		NetworkLib::Contents::CContentsThread::EnqueueEvent(pKeyBoardTask);
 	}
 }

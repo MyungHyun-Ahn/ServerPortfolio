@@ -14,6 +14,8 @@
 
 namespace EchoServer::Monitor
 {
+	CEchoMonitor *g_EchoMonitor = nullptr;
+
 	void CEchoMonitor::Update()
 	{
 		EchoServer::Server::CEchoServer *pEchoServer = reinterpret_cast<EchoServer::Server::CEchoServer *>(NetworkLib::Core::Net::Server::g_NetServer);

@@ -4,12 +4,14 @@ namespace MonitoringClientLib::Monitoring
 {
 	class CSystemMonitor : public MHLib::utils::CMonitor, public MHLib::utils::Singleton<CSystemMonitor>
 	{
+		friend class Singleton<CSystemMonitor>;
+
 	private:
 		CSystemMonitor() = default;
 		virtual ~CSystemMonitor() = default;
 
 	public:
-		void Init(HANDLE hProcess = INVALID_HANDLE_VALUE);
+		void Init(const std::wstring &processName, const std::vector<std::wstring> &nicNames, HANDLE hProcess = INVALID_HANDLE_VALUE);
 
 	private:
 		virtual void Update() override;
@@ -19,7 +21,7 @@ namespace MonitoringClientLib::Monitoring
 
 		void InitSystemMonitor();
 		void UpdateSystemMonitor();
-		void InitPDHMonitor(std::wstring &processName, std::vector<std::wstring> &nicNames);
+		void InitPDHMonitor(const std::wstring &processName, const std::vector<std::wstring> &nicNames);
 		void UpdatePDHMonitor();
 		void UpdateMemoryMonitor();
 

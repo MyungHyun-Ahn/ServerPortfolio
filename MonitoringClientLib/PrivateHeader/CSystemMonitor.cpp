@@ -11,7 +11,7 @@ namespace MonitoringClientLib::Monitoring
 {
 	CSystemMonitor *g_SystemMonitor;
 
-	void CSystemMonitor::Init(HANDLE hProcess)
+	void CSystemMonitor::Init(const std::wstring &processName, const std::vector<std::wstring> &nicNames, HANDLE hProcess)
 	{
 		if (hProcess == INVALID_HANDLE_VALUE)
 		{
@@ -20,6 +20,9 @@ namespace MonitoringClientLib::Monitoring
 
 		time_t startTime = time(nullptr);
 		localtime_s(&m_startTime, &startTime);
+
+		InitSystemMonitor();
+		InitPDHMonitor(processName, nicNames);
 	}
 
 	void CSystemMonitor::Update()
@@ -132,7 +135,7 @@ namespace MonitoringClientLib::Monitoring
 	}
 
 
-	void CSystemMonitor::InitPDHMonitor(std::wstring &processName, std::vector<std::wstring> &nicNames)
+	void CSystemMonitor::InitPDHMonitor(const std::wstring &processName, const std::vector<std::wstring> &nicNames)
 	{
 		PdhOpenQuery(NULL, NULL, &m_PDHQuery);
 

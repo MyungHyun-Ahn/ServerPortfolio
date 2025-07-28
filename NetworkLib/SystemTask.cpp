@@ -11,10 +11,13 @@ namespace NetworkLib::Task
 {
 	void MonitorTimerTask::SetEvent() noexcept
 	{
+		m_timeMs = 1000; // 1초
+		m_nextExecuteTime = timeGetTime(); // 현재 시각
 	}
 
 	void MonitorTimerTask::execute(int delayFrame) noexcept
 	{
+		MHLib::utils::g_MonitoringMgr->Update();
 	}
 
 	void KeyBoardTimerTask::SetEvent() noexcept

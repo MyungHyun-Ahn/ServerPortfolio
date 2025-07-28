@@ -12,6 +12,8 @@
 
 namespace MonitoringClientLib::Monitoring
 {
+	CServerMonitor *g_ServerMonitor = nullptr;
+
 	void CServerMonitor::Update()
 	{
 		m_llLoopCount++;

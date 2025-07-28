@@ -32,7 +32,7 @@ namespace MHLib::utils
 			HWND console = GetConsoleWindow();
 			RECT r;
 			GetWindowRect(console, &r);
-			MoveWindow(console, r.left, r.top, 700, 900, TRUE);
+			MoveWindow(console, r.left, r.top, width, height, TRUE);
 		}
 
 		inline void RegisterMonitor(CMonitor *monitor)

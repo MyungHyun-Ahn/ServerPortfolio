@@ -5,6 +5,7 @@
 
 #include "EchoServerSetting.h"
 #include "CEchoServer.h"
+#include "CEchoMonitor.h"
 #include "InitEchoServer.h"
 #include "LoadConfig.h"
 
