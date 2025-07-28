@@ -201,7 +201,7 @@ namespace NetworkLib::Contents
 		pTimerTask->m_nextExecuteTime += pTimerTask->m_timeMs * delayFrame;
 
 		if ((dTime * -1) >
-			((1000 / NetworkLib::Core::Net::Server::MAX_CONTENTS_FPS) * NetworkLib::Core::Net::Server::DELAY_FRAME))
+			((1000 / NetworkLib::Core::Net::Server::Config::MAX_CONTENTS_FPS) * NetworkLib::Core::Net::Server::Config::DELAY_FRAME))
 		{
 			DelegateWork();
 		}

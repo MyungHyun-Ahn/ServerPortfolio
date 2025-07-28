@@ -32,12 +32,12 @@ namespace EchoServer::Server
 	{
 		m_pAuthContents = new EchoServer::Contents::CAuthContents;
 		NetworkLib::Task::ContentsFrameTask *pAuthTask = new NetworkLib::Task::ContentsFrameTask;
-		pAuthTask->SetEvent(m_pAuthContents, EchoServer::Server::AUTH_FPS);
+		pAuthTask->SetEvent(m_pAuthContents, EchoServer::Server::Config::AUTH_FPS);
 		NetworkLib::Contents::CContentsThread::EnqueueEvent(pAuthTask);
 
 		m_pEchoContents = new EchoServer::Contents::CEchoContents;
 		NetworkLib::Task::ContentsFrameTask *pEchoTask = new NetworkLib::Task::ContentsFrameTask;
-		pEchoTask->SetEvent(m_pEchoContents, EchoServer::Server::ECHO_FPS);
+		pEchoTask->SetEvent(m_pEchoContents, EchoServer::Server::Config::ECHO_FPS);
 		NetworkLib::Contents::CContentsThread::EnqueueEvent(pEchoTask);
 
 	}

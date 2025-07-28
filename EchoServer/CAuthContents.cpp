@@ -70,6 +70,8 @@ namespace EchoServer::Contents
 			NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *pLoginRes
 				= EchoServer::Protocol::CGenPacket::makePacketResLogin(TRUE, accountNo);
 			NetworkLib::Core::Net::Server::g_NetServer->SendPacket(sessionID, pLoginRes);
+
+			return  NetworkLib::Contents::RECV_RET::RECV_TRUE;
 		}
 			break;
 		default:

@@ -12,7 +12,7 @@ namespace MonitoringClientLib
 
 	void CMonitoringClient::OnConnect(const UINT64 sessionID) noexcept
 	{
-		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *reqLogin = MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringLogin(Setting::SERVER_NO);
+		NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::LAN> *reqLogin = MonitoringClientLib::Protocol::CGenPacket::makePacketReqMonitoringLogin(Config::SERVER_NO);
 		reqLogin->IncreaseRef();
 
 		SendPacket(sessionID, reqLogin);

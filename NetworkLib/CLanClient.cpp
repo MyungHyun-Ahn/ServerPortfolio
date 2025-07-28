@@ -495,7 +495,7 @@ namespace NetworkLib::Core::Lan::Client
 			}
 
 			// 송신 버퍼를 0으로 만들어서 실직적인 I/O를 우리의 버퍼를 이용하도록 만듬
-			if (USE_ZERO_COPY)
+			if (Config::USE_ZERO_COPY)
 			{
 				DWORD sendBufferSize = 0;
 				retVal = setsockopt(pConnectSession->m_sSessionSocket, SOL_SOCKET, SO_SNDBUF, (char *)&sendBufferSize, sizeof(DWORD));
@@ -606,7 +606,7 @@ namespace NetworkLib::Core::Lan::Client
 				return FALSE;
 			}
 
-			m_hIOCPHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, IOCP_ACTIVE_THREAD);
+			m_hIOCPHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, Config::IOCP_ACTIVE_THREAD);
 			if (m_hIOCPHandle == NULL)
 			{
 				errVal = WSAGetLastError();
@@ -642,7 +642,7 @@ namespace NetworkLib::Core::Lan::Client
 			int errVal;
 
 			// CreateWorkerThread
-			for (int i = 1; i <= IOCP_WORKER_THREAD; i++)
+			for (int i = 1; i <= Config::IOCP_WORKER_THREAD; i++)
 			{
 				HANDLE hWorkerThread = (HANDLE)_beginthreadex(nullptr, 0, NetWorkerThreadFunc, nullptr, 0, nullptr);
 				if (hWorkerThread == 0)

@@ -2,6 +2,11 @@
 
 namespace EchoServer::Server
 {
-	extern INT AUTH_FPS;
-	extern INT ECHO_FPS;
+	namespace Config
+	{
+		extern INT AUTH_FPS;
+		extern INT ECHO_FPS;
+
+		void Load(MHLib::utils::CFileLoader &loader);
+	}
 }

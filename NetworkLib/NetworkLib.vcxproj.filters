@@ -28,6 +28,12 @@
     <Filter Include="Core\Monitoring">
       <UniqueIdentifier>{64c85d08-2ef4-440a-9112-055924319479}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core\Lan\Config">
+      <UniqueIdentifier>{b96055bc-2194-4683-8be0-9843f4cfb52a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Net\Config">
+      <UniqueIdentifier>{4940b9f3-6824-44f3-ac7d-96f64a1cfebe}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CNetServer.h">
@@ -66,16 +72,10 @@
     <ClInclude Include="SystemTask.h">
       <Filter>Task</Filter>
     </ClInclude>
-    <ClInclude Include="NetSetting.h">
-      <Filter>Core\Net</Filter>
-    </ClInclude>
     <ClInclude Include="CContentsThread.h">
       <Filter>Contents</Filter>
     </ClInclude>
     <ClInclude Include="CLanClient.h">
-      <Filter>Core\Lan</Filter>
-    </ClInclude>
-    <ClInclude Include="LanSetting.h">
       <Filter>Core\Lan</Filter>
     </ClInclude>
     <ClInclude Include="CoreUtils.h">
@@ -92,6 +92,12 @@
     </ClInclude>
     <ClInclude Include="ContentsFrameTask.h">
       <Filter>Task</Filter>
+    </ClInclude>
+    <ClInclude Include="LanSetting.h">
+      <Filter>Core\Lan\Config</Filter>
+    </ClInclude>
+    <ClInclude Include="NetSetting.h">
+      <Filter>Core\Net\Config</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -110,13 +116,7 @@
     <ClCompile Include="SystemTask.cpp">
       <Filter>Task</Filter>
     </ClCompile>
-    <ClCompile Include="NetSetting.cpp">
-      <Filter>Core\Net</Filter>
-    </ClCompile>
     <ClCompile Include="CLanClient.cpp">
-      <Filter>Core\Lan</Filter>
-    </ClCompile>
-    <ClCompile Include="LanSetting.cpp">
       <Filter>Core\Lan</Filter>
     </ClCompile>
     <ClCompile Include="CContentsThread.cpp">
@@ -124,6 +124,12 @@
     </ClCompile>
     <ClCompile Include="ContentsFrameTask.cpp">
       <Filter>Task</Filter>
+    </ClCompile>
+    <ClCompile Include="LanSetting.cpp">
+      <Filter>Core\Lan\Config</Filter>
+    </ClCompile>
+    <ClCompile Include="NetSetting.cpp">
+      <Filter>Core\Net\Config</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

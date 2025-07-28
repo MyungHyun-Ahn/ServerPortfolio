@@ -185,6 +185,8 @@
     <ClInclude Include="EchoProtocol.h" />
     <ClInclude Include="EchoServerPch.h" />
     <ClInclude Include="EchoServerSetting.h" />
+    <ClInclude Include="InitEchoServer.h" />
+    <ClInclude Include="LoadConfig.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -35,7 +35,7 @@ namespace EchoServer::Contents
         EchoServer::Protocol::PACKET_TYPE type = static_cast<EchoServer::Protocol::PACKET_TYPE>(wordType);
         switch (type)
         {
-        case EchoServer::Protocol::PACKET_TYPE::CS_GAME_RES_ECHO:
+        case EchoServer::Protocol::PACKET_TYPE::CS_GAME_REQ_ECHO:
         {
             auto it = m_umapSessions.find(sessionID);
             if (it == m_umapSessions.end())

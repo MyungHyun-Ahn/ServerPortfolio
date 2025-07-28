@@ -21,7 +21,7 @@ namespace NetworkLib::Core::Net::Server
 			NetworkLib::Core::Utils::Net::Header packetHeader;
 			m_RecvBuffer.Peek((char *)&packetHeader, sizeof(NetworkLib::Core::Utils::Net::Header));
 
-			if (packetHeader.code != PACKET_CODE)
+			if (packetHeader.code != Config::PACKET_CODE)
 			{
 				g_NetServer->Disconnect(m_uiSessionID);
 				return;
@@ -322,17 +322,17 @@ namespace NetworkLib::Core::Net::Server
 		m_monitoringTargets = new NetworkLib::Core::Monitoring::ServerMonitoringTargets;
 		NetworkLib::Contents::CContentsThread::s_monitoringTargets = new NetworkLib::Core::Monitoring::ContentsThreadMonitoringTargets;
 
-		m_usMaxSessionCount = MAX_SESSION_COUNT;
+		m_usMaxSessionCount = Config::MAX_SESSION_COUNT;
 
-		m_arrPSessions = new CNetSession * [MAX_SESSION_COUNT];
+		m_arrPSessions = new CNetSession * [Config::MAX_SESSION_COUNT];
 
-		ZeroMemory((char *)m_arrPSessions, sizeof(CNetSession *) * MAX_SESSION_COUNT);
+		ZeroMemory((char *)m_arrPSessions, sizeof(CNetSession *) * Config::MAX_SESSION_COUNT);
 
-		m_arrAcceptExSessions = new CNetSession * [ACCEPTEX_COUNT];
+		m_arrAcceptExSessions = new CNetSession * [Config::ACCEPTEX_COUNT];
 
 		// 디스커넥트 스택 채우기
-		USHORT val = MAX_SESSION_COUNT - 1;
-		for (int i = 0; i < MAX_SESSION_COUNT; i++)
+		USHORT val = Config::MAX_SESSION_COUNT - 1;
+		for (int i = 0; i < Config::MAX_SESSION_COUNT; i++)
 		{
 			m_stackDisconnectIndex.Push(val--);
 		}
@@ -367,7 +367,7 @@ namespace NetworkLib::Core::Net::Server
 			return FALSE;
 		}
 
-		if (USE_ZERO_COPY)
+		if (Config::USE_ZERO_COPY)
 		{
 			DWORD sendBufferSize = 0;
 			retVal = setsockopt(m_sListenSocket, SOL_SOCKET, SO_SNDBUF, (char *)&sendBufferSize, sizeof(DWORD));
@@ -399,7 +399,7 @@ namespace NetworkLib::Core::Net::Server
 		}
 
 		// CP 핸들 생성
-		m_hIOCPHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, IOCP_ACTIVE_THREAD);
+		m_hIOCPHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, Config::IOCP_ACTIVE_THREAD);
 		if (m_hIOCPHandle == NULL)
 		{
 			errVal = WSAGetLastError();
@@ -429,7 +429,7 @@ namespace NetworkLib::Core::Net::Server
 		// AcceptEx 요청 : TODO
 		FristPostAcceptEx();
 
-		for (int i = 0; i < CONTENTS_THREAD_COUNT; i++)
+		for (int i = 0; i < Config::CONTENTS_THREAD_COUNT; i++)
 		{
 			NetworkLib::Contents::CContentsThread * pContentsThread = new NetworkLib::Contents::CContentsThread;
 			pContentsThread->Create();
@@ -438,7 +438,7 @@ namespace NetworkLib::Core::Net::Server
 		NetworkLib::Contents::CContentsThread::RunAll();
 
 		// CreateWorkerThread
-		for (int i = 1; i <= IOCP_WORKER_THREAD; i++)
+		for (int i = 1; i <= Config::IOCP_WORKER_THREAD; i++)
 		{
 			HANDLE hWorkerThread = (HANDLE)_beginthreadex(nullptr, 0, NetWorkerThreadFunc, nullptr, 0, nullptr);
 			if (hWorkerThread == 0)
@@ -466,7 +466,7 @@ namespace NetworkLib::Core::Net::Server
 		InterlockedExchange(&m_isStop, TRUE);
 		closesocket(m_sListenSocket);
 
-		for (int i = 0; i < MAX_SESSION_COUNT; i++)
+		for (int i = 0; i < Config::MAX_SESSION_COUNT; i++)
 		{
 			if (m_arrPSessions[i] != NULL)
 			{
@@ -514,7 +514,7 @@ namespace NetworkLib::Core::Net::Server
 		{
 			sBuffer->m_isEnqueueHeader = true;
 			NetworkLib::Core::Utils::Net::Header *header = (NetworkLib::Core::Utils::Net::Header *)sBuffer->GetBufferPtr();
-			header->code = PACKET_CODE; // 코드
+			header->code = Config::PACKET_CODE; // 코드
 			header->len = sBuffer->GetDataSize();
 			header->randKey = 0;
 			header->checkSum = MHLib::scurity::CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
@@ -563,7 +563,7 @@ namespace NetworkLib::Core::Net::Server
 		{
 			sBuffer->m_isEnqueueHeader = true;
 			NetworkLib::Core::Utils::Net::Header *header = (NetworkLib::Core::Utils::Net::Header *)sBuffer->GetBufferPtr();
-			header->code = PACKET_CODE; // 코드
+			header->code = Config::PACKET_CODE; // 코드
 			header->len = sBuffer->GetDataSize();
 			header->randKey = 0;
 			header->checkSum = MHLib::scurity::CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
@@ -681,7 +681,7 @@ namespace NetworkLib::Core::Net::Server
 	void CNetServer::FristPostAcceptEx() noexcept
 	{
 		// 처음에 AcceptEx를 걸어두고 시작
-		for (int i = 0; i < ACCEPTEX_COUNT; i++)
+		for (int i = 0; i < Config::ACCEPTEX_COUNT; i++)
 		{
 			PostAcceptEx(i);
 		}

@@ -2,11 +2,13 @@
 
 namespace MonitoringClientLib
 {
-	namespace Setting
+	namespace Config
 	{
 		extern INT SERVER_NO;
 		extern std::string IP;
 		extern USHORT PORT;
+
+		void Load(MHLib::utils::CFileLoader &loader);
 	}
 }
 
