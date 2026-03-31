@@ -26,6 +26,14 @@ namespace NetworkLib::Contents
 
 	void CBaseContents::ProcessMoveJob() noexcept
 	{
+		auto releaseSession = [](NetworkLib::Core::Net::Server::CNetSession *pSession) noexcept
+		{
+			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
+			{
+				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+			}
+		};
+
 		// 이동 처리
 		int moveJobQSize = m_MoveJobQ.GetUseSize();
 		for (int i = 0; i < moveJobQSize; i++)
@@ -53,11 +61,7 @@ namespace NetworkLib::Contents
 			pSession->RegisterContents(this);
 
 			MOVE_JOB::Free(moveJob);
-
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
-			}
+			releaseSession(pSession);
 		}
 	}
 
@@ -74,6 +78,21 @@ namespace NetworkLib::Contents
 
 	void CBaseContents::ProcessRecvMsg(int delayFrame) noexcept
 	{
+		auto releaseSession = [](NetworkLib::Core::Net::Server::CNetSession *pSession) noexcept
+		{
+			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
+			{
+				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
+			}
+		};
+		auto freeRecvMessage = [](NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *pMsg) noexcept
+		{
+			if (pMsg->DecreaseRef() == 0)
+			{
+				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(pMsg);
+			}
+		};
+
 		for (auto &it : m_umapSessions)
 		{
 			UINT64 sessionId = it.first;
@@ -95,30 +114,23 @@ namespace NetworkLib::Contents
 				RECV_RET ret = OnRecv(sessionId, pMsg, delayFrame);
 				if (ret == RECV_RET::RECV_MOVE)
 				{
-					if (pMsg->DecreaseRef() == 0)
-						NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(pMsg);
+					freeRecvMessage(pMsg);
 					break;
 				}
 				if (ret == RECV_RET::RECV_FALSE)
 				{
 					NetworkLib::Core::Net::Server::g_NetServer->Disconnect(sessionId);
-
-					if (pMsg->DecreaseRef() == 0)
-						NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(pMsg);
+					freeRecvMessage(pMsg);
 					break;
 				}
 
-				if (pMsg->DecreaseRef() == 0)
-					NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(pMsg);
+				freeRecvMessage(pMsg);
 			}
 
 			if (recvMsgCount != 0)
 				NetworkLib::Core::Net::Server::g_NetServer->SendPQCS(pSession);
 
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
-			}
+			releaseSession(pSession);
 		}
 	}
 
