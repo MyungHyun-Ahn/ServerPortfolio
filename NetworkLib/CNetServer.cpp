@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "CNetServer.h"
 #include "CBaseContents.h"
 #include "PrivateHeader/MonitoringTarget.h"
@@ -62,9 +62,9 @@ namespace NetworkLib::Core::Net::Server
 		}
 	}
 
-	// m_iSendCount¸¦ ¹Ï°í ÇÒ´ç ÇØÁ¦¸¦ ÁøÇà
-	// * ³íºí¶ôÅ· I/OÀÏ ¶§¸¸ Send¸¦ ¿äÃ»ÇÑ µ¥ÀÌÅÍº¸´Ù ´ú º¸³»´Â »óÈ²ÀÌ ¹ß»ı °¡´É
-	// * ºñµ¿±â I/O´Â ¹«Á¶°Ç ÀüºÎ º¸³»°í ¿Ï·á ÅëÁö°¡ µµÂøÇÔ
+	// m_iSendCountë¥¼ ë¯¿ê³  í• ë‹¹ í•´ì œë¥¼ ì§„í–‰
+	// * ë…¼ë¸”ë½í‚¹ I/Oì¼ ë•Œë§Œ Sendë¥¼ ìš”ì²­í•œ ë°ì´í„°ë³´ë‹¤ ëœ ë³´ë‚´ëŠ” ìƒí™©ì´ ë°œìƒ ê°€ëŠ¥
+	// * ë¹„ë™ê¸° I/OëŠ” ë¬´ì¡°ê±´ ì „ë¶€ ë³´ë‚´ê³  ì™„ë£Œ í†µì§€ê°€ ë„ì°©í•¨
 
 	void CNetSession::SendCompleted(int size) noexcept
 	{
@@ -90,8 +90,8 @@ namespace NetworkLib::Core::Net::Server
 		int errVal;
 		int retVal;
 
-		// ¿©±â¼­´Â ¼öµ¿ Ref ¹öÀüÀÌ ÇÊ¿ä
-		// * WSARecv¿¡¼­ Ref °ü¸®°¡ ºÒ°¡´É
+		// ì—¬ê¸°ì„œëŠ” ìˆ˜ë™ Ref ë²„ì „ì´ í•„ìš”
+		// * WSARecvì—ì„œ Ref ê´€ë¦¬ê°€ ë¶ˆê°€ëŠ¥
 
 		InterlockedIncrement(&m_iIOCountAndRelease);
 		if ((m_iIOCountAndRelease & CNetSession::RELEASE_FLAG) == CNetSession::RELEASE_FLAG)
@@ -121,8 +121,8 @@ namespace NetworkLib::Core::Net::Server
 				if (errVal != WSAECONNABORTED && errVal != WSAECONNRESET && errVal != WSAEINTR)
 					MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSARecv() Error : %d", errVal);
 
-				// »ç½Ç ¿©±â¼± 0ÀÌ µÉ ÀÏÀÌ ¾øÀ½
-				// ¹İÈ¯°ªÀ» »ç¿ë¾ÈÇØµµ µÊ
+				// ì‚¬ì‹¤ ì—¬ê¸°ì„  0ì´ ë  ì¼ì´ ì—†ìŒ
+				// ë°˜í™˜ê°’ì„ ì‚¬ìš©ì•ˆí•´ë„ ë¨
 				if (InterlockedDecrement(&m_iIOCountAndRelease) == 0)
 				{
 					return FALSE;
@@ -165,7 +165,7 @@ namespace NetworkLib::Core::Net::Server
 		if (sendUseSize <= 0)
 		{
 			LONG beforeSendFlag = InterlockedCompareExchange(&m_iSendFlag, FALSE, TRUE);
-			if ((beforeSendFlag & ENQUEUE_FLAG) == ENQUEUE_FLAG) // ÃÖ»óÀ§ ºñÆ® ÄÑÁ³À¸¸é
+			if ((beforeSendFlag & ENQUEUE_FLAG) == ENQUEUE_FLAG) // ìµœìƒìœ„ ë¹„íŠ¸ ì¼œì¡Œìœ¼ë©´
 			{
 				PostSend(TRUE);
 				return FALSE;
@@ -184,8 +184,8 @@ namespace NetworkLib::Core::Net::Server
 		WSABUF wsaBuf[Utils::WSASEND_MAX_BUFFER_COUNT];
 
 		m_iSendCount = min(sendUseSize, Utils::WSASEND_MAX_BUFFER_COUNT);
-		// WSASEND_MAX_BUFFER_COUNT ¸¸Å­ 1ÃÊ¿¡ ¸î¹ø º¸³»´ÂÁö Ä«¿îÆ®
-		// ÀÌ ¼öÄ¡°¡ ³ô´Ù¸é ´õ ´Ã¸± °Í
+		// WSASEND_MAX_BUFFER_COUNT ë§Œí¼ 1ì´ˆì— ëª‡ë²ˆ ë³´ë‚´ëŠ”ì§€ ì¹´ìš´íŠ¸
+		// ì´ ìˆ˜ì¹˜ê°€ ë†’ë‹¤ë©´ ë” ëŠ˜ë¦´ ê²ƒ
 		if (m_iSendCount == Utils::WSASEND_MAX_BUFFER_COUNT)
 			InterlockedIncrement(&g_NetServer->m_monitoringTargets->maxSendCount);
 
@@ -193,7 +193,7 @@ namespace NetworkLib::Core::Net::Server
 		for (count = 0; count < m_iSendCount; count++)
 		{
 			NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer;
-			// ¸ø²¨³½ °Í
+			// ëª»êº¼ë‚¸ ê²ƒ
 			{
 				PROFILE_BEGIN(0, "SEND_MSQ DEQUEUE");
 				if (!m_lfSendBufferQueue.Dequeue(&sBuffer))
@@ -225,8 +225,8 @@ namespace NetworkLib::Core::Net::Server
 				if (errVal != WSAECONNABORTED && errVal != WSAECONNRESET && errVal != WSAEINTR)
 					MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSASend() Error : %d", errVal);
 
-				// »ç½Ç ¿©±â¼± 0ÀÌ µÉ ÀÏÀÌ ¾øÀ½
-				// ¹İÈ¯°ªÀ» »ç¿ë¾ÈÇØµµ µÊ
+				// ì‚¬ì‹¤ ì—¬ê¸°ì„  0ì´ ë  ì¼ì´ ì—†ìŒ
+				// ë°˜í™˜ê°’ì„ ì‚¬ìš©ì•ˆí•´ë„ ë¨
 				if (InterlockedDecrement(&m_iIOCountAndRelease) == 0)
 				{
 					return FALSE;
@@ -262,7 +262,7 @@ namespace NetworkLib::Core::Net::Server
 		for (int i = 0; i < useBufferSize; i++)
 		{
 			NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *pBuffer;
-			// ¸ø²¨³½ °Í
+			// ëª»êº¼ë‚¸ ê²ƒ
 			{
 				PROFILE_BEGIN(0, "SEND_MSQ DEQUEUE");
 				if (!m_lfSendBufferQueue.Dequeue(&pBuffer))
@@ -272,7 +272,7 @@ namespace NetworkLib::Core::Net::Server
 				}
 			}
 
-			// RefCount¸¦ ³·Ãß°í 0ÀÌ¶ó¸é º¸³½ °Å »èÁ¦
+			// RefCountë¥¼ ë‚®ì¶”ê³  0ì´ë¼ë©´ ë³´ë‚¸ ê±° ì‚­ì œ
 			if (pBuffer->DecreaseRef() == 0)
 			{
 				NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET>::Free(pBuffer);
@@ -331,7 +331,7 @@ namespace NetworkLib::Core::Net::Server
 
 		m_arrAcceptExSessions = new CNetSession * [Config::ACCEPTEX_COUNT];
 
-		// µğ½ºÄ¿³ØÆ® ½ºÅÃ Ã¤¿ì±â
+		// ë””ìŠ¤ì»¤ë„¥íŠ¸ ìŠ¤íƒ ì±„ìš°ê¸°
 		USHORT val = Config::MAX_SESSION_COUNT - 1;
 		for (int i = 0; i < Config::MAX_SESSION_COUNT; i++)
 		{
@@ -342,7 +342,7 @@ namespace NetworkLib::Core::Net::Server
 		if (retVal != 0)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAStartup() ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAStartup() ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
@@ -350,7 +350,7 @@ namespace NetworkLib::Core::Net::Server
 		if (m_sListenSocket == INVALID_SOCKET)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSASocket() ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSASocket() ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
@@ -364,7 +364,7 @@ namespace NetworkLib::Core::Net::Server
 		if (retVal == SOCKET_ERROR)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"bind() ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"bind() ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
@@ -375,18 +375,18 @@ namespace NetworkLib::Core::Net::Server
 			if (retVal == SOCKET_ERROR)
 			{
 				errVal = WSAGetLastError();
-				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_SNDBUF) ½ÇÆĞ : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_SNDBUF) ì‹¤íŒ¨ : %d", errVal);
 				return FALSE;
 			}
 		}
 
-		// LINGER option ¼³Á¤
+		// LINGER option ì„¤ì •
 		LINGER ling{ 1, 0 };
 		retVal = setsockopt(m_sListenSocket, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
 		if (retVal == SOCKET_ERROR)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_LINGER) ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_LINGER) ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
@@ -395,16 +395,16 @@ namespace NetworkLib::Core::Net::Server
 		if (retVal == SOCKET_ERROR)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"listen() ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"listen() ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
-		// CP ÇÚµé »ı¼º
+		// CP í•¸ë“¤ ìƒì„±
 		m_hIOCPHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, Config::IOCP_ACTIVE_THREAD);
 		if (m_hIOCPHandle == NULL)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"CreateIoCompletionPort(»ı¼º) ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"CreateIoCompletionPort(ìƒì„±) ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
@@ -415,7 +415,7 @@ namespace NetworkLib::Core::Net::Server
 		if (retVal == SOCKET_ERROR)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAIoctl(lpfnAcceptEx) ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAIoctl(lpfnAcceptEx) ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
@@ -423,11 +423,11 @@ namespace NetworkLib::Core::Net::Server
 		if (retVal == SOCKET_ERROR)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAIoctl(lpfnGetAcceptExSockaddrs) ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"WSAIoctl(lpfnGetAcceptExSockaddrs) ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
-		// AcceptEx ¿äÃ» : TODO
+		// AcceptEx ìš”ì²­ : TODO
 		FristPostAcceptEx();
 
 		for (int i = 0; i < Config::CONTENTS_THREAD_COUNT; i++)
@@ -463,7 +463,7 @@ namespace NetworkLib::Core::Net::Server
 
 	void CNetServer::Stop()
 	{
-		// listen ¼ÒÄÏ ´İ±â
+		// listen ì†Œì¼“ ë‹«ê¸°
 		InterlockedExchange(&m_isStop, TRUE);
 		closesocket(m_sListenSocket);
 
@@ -475,10 +475,10 @@ namespace NetworkLib::Core::Net::Server
 			}
 		}
 
-		// while SessionCount 0ÀÏ ¶§±îÁö
+		// while SessionCount 0ì¼ ë•Œê¹Œì§€
 		while (true)
 		{
-			// ¼¼¼Ç ÀüºÎ ²÷°í
+			// ì„¸ì…˜ ì „ë¶€ ëŠê³ 
 			if (m_monitoringTargets->sessionCount == 0)
 			{
 				m_bIsWorkerRun = FALSE;
@@ -488,26 +488,41 @@ namespace NetworkLib::Core::Net::Server
 		}
 	}
 
-	void CNetServer::SendPacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept
+	CNetSession *CNetServer::AcquireSession(const UINT64 sessionID, BOOL isPQCS) noexcept
 	{
 		CNetSession *pSession = m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
+		if (pSession == nullptr)
+		{
+			return nullptr;
+		}
 
 		InterlockedIncrement(&pSession->m_iIOCountAndRelease);
 		if ((pSession->m_iIOCountAndRelease & CNetSession::RELEASE_FLAG) == CNetSession::RELEASE_FLAG)
 		{
 			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 			{
-				ReleaseSession(pSession);
+				ReleaseSession(pSession, isPQCS);
 			}
-			return;
+			return nullptr;
 		}
 
 		if (sessionID != pSession->m_uiSessionID)
 		{
 			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 			{
-				ReleaseSession(pSession);
+				ReleaseSession(pSession, isPQCS);
 			}
+			return nullptr;
+		}
+
+		return pSession;
+	}
+
+	void CNetServer::SendPacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept
+	{
+		CNetSession *pSession = AcquireSession(sessionID);
+		if (pSession == nullptr)
+		{
 			return;
 		}
 
@@ -515,12 +530,12 @@ namespace NetworkLib::Core::Net::Server
 		{
 			sBuffer->m_isEnqueueHeader = true;
 			NetworkLib::Core::Utils::Net::Header *header = (NetworkLib::Core::Utils::Net::Header *)sBuffer->GetBufferPtr();
-			header->code = Config::PACKET_CODE; // ÄÚµå
+			header->code = Config::PACKET_CODE; // ì½”ë“œ
 			header->len = sBuffer->GetDataSize();
 			header->randKey = 0;
 			header->checkSum = MHLib::scurity::CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
 
-			// CheckSum ºÎÅÍ ¾ÏÈ£È­ÇÏ±â À§ÇØ
+			// CheckSum ë¶€í„° ì•”í˜¸í™”í•˜ê¸° ìœ„í•´
 			MHLib::scurity::CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
 		}
 
@@ -535,28 +550,12 @@ namespace NetworkLib::Core::Net::Server
 		}
 	}
 
-	// Sector ¶ôÀÌ ÀâÈù °æ¿ì¿¡¸¸ PQCS
+	// Sector ë½ì´ ì¡íŒ ê²½ìš°ì—ë§Œ PQCS
 	void CNetServer::EnqueuePacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept
 	{
-		CNetSession *pSession = m_arrPSessions[Utils::GetSessionIndex(sessionID)];
-
-		InterlockedIncrement(&pSession->m_iIOCountAndRelease);
-		// ReleaseFlag°¡ ÀÌ¹Ì ÄÑÁø »óÈ²
-		if ((pSession->m_iIOCountAndRelease & CNetSession::RELEASE_FLAG) == CNetSession::RELEASE_FLAG)
+		CNetSession *pSession = AcquireSession(sessionID, TRUE);
+		if (pSession == nullptr)
 		{
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				ReleaseSession(pSession, TRUE);
-			}
-			return;
-		}
-
-		if (sessionID != pSession->m_uiSessionID)
-		{
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				ReleaseSession(pSession, TRUE);
-			}
 			return;
 		}
 
@@ -564,12 +563,12 @@ namespace NetworkLib::Core::Net::Server
 		{
 			sBuffer->m_isEnqueueHeader = true;
 			NetworkLib::Core::Utils::Net::Header *header = (NetworkLib::Core::Utils::Net::Header *)sBuffer->GetBufferPtr();
-			header->code = Config::PACKET_CODE; // ÄÚµå
+			header->code = Config::PACKET_CODE; // ì½”ë“œ
 			header->len = sBuffer->GetDataSize();
 			header->randKey = 0;
 			header->checkSum = MHLib::scurity::CEncryption::CalCheckSum(sBuffer->GetContentBufferPtr(), sBuffer->GetDataSize());
 
-			// CheckSum ºÎÅÍ ¾ÏÈ£È­ÇÏ±â À§ÇØ
+			// CheckSum ë¶€í„° ì•”í˜¸í™”í•˜ê¸° ìœ„í•´
 			MHLib::scurity::CEncryption::Encoding(sBuffer->GetBufferPtr() + 4, sBuffer->GetDataSize() + 1, header->randKey);
 		}
 
@@ -589,25 +588,9 @@ namespace NetworkLib::Core::Net::Server
 
 	BOOL CNetServer::Disconnect(const UINT64 sessionID, BOOL isPQCS) noexcept
 	{
-		CNetSession *pSession = m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
-
-		// ReleaseFlag°¡ ÀÌ¹Ì ÄÑÁø »óÈ²
-		InterlockedIncrement(&pSession->m_iIOCountAndRelease);
-		if ((pSession->m_iIOCountAndRelease & CNetSession::RELEASE_FLAG) == CNetSession::RELEASE_FLAG)
+		CNetSession *pSession = AcquireSession(sessionID, isPQCS);
+		if (pSession == nullptr)
 		{
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				ReleaseSession(pSession, isPQCS);
-			}
-			return FALSE;
-		}
-
-		if (sessionID != pSession->m_uiSessionID)
-		{
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				ReleaseSession(pSession, isPQCS);
-			}
 			return FALSE;
 		}
 
@@ -620,12 +603,12 @@ namespace NetworkLib::Core::Net::Server
 			return FALSE;
 		}
 
-		// Io ½ÇÆĞ À¯µµ
+		// Io ì‹¤íŒ¨ ìœ ë„
 		CancelIoEx((HANDLE)pSession->m_sSessionSocket, nullptr);
 
 		if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
 		{
-			// IOCount == 0 ÀÌ¸é ÇØÁ¦ ½Ãµµ
+			// IOCount == 0 ì´ë©´ í•´ì œ ì‹œë„
 			ReleaseSession(pSession, isPQCS);
 		}
 
@@ -649,9 +632,11 @@ namespace NetworkLib::Core::Net::Server
 		closesocket(pSession->m_sSessionSocket);
 		USHORT index = NetworkLib::Core::Utils::GetSessionIndex(pSession->m_uiSessionID);
 		UINT64 freeSessionId = pSession->m_uiSessionID;
+		NetworkLib::Contents::CBaseContents *pCurrentContent = pSession->m_pCurrentContent;
+		InterlockedCompareExchangePointer((PVOID volatile *)&m_arrPSessions[index], nullptr, pSession);
 
-		if (pSession->m_pCurrentContent != nullptr)
-			pSession->m_pCurrentContent->LeaveJobEnqueue(freeSessionId);
+		if (pCurrentContent != nullptr)
+			pCurrentContent->LeaveJobEnqueue(freeSessionId);
 		OnClientLeave(freeSessionId);
 
 		CNetSession::Free(pSession);
@@ -666,11 +651,13 @@ namespace NetworkLib::Core::Net::Server
 		USHORT index = NetworkLib::Core::Utils::GetSessionIndex(pSession->m_uiSessionID);
 		closesocket(pSession->m_sSessionSocket);
 		UINT64 freeSessionId = pSession->m_uiSessionID;
+		NetworkLib::Contents::CBaseContents *pCurrentContent = pSession->m_pCurrentContent;
+		InterlockedCompareExchangePointer((PVOID volatile *)&m_arrPSessions[index], nullptr, pSession);
 
 		OnClientLeave(freeSessionId);
 
-		if (pSession->m_pCurrentContent != nullptr)
-			pSession->m_pCurrentContent->LeaveJobEnqueue(freeSessionId);
+		if (pCurrentContent != nullptr)
+			pCurrentContent->LeaveJobEnqueue(freeSessionId);
 
 		CNetSession::Free(pSession);
 		InterlockedDecrement(&m_monitoringTargets->sessionCount);
@@ -681,7 +668,7 @@ namespace NetworkLib::Core::Net::Server
 
 	void CNetServer::FristPostAcceptEx() noexcept
 	{
-		// Ã³À½¿¡ AcceptEx¸¦ °É¾îµÎ°í ½ÃÀÛ
+		// ì²˜ìŒì— AcceptExë¥¼ ê±¸ì–´ë‘ê³  ì‹œì‘
 		for (int i = 0; i < Config::ACCEPTEX_COUNT; i++)
 		{
 			PostAcceptEx(i);
@@ -700,7 +687,7 @@ namespace NetworkLib::Core::Net::Server
 		if (newAcceptEx->m_sSessionSocket == INVALID_SOCKET)
 		{
 			errVal = WSAGetLastError();
-			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"PostAcceptEx socket() ½ÇÆĞ : %d", errVal);
+			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"PostAcceptEx socket() ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
@@ -737,11 +724,11 @@ namespace NetworkLib::Core::Net::Server
 			errVal = WSAGetLastError();
 
 			if (!m_isStop)
-				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_UPDATE_ACCEPT_CONTEXT) ½ÇÆĞ : %d", errVal);
+				MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"setsockopt(SO_UPDATE_ACCEPT_CONTEXT) ì‹¤íŒ¨ : %d", errVal);
 			return FALSE;
 		}
 
-		// ¼º°øÇÑ ¼ÒÄÏ¿¡ ´ëÇØ IOCP µî·Ï
+		// ì„±ê³µí•œ ì†Œì¼“ì— ëŒ€í•´ IOCP ë“±ë¡
 		CreateIoCompletionPort((HANDLE)pSession->m_sSessionSocket, m_hIOCPHandle, (ULONG_PTR)pSession, 0);
 
 		SOCKADDR_IN *localAddr = nullptr;
@@ -755,12 +742,12 @@ namespace NetworkLib::Core::Net::Server
 
 		pSession->m_ClientPort = remoteAddr->sin_port;
 
-		// TODO - ²÷¾îÁÙ ¹æ¹ı °í¹Î
+		// TODO - ëŠì–´ì¤„ ë°©ë²• ê³ ë¯¼
 		if (!OnConnectionRequest(pSession->m_ClientAddrBuffer, pSession->m_ClientPort))
 			return FALSE;
 
 		USHORT index;
-		// ¿¬°á ½ÇÆĞ : FALSE
+		// ì—°ê²° ì‹¤íŒ¨ : FALSE
 		if (!m_stackDisconnectIndex.Pop(&index))
 		{
 			MHLib::utils::g_Logger->WriteLog(L"SYSTEM", L"NetworkLib", MHLib::utils::LOG_LEVEL::ERR, L"m_stackDisconnectIndex.Pop(&index) failed");
@@ -774,7 +761,7 @@ namespace NetworkLib::Core::Net::Server
 		InterlockedIncrement(&m_monitoringTargets->sessionCount);
 		m_arrPSessions[index] = pSession;
 
-		// ¼­¹ö Áß´Ü »óÅÂ¸é ¿¬°á ²÷±â
+		// ì„œë²„ ì¤‘ë‹¨ ìƒíƒœë©´ ì—°ê²° ëŠê¸°
 		if (m_isStop)
 		{
 			Disconnect(combineId);
@@ -822,12 +809,12 @@ namespace NetworkLib::Core::Net::Server
 
 				if (dwTransferred == 0 && pSession == 0)
 				{
-					// Á¤»ó Á¾·á ·çÆ¾
+					// ì •ìƒ ì¢…ë£Œ ë£¨í‹´
 					PostQueuedCompletionStatus(m_hIOCPHandle, 0, 0, 0);
 					break;
 				}
 			}
-			// ¼ÒÄÏ Á¤»ó Á¾·á
+			// ì†Œì¼“ ì •ìƒ ì¢…ë£Œ
 			else if (dwTransferred == 0 && oper != NetworkLib::DataStructures::IOOperation::ACCEPTEX && (UINT)oper < 3)
 			{
 				// Disconnect(pSession->m_uiSessionID);
@@ -838,19 +825,19 @@ namespace NetworkLib::Core::Net::Server
 				{
 				case NetworkLib::DataStructures::IOOperation::ACCEPTEX:
 				{
-					// Accept°¡ ¼º°øÇÑ ¼¼¼Ç Æ÷ÀÎÅÍ¸¦ ¾ò¾î¿È
+					// Acceptê°€ ì„±ê³µí•œ ì„¸ì…˜ í¬ì¸í„°ë¥¼ ì–»ì–´ì˜´
 					INT index = CNetSession::s_OverlappedPool.GetAcceptExIndex((ULONG_PTR)lpOverlapped);
 					pSession = m_arrAcceptExSessions[index];
 
-					// ÀÌ°Å ½ÇÆĞÇÏ¸é ¿¬°á ²÷À½
-					// * ½ÇÆĞ °¡´ÉÇÑ »óÈ² - setsockopt, OnConnectionRequest
-					// * ioCount ¹«Á¶°Ç 1ÀÏ °ÍÀÓ
-					// * ¹Ù·Î ²÷¾îµµ ±¦Ãá
-					// * ´Ù¸¥ I/O ¿äÃ»À» ¾È°É°í ³¡³»±â ¶§¹®¿¡ ¾Æ·¡ÀÇ ioCount 0ÀÌ µÊÀ¸·Î ¿¬°á ²÷±èÀ» À¯µµ
+					// ì´ê±° ì‹¤íŒ¨í•˜ë©´ ì—°ê²° ëŠìŒ
+					// * ì‹¤íŒ¨ ê°€ëŠ¥í•œ ìƒí™© - setsockopt, OnConnectionRequest
+					// * ioCount ë¬´ì¡°ê±´ 1ì¼ ê²ƒì„
+					// * ë°”ë¡œ ëŠì–´ë„ ê´œì¶˜
+					// * ë‹¤ë¥¸ I/O ìš”ì²­ì„ ì•ˆê±¸ê³  ëë‚´ê¸° ë•Œë¬¸ì— ì•„ë˜ì˜ ioCount 0ì´ ë¨ìœ¼ë¡œ ì—°ê²° ëŠê¹€ì„ ìœ ë„
 					InterlockedIncrement(&pSession->m_iIOCountAndRelease);
 					if (!AcceptExCompleted(pSession))
 					{
-						// ½ÇÆĞÇÑ ÀÎµ¦½º¿¡ ´ëÇÑ ¿¹¾àÀº ´Ù½Ã °É¾îÁÜ
+						// ì‹¤íŒ¨í•œ ì¸ë±ìŠ¤ì— ëŒ€í•œ ì˜ˆì•½ì€ ë‹¤ì‹œ ê±¸ì–´ì¤Œ
 						if (!m_isStop)
 							PostAcceptEx(index);
 
@@ -860,9 +847,9 @@ namespace NetworkLib::Core::Net::Server
 						continue;
 					}
 
-					// OnAccept Ã³¸®´Â ¿©±â¼­
+					// OnAccept ì²˜ë¦¬ëŠ” ì—¬ê¸°ì„œ
 					OnAccept(pSession->m_uiSessionID);
-					// ÇØ´ç ¼¼¼Ç¿¡ ´ëÇØ Recv ¿¹¾à
+					// í•´ë‹¹ ì„¸ì…˜ì— ëŒ€í•´ Recv ì˜ˆì•½
 					pSession->PostRecv();
 
 					if (!m_isStop)

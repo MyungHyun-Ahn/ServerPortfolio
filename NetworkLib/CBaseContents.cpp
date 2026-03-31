@@ -1,4 +1,4 @@
-#include "pch.h"
+Ôªø#include "pch.h"
 #include "CNetServer.h"
 #include "CBaseContents.h"
 
@@ -7,25 +7,9 @@ namespace NetworkLib::Contents
 	void CBaseContents::MoveJobEnqueue(UINT64 sessionID, void *pObject) noexcept
 	{
 		NetworkLib::Core::Net::Server::CNetSession *pSession
-			= NetworkLib::Core::Net::Server::g_NetServer->m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(sessionID)];
-
-		InterlockedIncrement(&pSession->m_iIOCountAndRelease);
-		if ((pSession->m_iIOCountAndRelease & NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
-			== NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
+			= NetworkLib::Core::Net::Server::g_NetServer->AcquireSession(sessionID);
+		if (pSession == nullptr)
 		{
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
-			}
-			return;
-		}
-
-		if (sessionID != pSession->m_uiSessionID)
-		{
-			if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-			{
-				NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
-			}
 			return;
 		}
 
@@ -42,23 +26,28 @@ namespace NetworkLib::Contents
 
 	void CBaseContents::ProcessMoveJob() noexcept
 	{
-		// ¿Ãµø √≥∏Æ
+		// Ïù¥Îèô Ï≤òÎ¶¨
 		int moveJobQSize = m_MoveJobQ.GetUseSize();
 		for (int i = 0; i < moveJobQSize; i++)
 		{
 			MOVE_JOB *moveJob;
-			// ø√∏∞ ªÛ≈¬∑Œ µÈæÓø√ ∞Õ
+			// Ïò¨Î¶∞ ÏÉÅÌÉúÎ°ú Îì§Ïñ¥Ïò¨ Í≤É
 			// InterlockedIncrement(&pSession->m_iIOCountAndRelease);
 			m_MoveJobQ.Dequeue(&moveJob);
 
-			// ººº« √£±‚
+			// ÏÑ∏ÏÖò Ï∞æÍ∏∞
 			NetworkLib::Core::Net::Server::CNetSession *pSession 
-				= NetworkLib::Core::Net::Server::g_NetServer->m_arrPSessions[NetworkLib::Core::Utils::GetSessionIndex(moveJob->sessionId)];
+				= NetworkLib::Core::Net::Server::g_NetServer->AcquireSession(moveJob->sessionId);
+			if (pSession == nullptr)
+			{
+				MOVE_JOB::Free(moveJob);
+				continue;
+			}
 
-			// ø©±‚±Ó¡¯ ¿Ø»ø«— ººº«¿œ ∞Õ
-			// objectPtr == nullptr¿Ã∏È OnEnter πﬁ¿∫ ¬ ø°º≠ ª˝º∫
-			// ¿⁄±‚ ¿⁄Ω≈ map ø°µµ ≥÷æÓæﬂ «‘
-			// ººº«ø° ªÛ≈¬ º≥¡§
+			// Ïó¨Í∏∞ÍπåÏßÑ Ïú†Ìö®Ìïú ÏÑ∏ÏÖòÏùº Í≤É
+			// objectPtr == nullptrÏù¥Î©¥ OnEnter Î∞õÏùÄ Ï™ΩÏóêÏÑú ÏÉùÏÑ±
+			// ÏûêÍ∏∞ ÏûêÏã† map ÏóêÎèÑ ÎÑ£Ïñ¥Ïïº Ìï®
+			// ÏÑ∏ÏÖòÏóê ÏÉÅÌÉú ÏÑ§Ï†ï
 			// pSession->flag = m_pBaseContent::State
 			OnEnter(moveJob->sessionId, moveJob->objectPtr);
 			pSession->RegisterContents(this);
@@ -88,27 +77,10 @@ namespace NetworkLib::Contents
 		for (auto &it : m_umapSessions)
 		{
 			UINT64 sessionId = it.first;
-			int sessionIdx = NetworkLib::Core::Utils::GetSessionIndex(sessionId);
 			NetworkLib::Core::Net::Server::CNetSession *pSession 
-				= NetworkLib::Core::Net::Server::g_NetServer->m_arrPSessions[sessionIdx];
-
-			InterlockedIncrement(&pSession->m_iIOCountAndRelease);
-			if ((pSession->m_iIOCountAndRelease & NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
-				== NetworkLib::Core::Net::Server::CNetSession::RELEASE_FLAG)
+				= NetworkLib::Core::Net::Server::g_NetServer->AcquireSession(sessionId);
+			if (pSession == nullptr)
 			{
-				if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-				{
-					NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
-				}
-				continue;
-			}
-
-			if (sessionId != pSession->m_uiSessionID)
-			{
-				if (InterlockedDecrement(&pSession->m_iIOCountAndRelease) == 0)
-				{
-					NetworkLib::Core::Net::Server::g_NetServer->ReleaseSession(pSession);
-				}
 				continue;
 			}
 
