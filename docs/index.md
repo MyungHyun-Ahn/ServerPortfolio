@@ -30,6 +30,7 @@
 | --- | --- | --- |
 | [2026-03-31_networklib-lifecycle-review.md](D:\Project\ServerPortfolio\docs\code-review\2026-03-31_networklib-lifecycle-review.md) | 세션 수명주기, 콘텐츠 이동, 종료 흐름의 위험 지점 정리 | 완료 |
 | [2026-03-31_networklib-session-guard-refactoring-review.md](D:\Project\ServerPortfolio\docs\code-review\2026-03-31_networklib-session-guard-refactoring-review.md) | 1차 세션 가드 리팩터링 근거와 런타임 테스트 결과 정리 | 완료 |
+| [2026-03-31_networklib-stop-shutdown-review.md](D:\Project\ServerPortfolio\docs\code-review\2026-03-31_networklib-stop-shutdown-review.md) | `Stop()` busy-wait 제거와 종료 대기 구조 보강 결과 정리 | 완료 |
 
 ## 5. 상태 기준
 | 상태 | 의미 |

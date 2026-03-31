@@ -30,6 +30,7 @@ namespace NetworkLib::Contents
 		void Resume() noexcept;
 
 		static void RunAll() noexcept;
+		static void StopAll() noexcept;
 		static void EnqueueEvent(NetworkLib::Task::BaseTask *pTask);
 
 		// 자기 자신 스레드에게 Enqueue Event

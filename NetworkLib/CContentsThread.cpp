@@ -42,6 +42,21 @@ namespace NetworkLib::Contents
 		}
 	}
 
+	void CContentsThread::StopAll() noexcept
+	{
+		for (CContentsThread *thread : s_arrContentsThreads)
+		{
+			if (thread == nullptr)
+			{
+				continue;
+			}
+
+			thread->m_RunningFlag = FALSE;
+			InterlockedExchange(&thread->m_EnqueueFlag, TRUE);
+			WakeByAddressAll(&thread->m_EnqueueFlag);
+		}
+	}
+
 	void CContentsThread::EnqueueEvent(Task::BaseTask *pTask)
 	{
 		CContentsThread *targetThread = nullptr;
@@ -227,3 +242,4 @@ namespace NetworkLib::Contents
 		}
 	}
 }
+

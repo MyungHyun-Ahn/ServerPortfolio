@@ -1,6 +1,6 @@
-ï»¿#pragma once
+#pragma once
 
-// ì‚¬ìš©ì ì…ì¥ì—ì„œ CNetServer.h ë§Œ include í•´ë„ ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•˜ê¸° ìœ„í•¨
+// »ç¿ëÀÚ ÀÔÀå¿¡¼­ CNetServer.h ¸¸ include ÇØµµ »ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÏ±â À§ÇÔ
 #include "CoreUtils.h"
 #include "NetSetting.h"
 #include "CContentsThread.h"
@@ -65,7 +65,7 @@ namespace NetworkLib::Core::Net::Server
 
 		void RecvCompleted(int size) noexcept;
 
-		// ì¸íí•  ë•Œ ì§ë ¬í™” ë²„í¼ì˜ í¬ì¸í„°ë¥¼ ì¸í
+		// ÀÎÅ¥ÇÒ ¶§ Á÷·ÄÈ­ ¹öÆÛÀÇ Æ÷ÀÎÅÍ¸¦ ÀÎÅ¥
 
 
 		inline bool SendPacket(NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *message) noexcept
@@ -90,8 +90,8 @@ namespace NetworkLib::Core::Net::Server
 		void RegisterContents(NetworkLib::Contents::CBaseContents *pContents) { m_pCurrentContent = pContents; }
 
 	private:
-		// íŒ¨ë”© ê³„ì‚°í•´ì„œ ì„¸ì…˜ í¬ê¸° ìµœì í™”
-		// + Interlock ì‚¬ìš©í•˜ëŠ” ë³€ìˆ˜ë“¤ì€ ìºì‹œë¼ì¸ ë„ì›Œë†“ê¸°
+		// ÆĞµù °è»êÇØ¼­ ¼¼¼Ç Å©±â ÃÖÀûÈ­
+		// + Interlock »ç¿ëÇÏ´Â º¯¼öµéÀº Ä³½Ã¶óÀÎ ¶ç¿ö³õ±â
 		// Release + IoCount
 		LONG m_iIOCountAndRelease = RELEASE_FLAG;
 		LONG m_iSendCount = 0;
@@ -107,8 +107,8 @@ namespace NetworkLib::Core::Net::Server
 
 		LONG		m_iSendFlag = FALSE;
 		USHORT		m_ClientPort;
-		char		m_dummy01[2]; // íŒ¨ë”© ê³„ì‚°ìš©
-		// ìµœëŒ€ ë¬´ì¡°ê±´ 1ê°œ -> ìˆê±°ë‚˜ ì—†ê±°ë‚˜
+		char		m_dummy01[2]; // ÆĞµù °è»ê¿ë
+		// ÃÖ´ë ¹«Á¶°Ç 1°³ -> ÀÖ°Å³ª ¾ø°Å³ª
 		// CSerializableBufferView<FALSE> *m_pDelayedBuffer = nullptr;
 		MHLib::containers::CLFQueue<NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *> m_lfSendBufferQueue;
 		// m_pMyOverlappedStartAddr
@@ -120,11 +120,11 @@ namespace NetworkLib::Core::Net::Server
 
 		LONG m_iCacelIoCalled = FALSE;
 
-		// Recv í
+		// Recv Å¥
 		MHLib::containers::CLFQueue<NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *> m_RecvMsgQueue;
 		// LONG m_ContentStatus = FALSE;
 
-		// ì´ 460ë°”ì´íŠ¸
+		// ÃÑ 460¹ÙÀÌÆ®
 
 		// ContentPtr
 		NetworkLib::Contents::CBaseContents * m_pCurrentContent = nullptr;
@@ -149,7 +149,7 @@ namespace NetworkLib::Core::Net::Server
 		void Stop();
 
 		void SendPacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept;
-		// Send ì‹œë„ëŠ” í•˜ì§€ ì•ŠìŒ
+		// Send ½Ãµµ´Â ÇÏÁö ¾ÊÀ½
 		void EnqueuePacket(const UINT64 sessionID, NetworkLib::DataStructures::CSerializableBuffer<NetworkLib::SERVER_TYPE::NET> *sBuffer) noexcept;
 		void SendPQCS(const CNetSession *pSession);
 
@@ -177,6 +177,7 @@ namespace NetworkLib::Core::Net::Server
 		virtual void RegisterContentTimerEvent() noexcept = 0;
 
 	private:
+		void WaitForZeroSessionCount() noexcept;
 		CNetSession *AcquireSession(const UINT64 sessionID, BOOL isPQCS = FALSE) noexcept;
 
 		// Session
@@ -200,13 +201,14 @@ namespace NetworkLib::Core::Net::Server
 		LPFN_GETACCEPTEXSOCKADDRS		m_lpfnGetAcceptExSockaddrs = NULL;
 		GUID							m_guidGetAcceptExSockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
 
-		// IOCP í•¸ë“¤
+		// IOCP ÇÚµé
 		HANDLE m_hIOCPHandle = INVALID_HANDLE_VALUE;
 		LONG m_isStop = FALSE;
 
-		// ëª¨ë‹ˆí„°ë§ í•­ëª©
+		// ¸ğ´ÏÅÍ¸µ Ç×¸ñ
 		NetworkLib::Core::Monitoring::ServerMonitoringTargets *m_monitoringTargets;
 	};
 
 	extern CNetServer *g_NetServer;
 }
+
