@@ -43,3 +43,7 @@
 # vs
 .vs
 x64
+
+# Local build outputs and runtime logs
+Out/
+EchoServer/LogFile/
