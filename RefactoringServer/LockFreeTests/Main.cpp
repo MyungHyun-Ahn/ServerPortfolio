@@ -5,6 +5,8 @@
 #include "Crypto/IPacketCipher.h"
 #include "Memory/FTlsMemoryPool.h"
 #include "Packet/FDefaultPacketFramer.h"
+#include "Packet/FPacketView.h"
+#include "Packet/FRecvBuffer.h"
 
 #include <atomic>
 #include <array>
@@ -419,6 +421,132 @@ namespace
 		return { true, "Packet framer partial receive", "passed" };
 	}
 
+	STestResult RunPacketFramerRecvBufferTest()
+	{
+		using namespace GameServer::NetworkLib::Packet;
+
+		FDefaultPacketFramer framer;
+		FRecvBuffer recvBuffer(64);
+		std::vector<char> packetBuffer;
+		const std::string payload = "recv-ring-buffer";
+
+		SOutgoingPacket outgoingPacket{};
+		outgoingPacket.opcode = 3003;
+		outgoingPacket.randomKey = 0x31;
+		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
+		outgoingPacket.payload = payload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
+
+		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
+		{
+			return { false, "Packet framer recv buffer", "BuildPacket failed" };
+		}
+
+		WSABUF recvWsabufs[2]{};
+		DWORD recvBufferCount = 0;
+		recvBuffer.BuildRecvWsabufs(recvWsabufs, recvBufferCount);
+		if (recvBufferCount != 1)
+		{
+			return { false, "Packet framer recv buffer", "unexpected initial recv buffer count" };
+		}
+
+		std::memcpy(recvWsabufs[0].buf, packetBuffer.data(), 5);
+		if (!recvBuffer.CommitWrite(5))
+		{
+			return { false, "Packet framer recv buffer", "CommitWrite failed for first fragment" };
+		}
+
+		SFramedPacket framedPacket;
+		if (framer.TryExtractPacket(recvBuffer, framedPacket))
+		{
+			return { false, "Packet framer recv buffer", "packet should not be extracted before full payload arrives" };
+		}
+
+		recvBuffer.BuildRecvWsabufs(recvWsabufs, recvBufferCount);
+		std::memcpy(recvWsabufs[0].buf, packetBuffer.data() + 5, packetBuffer.size() - 5);
+		if (!recvBuffer.CommitWrite(packetBuffer.size() - 5))
+		{
+			return { false, "Packet framer recv buffer", "CommitWrite failed for second fragment" };
+		}
+
+		if (!framer.TryExtractPacket(recvBuffer, framedPacket))
+		{
+			return { false, "Packet framer recv buffer", "packet should be extracted from recv buffer" };
+		}
+
+		if (framedPacket.opcode != outgoingPacket.opcode)
+		{
+			return { false, "Packet framer recv buffer", "opcode mismatch after recv buffer extraction" };
+		}
+
+		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)
+		{
+			return { false, "Packet framer recv buffer", "payload mismatch after recv buffer extraction" };
+		}
+
+		if (recvBuffer.GetUsedSize() != 0)
+		{
+			return { false, "Packet framer recv buffer", "recv buffer should be empty after extraction" };
+		}
+
+		return { true, "Packet framer recv buffer", "passed" };
+	}
+
+	STestResult RunPacketFramerPacketViewTest()
+	{
+		using namespace GameServer::NetworkLib::Packet;
+
+		FDefaultPacketFramer framer;
+		FRecvBuffer recvBuffer(64);
+		std::vector<char> packetBuffer;
+		const std::string payload = "packet-view";
+
+		SOutgoingPacket outgoingPacket{};
+		outgoingPacket.opcode = 3004;
+		outgoingPacket.randomKey = 0x55;
+		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
+		outgoingPacket.payload = payload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
+
+		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
+		{
+			return { false, "Packet framer packet view", "BuildPacket failed" };
+		}
+
+		WSABUF recvWsabufs[2]{};
+		DWORD recvBufferCount = 0;
+		recvBuffer.BuildRecvWsabufs(recvWsabufs, recvBufferCount);
+		std::memcpy(recvWsabufs[0].buf, packetBuffer.data(), packetBuffer.size());
+		if (!recvBuffer.CommitWrite(packetBuffer.size()))
+		{
+			return { false, "Packet framer packet view", "CommitWrite failed" };
+		}
+
+		FPacketView packetView;
+		if (!framer.TryExtractPacketView(recvBuffer, packetView))
+		{
+			return { false, "Packet framer packet view", "TryExtractPacketView failed" };
+		}
+
+		const char* expectedPayloadPtr = recvBuffer.GetReadPointer() + sizeof(SPacketHeader);
+		if (packetView.payload != expectedPayloadPtr)
+		{
+			return { false, "Packet framer packet view", "payload pointer should point into recv buffer" };
+		}
+
+		if (std::string(packetView.payload, packetView.payload + packetView.payloadLength) != payload)
+		{
+			return { false, "Packet framer packet view", "payload mismatch" };
+		}
+
+		if (!recvBuffer.Discard(sizeof(SPacketHeader) + static_cast<std::size_t>(packetView.payloadLength)))
+		{
+			return { false, "Packet framer packet view", "Discard failed after view dispatch" };
+		}
+
+		return { true, "Packet framer packet view", "passed" };
+	}
+
 	template <>
 	STestResult RunParallelSumTest<TQueue>(const char* testName)
 	{
@@ -516,6 +644,8 @@ int main()
 	results.push_back(RunNullPacketCipherTest());
 	results.push_back(RunPacketFramerRoundTripTest());
 	results.push_back(RunPacketFramerPartialReceiveTest());
+	results.push_back(RunPacketFramerRecvBufferTest());
+	results.push_back(RunPacketFramerPacketViewTest());
 
 	bool allPassed = true;
 	for (const STestResult& result : results)

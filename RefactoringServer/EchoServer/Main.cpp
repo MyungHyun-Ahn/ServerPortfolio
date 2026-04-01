@@ -57,16 +57,16 @@ namespace
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
 
-		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) override
+		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) override
 		{
-			std::string message(buffer, buffer + length);
+			std::string message(packetView.payload, packetView.payload + packetView.payloadLength);
 			std::ostringstream oss;
-			oss << "received. sessionId=" << sessionId << " opcode=" << opcode << " message=" << message;
+			oss << "received. sessionId=" << sessionId << " opcode=" << packetView.opcode << " message=" << message;
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 
-			if (opcode == kEchoRequestOpcode)
+			if (packetView.opcode == kEchoRequestOpcode)
 			{
-				server.Send(sessionId, kEchoResponseOpcode, buffer, length);
+				server.Send(sessionId, kEchoResponseOpcode, packetView.payload, packetView.payloadLength);
 			}
 		}
 

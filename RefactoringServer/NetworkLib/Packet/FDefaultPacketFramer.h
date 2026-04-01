@@ -9,6 +9,8 @@ namespace GameServer::NetworkLib::Packet
 	public:
 		bool BuildPacket(const SOutgoingPacket& packet, std::vector<char>& outPacket) const override;
 		bool TryExtractPacket(std::vector<char>& ioBuffer, SFramedPacket& outPacket) const override;
+		bool TryExtractPacket(FRecvBuffer& ioBuffer, SFramedPacket& outPacket) const override;
+		bool TryExtractPacketView(FRecvBuffer& ioBuffer, FPacketView& outPacketView) const override;
 		std::uint32_t GetHeaderSize() const noexcept override;
 	};
 }

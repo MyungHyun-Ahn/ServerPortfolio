@@ -359,57 +359,59 @@ namespace GameServer::NetworkLib
 
 			if (ioContext->ioType == FSession::EIoType::Recv)
 			{
-				sessionContext->AppendRecvBytes(
-					ioContext->buffer.data(),
-					transferredBytes);
+				if (!sessionContext->CommitRecvBytes(transferredBytes))
+				{
+					Log(GameServer::Foundation::ELogLevel::Warn, "Recv buffer overflow detected.");
+					CloseSession(*sessionContext);
+					ReleaseSession(sessionContext);
+					continue;
+				}
 
 				if (m_packetFramer != nullptr)
 				{
 					while (true)
 					{
-						GameServer::NetworkLib::Packet::SFramedPacket framedPacket;
-						if (!m_packetFramer->TryExtractPacket(sessionContext->GetRecvBuffer(), framedPacket))
+						GameServer::NetworkLib::Packet::FPacketView packetView;
+						if (!m_packetFramer->TryExtractPacketView(sessionContext->GetRecvBuffer(), packetView))
 						{
 							break;
 						}
 
 						const std::uint8_t actualChecksum =
 							GameServer::NetworkLib::Packet::CalculatePacketChecksum(
-								framedPacket.payload.data(),
-								static_cast<std::int32_t>(framedPacket.payload.size()));
-						if (actualChecksum != framedPacket.checkSum)
+								packetView.payload,
+								packetView.payloadLength);
+						if (actualChecksum != packetView.checkSum)
 						{
 							std::ostringstream oss;
 							oss << "Packet checksum mismatch. sessionId=" << sessionContext->GetSessionId()
-								<< " opcode=" << framedPacket.opcode
-								<< " expected=" << static_cast<int>(framedPacket.checkSum)
+								<< " opcode=" << packetView.opcode
+								<< " expected=" << static_cast<int>(packetView.checkSum)
 								<< " actual=" << static_cast<int>(actualChecksum);
 							Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 							CloseSession(*sessionContext);
 							break;
 						}
 
-						if (m_packetCipher != nullptr && !framedPacket.payload.empty())
+						if (m_packetCipher != nullptr && packetView.payloadLength > 0)
 						{
-							m_packetCipher->Decode(framedPacket.payload.data(), static_cast<int>(framedPacket.payload.size()), framedPacket.randomKey);
+							m_packetCipher->Decode(const_cast<char*>(packetView.payload), packetView.payloadLength, packetView.randomKey);
 						}
 
 						m_applicationHandler->OnPacketReceived(
 							*this,
 							sessionContext->GetSessionId(),
-							framedPacket.opcode,
-							framedPacket.payload.data(),
-							static_cast<std::int32_t>(framedPacket.payload.size()));
+							packetView);
+
+						const std::size_t consumedPacketSize =
+							sizeof(GameServer::NetworkLib::Packet::SPacketHeader) + static_cast<std::size_t>(packetView.payloadLength);
+						sessionContext->GetRecvBuffer().Discard(consumedPacketSize);
 					}
 				}
 				else
 				{
-					m_applicationHandler->OnPacketReceived(
-						*this,
-						sessionContext->GetSessionId(),
-						0,
-						ioContext->buffer.data(),
-						static_cast<std::int32_t>(transferredBytes));
+					Log(GameServer::Foundation::ELogLevel::Warn, "Recv path without framer is not supported by ring buffer mode.");
+					CloseSession(*sessionContext);
 				}
 
 				if (!PostRecv(*sessionContext))
@@ -438,12 +440,20 @@ namespace GameServer::NetworkLib
 	{
 		DWORD recvFlags = 0;
 		DWORD recvBytes = 0;
+		WSABUF recvBuffers[2]{};
+		DWORD recvBufferCount = 0;
 
 		FSession::SIoContext& recvContext = sessionContext.GetRecvContext();
-		recvContext.Prepare(FSession::EIoType::Recv, &sessionContext, m_serverConfig.recvBufferSize);
+		recvContext.Prepare(FSession::EIoType::Recv, &sessionContext);
+		sessionContext.BuildRecvWsabufs(recvBuffers, recvBufferCount);
+		if (recvBufferCount == 0)
+		{
+			Log(GameServer::Foundation::ELogLevel::Warn, "PostRecv failed because recv buffer has no writable space.");
+			return false;
+		}
 		sessionContext.AcquireRef();
 
-		const int recvResult = WSARecv(sessionContext.GetSocket(), &recvContext.wsabuf, 1, &recvBytes, &recvFlags, &recvContext.overlapped, nullptr);
+		const int recvResult = WSARecv(sessionContext.GetSocket(), recvBuffers, recvBufferCount, &recvBytes, &recvFlags, &recvContext.overlapped, nullptr);
 		if (recvResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 		{
 			const int errorCode = WSAGetLastError();
@@ -575,7 +585,9 @@ namespace GameServer::NetworkLib
 			auto* candidateSession = new FSession();
 			const std::uint32_t generation = m_generations[slotIndex].fetch_add(1);
 			const std::uint64_t sessionId = ComposeSessionId(slotIndex, generation);
-			candidateSession->Initialize(clientSocket, sessionId, slotIndex, generation);
+			const std::size_t recvBufferCapacity =
+				static_cast<std::size_t>(std::max<std::uint32_t>(m_serverConfig.recvBufferSize * 8u, 65536u));
+			candidateSession->Initialize(clientSocket, sessionId, slotIndex, generation, recvBufferCapacity);
 
 			if (m_sessionSlots[slotIndex].compare_exchange_strong(expected, candidateSession))
 			{
