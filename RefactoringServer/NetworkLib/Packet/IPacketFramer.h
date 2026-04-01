@@ -10,7 +10,7 @@ namespace GameServer::NetworkLib::Packet
 		virtual ~IPacketFramer() = default;
 
 	public:
-		virtual bool BuildPacket(const char* payload, std::int32_t payloadLength, std::uint8_t randomKey, std::vector<char>& outPacket) const = 0;
+		virtual bool BuildPacket(const SOutgoingPacket& packet, std::vector<char>& outPacket) const = 0;
 		virtual bool TryExtractPacket(std::vector<char>& ioBuffer, SFramedPacket& outPacket) const = 0;
 		virtual std::uint32_t GetHeaderSize() const noexcept = 0;
 	};

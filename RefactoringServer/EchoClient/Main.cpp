@@ -10,6 +10,8 @@
 int main()
 {
 	constexpr std::uint8_t kPacketKey = 0x37;
+	constexpr std::uint16_t kEchoRequestOpcode = 1000;
+	constexpr std::uint16_t kEchoResponseOpcode = 1001;
 
 	WSADATA wsaData{};
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
@@ -49,8 +51,18 @@ int main()
 	std::vector<char> encryptedPayload(requestMessage.begin(), requestMessage.end());
 	packetCipher.Encode(encryptedPayload.data(), static_cast<int>(encryptedPayload.size()), requestRandomKey);
 
+	GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
+	outgoingPacket.opcode = kEchoRequestOpcode;
+	outgoingPacket.randomKey = requestRandomKey;
+	outgoingPacket.checkSum =
+		GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+			encryptedPayload.data(),
+			static_cast<std::int32_t>(encryptedPayload.size()));
+	outgoingPacket.payload = encryptedPayload.data();
+	outgoingPacket.payloadLength = static_cast<std::int32_t>(encryptedPayload.size());
+
 	std::vector<char> outboundPacket;
-	if (!packetFramer.BuildPacket(encryptedPayload.data(), static_cast<std::int32_t>(encryptedPayload.size()), requestRandomKey, outboundPacket))
+	if (!packetFramer.BuildPacket(outgoingPacket, outboundPacket))
 	{
 		std::cerr << "BuildPacket failed.\n";
 		closesocket(clientSocket);
@@ -81,6 +93,26 @@ int main()
 	if (!packetFramer.TryExtractPacket(inboundBuffer, framedPacket))
 	{
 		std::cerr << "packet framing failed.\n";
+		closesocket(clientSocket);
+		WSACleanup();
+		return 1;
+	}
+
+	const std::uint8_t responseChecksum =
+		GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+			framedPacket.payload.data(),
+			static_cast<std::int32_t>(framedPacket.payload.size()));
+	if (responseChecksum != framedPacket.checkSum)
+	{
+		std::cerr << "packet checksum failed.\n";
+		closesocket(clientSocket);
+		WSACleanup();
+		return 1;
+	}
+
+	if (framedPacket.opcode != kEchoResponseOpcode)
+	{
+		std::cerr << "unexpected opcode: " << framedPacket.opcode << "\n";
 		closesocket(clientSocket);
 		WSACleanup();
 		return 1;

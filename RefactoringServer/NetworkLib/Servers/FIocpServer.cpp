@@ -134,7 +134,7 @@ namespace GameServer::NetworkLib
 		m_logger.reset();
 	}
 
-	bool FIocpServer::Send(std::uint64_t sessionId, const char* buffer, std::int32_t length)
+	bool FIocpServer::Send(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length)
 	{
 		if (buffer == nullptr || length <= 0)
 		{
@@ -164,7 +164,18 @@ namespace GameServer::NetworkLib
 				m_packetCipher->Encode(payloadBuffer.data(), static_cast<int>(payloadBuffer.size()), randomKey);
 			}
 
-			if (!m_packetFramer->BuildPacket(payloadBuffer.data(), static_cast<std::int32_t>(payloadBuffer.size()), randomKey, ioContext->buffer))
+			GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
+			outgoingPacket.opcode = opcode;
+			outgoingPacket.randomKey = randomKey;
+			outgoingPacket.checkSum =
+				GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+					payloadBuffer.data(),
+					static_cast<std::int32_t>(payloadBuffer.size()));
+			outgoingPacket.flags = static_cast<std::uint8_t>(GameServer::NetworkLib::Packet::EPacketFlags::None);
+			outgoingPacket.payload = payloadBuffer.data();
+			outgoingPacket.payloadLength = static_cast<std::int32_t>(payloadBuffer.size());
+
+			if (!m_packetFramer->BuildPacket(outgoingPacket, ioContext->buffer))
 			{
 				Log(GameServer::Foundation::ELogLevel::Error, "BuildPacket failed during send path.");
 				delete ioContext;
@@ -386,6 +397,22 @@ namespace GameServer::NetworkLib
 							break;
 						}
 
+						const std::uint8_t actualChecksum =
+							GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+								framedPacket.payload.data(),
+								static_cast<std::int32_t>(framedPacket.payload.size()));
+						if (actualChecksum != framedPacket.checkSum)
+						{
+							std::ostringstream oss;
+							oss << "Packet checksum mismatch. sessionId=" << sessionContext->sessionId
+								<< " opcode=" << framedPacket.opcode
+								<< " expected=" << static_cast<int>(framedPacket.checkSum)
+								<< " actual=" << static_cast<int>(actualChecksum);
+							Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+							CloseSession(*sessionContext);
+							break;
+						}
+
 						if (m_packetCipher != nullptr && !framedPacket.payload.empty())
 						{
 							m_packetCipher->Decode(framedPacket.payload.data(), static_cast<int>(framedPacket.payload.size()), framedPacket.randomKey);
@@ -394,13 +421,19 @@ namespace GameServer::NetworkLib
 						m_applicationHandler->OnPacketReceived(
 							*this,
 							sessionContext->sessionId,
+							framedPacket.opcode,
 							framedPacket.payload.data(),
 							static_cast<std::int32_t>(framedPacket.payload.size()));
 					}
 				}
 				else
 				{
-					m_applicationHandler->OnPacketReceived(*this, sessionContext->sessionId, ioContext->buffer.data(), static_cast<std::int32_t>(transferredBytes));
+					m_applicationHandler->OnPacketReceived(
+						*this,
+						sessionContext->sessionId,
+						0,
+						ioContext->buffer.data(),
+						static_cast<std::int32_t>(transferredBytes));
 				}
 
 				if (!PostRecv(*sessionContext))

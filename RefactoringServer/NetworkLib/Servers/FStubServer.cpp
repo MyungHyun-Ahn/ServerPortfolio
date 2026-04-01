@@ -19,7 +19,7 @@ namespace GameServer::NetworkLib
 	{
 	}
 
-	bool FStubServer::Send(std::uint64_t, const char*, std::int32_t)
+	bool FStubServer::Send(std::uint64_t, std::uint16_t, const char*, std::int32_t)
 	{
 		return false;
 	}

@@ -311,8 +311,14 @@ namespace
 		FDefaultPacketFramer framer;
 		std::vector<char> packetBuffer;
 		const std::string payload = "framed-echo-payload";
+		SOutgoingPacket outgoingPacket{};
+		outgoingPacket.opcode = 3001;
+		outgoingPacket.randomKey = 0x44;
+		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
+		outgoingPacket.payload = payload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
 
-		if (!framer.BuildPacket(payload.data(), static_cast<std::int32_t>(payload.size()), 0x44, packetBuffer))
+		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
 		{
 			return { false, "Packet framer round trip", "BuildPacket failed" };
 		}
@@ -334,9 +340,19 @@ namespace
 			return { false, "Packet framer round trip", "receive buffer should be empty after extraction" };
 		}
 
+		if (framedPacket.opcode != outgoingPacket.opcode)
+		{
+			return { false, "Packet framer round trip", "opcode mismatch after extraction" };
+		}
+
 		if (framedPacket.randomKey != 0x44)
 		{
 			return { false, "Packet framer round trip", "randomKey mismatch after extraction" };
+		}
+
+		if (framedPacket.checkSum != outgoingPacket.checkSum)
+		{
+			return { false, "Packet framer round trip", "checksum mismatch after extraction" };
 		}
 
 		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)
@@ -354,8 +370,14 @@ namespace
 		FDefaultPacketFramer framer;
 		std::vector<char> packetBuffer;
 		const std::string payload = "partial-frame";
+		SOutgoingPacket outgoingPacket{};
+		outgoingPacket.opcode = 3002;
+		outgoingPacket.randomKey = 0x21;
+		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
+		outgoingPacket.payload = payload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
 
-		if (!framer.BuildPacket(payload.data(), static_cast<std::int32_t>(payload.size()), 0x21, packetBuffer))
+		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
 		{
 			return { false, "Packet framer partial receive", "BuildPacket failed" };
 		}
@@ -377,6 +399,16 @@ namespace
 		if (!framer.TryExtractPacket(receiveBuffer, framedPacket))
 		{
 			return { false, "Packet framer partial receive", "packet should be extracted after remaining bytes arrive" };
+		}
+
+		if (framedPacket.opcode != outgoingPacket.opcode)
+		{
+			return { false, "Packet framer partial receive", "opcode mismatch after partial receive assembly" };
+		}
+
+		if (framedPacket.checkSum != outgoingPacket.checkSum)
+		{
+			return { false, "Packet framer partial receive", "checksum mismatch after partial receive assembly" };
 		}
 
 		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)

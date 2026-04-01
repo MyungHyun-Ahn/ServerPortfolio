@@ -17,6 +17,9 @@
 
 namespace
 {
+	constexpr std::uint16_t kEchoRequestOpcode = 1000;
+	constexpr std::uint16_t kEchoResponseOpcode = 1001;
+
 	std::filesystem::path GetExecutableDirectory()
 	{
 		std::array<char, MAX_PATH> modulePath = {};
@@ -52,13 +55,17 @@ namespace
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
 
-		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const char* buffer, std::int32_t length) override
+		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) override
 		{
 			std::string message(buffer, buffer + length);
 			std::ostringstream oss;
-			oss << "received. sessionId=" << sessionId << " message=" << message;
+			oss << "received. sessionId=" << sessionId << " opcode=" << opcode << " message=" << message;
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
-			server.Send(sessionId, buffer, length);
+
+			if (opcode == kEchoRequestOpcode)
+			{
+				server.Send(sessionId, kEchoResponseOpcode, buffer, length);
+			}
 		}
 
 		void OnClientDisconnected(std::uint64_t sessionId) override
