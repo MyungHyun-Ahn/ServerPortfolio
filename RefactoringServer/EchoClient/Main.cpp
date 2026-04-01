@@ -2,6 +2,7 @@
 
 #include "Crypto/FDefaultPacketCipher.h"
 #include "Generated/Packets/Echo/EchoPackets.h"
+#include "Generated/Packets/Login/LoginPackets.h"
 #include "Packet/FDefaultPacketFramer.h"
 #include "Packet/FPacketSerialization.h"
 
@@ -24,6 +25,7 @@ namespace
 	{
 		std::string serverIp = "127.0.0.1";
 		std::uint16_t port = 19000;
+		std::uint32_t loginUserIdBase = 1000;
 		int sessionCount = 1;
 		int requestCount = 1;
 		int payloadSize = 9;
@@ -83,6 +85,16 @@ namespace
 				}
 
 				outOptions.port = static_cast<std::uint16_t>(parsedValue);
+			}
+			else if (argument == "--login-userid-base" && argumentIndex + 1 < argc)
+			{
+				int parsedValue = 0;
+				if (!TryParseInt(argv[++argumentIndex], parsedValue) || parsedValue <= 0)
+				{
+					return false;
+				}
+
+				outOptions.loginUserIdBase = static_cast<std::uint32_t>(parsedValue);
 			}
 			else if (argument == "--count" && argumentIndex + 1 < argc)
 			{
@@ -341,6 +353,121 @@ namespace
 			std::vector<char> recvChunk(static_cast<std::size_t>(options.recvBufferSize));
 			std::unordered_map<std::string, int> expectedResponseCounts;
 			std::vector<char> sendBatchBuffer;
+			auto tryReceiveNextContentPacket =
+				[&](GameServer::NetworkLib::Packet::SFramedPacket& outFramedPacket, GameServer::NetworkLib::Packet::FPacketView& outContentPacketView) -> bool
+				{
+					while (true)
+					{
+						if (packetFramer.TryExtractPacket(inboundBuffer, outFramedPacket))
+						{
+							const std::uint8_t responseChecksum =
+								GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+									outFramedPacket.payload.data(),
+									static_cast<std::int32_t>(outFramedPacket.payload.size()));
+							if (responseChecksum != outFramedPacket.checkSum)
+							{
+								sessionResult.errorMessage = "packet checksum failed.";
+								return false;
+							}
+
+							packetCipher.Decode(outFramedPacket.payload.data(), static_cast<int>(outFramedPacket.payload.size()), outFramedPacket.randomKey);
+
+							GameServer::NetworkLib::Packet::FPacketView transportPacketView{};
+							transportPacketView.randomKey = outFramedPacket.randomKey;
+							transportPacketView.checkSum = outFramedPacket.checkSum;
+							transportPacketView.payload = outFramedPacket.payload.data();
+							transportPacketView.payloadLength = static_cast<std::int32_t>(outFramedPacket.payload.size());
+
+							if (!GameServer::NetworkLib::Packet::TryParseContentPacketView(transportPacketView, outContentPacketView))
+							{
+								sessionResult.errorMessage = "response content header parse failed.";
+								return false;
+							}
+
+							return true;
+						}
+
+						const int recvBytes = recv(clientSocket, recvChunk.data(), static_cast<int>(recvChunk.size()), 0);
+						if (recvBytes <= 0)
+						{
+							sessionResult.errorMessage = "recv failed before all responses arrived.";
+							return false;
+						}
+
+						inboundBuffer.insert(inboundBuffer.end(), recvChunk.begin(), recvChunk.begin() + recvBytes);
+					}
+				};
+
+			{
+				GameServer::Generated::Login::FLoginRq loginRequest;
+				loginRequest.userId = options.loginUserIdBase + static_cast<std::uint32_t>(sessionIndex);
+
+				std::vector<char> loginPayload = GameServer::NetworkLib::Packet::SerializeContentPacket(loginRequest);
+				const std::uint8_t loginRandomKey = static_cast<std::uint8_t>((0x21 + sessionIndex) & 0xFF);
+				packetCipher.Encode(loginPayload.data(), static_cast<int>(loginPayload.size()), loginRandomKey);
+
+				GameServer::NetworkLib::Packet::SOutgoingPacket loginOutgoingPacket{};
+				loginOutgoingPacket.randomKey = loginRandomKey;
+				loginOutgoingPacket.checkSum =
+					GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+						loginPayload.data(),
+						static_cast<std::int32_t>(loginPayload.size()));
+				loginOutgoingPacket.payload = loginPayload.data();
+				loginOutgoingPacket.payloadLength = static_cast<std::int32_t>(loginPayload.size());
+
+				std::vector<char> loginWirePacket;
+				if (!packetFramer.BuildPacket(loginOutgoingPacket, loginWirePacket))
+				{
+					sessionResult.errorMessage = "BuildPacket failed for login request.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				if (!SendPacketWithOptionalChunking(clientSocket, loginWirePacket, options.sendChunkSize, options.sendChunkDelayMs))
+				{
+					sessionResult.errorMessage = "send failed for login request.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				GameServer::NetworkLib::Packet::SFramedPacket loginResponseFramedPacket{};
+				GameServer::NetworkLib::Packet::FPacketView loginResponsePacketView{};
+				if (!tryReceiveNextContentPacket(loginResponseFramedPacket, loginResponsePacketView))
+				{
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				if (loginResponsePacketView.opcode != GameServer::Generated::Login::FLoginRp::kOpcode)
+				{
+					std::ostringstream oss;
+					oss << "unexpected login response opcode: " << loginResponsePacketView.opcode;
+					sessionResult.errorMessage = oss.str();
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				GameServer::Generated::Login::FLoginRp loginResponse;
+				if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(loginResponsePacketView, loginResponse))
+				{
+					sessionResult.errorMessage = "login response deserialize failed.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				if (!loginResponse.success || loginResponse.userId != loginRequest.userId)
+				{
+					sessionResult.errorMessage = "login validation failed.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+			}
 
 			for (int requestIndex = 0; requestIndex < options.requestCount; ++requestIndex)
 			{
@@ -402,98 +529,56 @@ namespace
 
 			while (cycleReceivedResponseCount < expectedResponseCount)
 			{
-				const int recvBytes = recv(clientSocket, recvChunk.data(), static_cast<int>(recvChunk.size()), 0);
-				if (recvBytes <= 0)
+				GameServer::NetworkLib::Packet::SFramedPacket framedPacket{};
+				GameServer::NetworkLib::Packet::FPacketView contentPacketView{};
+				if (!tryReceiveNextContentPacket(framedPacket, contentPacketView))
 				{
-					sessionResult.errorMessage = "recv failed before all responses arrived.";
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
 					return sessionResult;
 				}
 
-				inboundBuffer.insert(inboundBuffer.end(), recvChunk.begin(), recvChunk.begin() + recvBytes);
-
-				while (true)
+				if (contentPacketView.opcode != GameServer::Generated::Echo::FEchoRp::kOpcode)
 				{
-					GameServer::NetworkLib::Packet::SFramedPacket framedPacket;
-					if (!packetFramer.TryExtractPacket(inboundBuffer, framedPacket))
-					{
-						break;
-					}
-
-					const std::uint8_t responseChecksum =
-						GameServer::NetworkLib::Packet::CalculatePacketChecksum(
-							framedPacket.payload.data(),
-							static_cast<std::int32_t>(framedPacket.payload.size()));
-					if (responseChecksum != framedPacket.checkSum)
-					{
-						std::ostringstream oss;
-						oss << "packet checksum failed for response " << sessionResult.receivedResponseCount << '.';
-						sessionResult.errorMessage = oss.str();
-						closesocket(clientSocket);
-						clientSocket = INVALID_SOCKET;
-						return sessionResult;
-					}
-
-					packetCipher.Decode(framedPacket.payload.data(), static_cast<int>(framedPacket.payload.size()), framedPacket.randomKey);
-
-					GameServer::NetworkLib::Packet::FPacketView transportPacketView{};
-					transportPacketView.randomKey = framedPacket.randomKey;
-					transportPacketView.checkSum = framedPacket.checkSum;
-					transportPacketView.payload = framedPacket.payload.data();
-					transportPacketView.payloadLength = static_cast<std::int32_t>(framedPacket.payload.size());
-
-					GameServer::NetworkLib::Packet::FPacketView contentPacketView{};
-					if (!GameServer::NetworkLib::Packet::TryParseContentPacketView(transportPacketView, contentPacketView))
-					{
-						sessionResult.errorMessage = "response content header parse failed.";
-						closesocket(clientSocket);
-						clientSocket = INVALID_SOCKET;
-						return sessionResult;
-					}
-
-					if (contentPacketView.opcode != GameServer::Generated::Echo::FEchoRp::kOpcode)
-					{
-						std::ostringstream oss;
-						oss << "unexpected opcode: " << contentPacketView.opcode;
-						sessionResult.errorMessage = oss.str();
-						closesocket(clientSocket);
-						clientSocket = INVALID_SOCKET;
-						return sessionResult;
-					}
-
-					GameServer::Generated::Echo::FEchoRp responsePacket;
-					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, responsePacket))
-					{
-						sessionResult.errorMessage = "response packet deserialize failed.";
-						closesocket(clientSocket);
-						clientSocket = INVALID_SOCKET;
-						return sessionResult;
-					}
-
-					const std::string& responseMessage = responsePacket.message;
-
-					auto expectedIt = expectedResponseCounts.find(responseMessage);
-					if (expectedIt == expectedResponseCounts.end() || expectedIt->second <= 0)
-					{
-						std::ostringstream oss;
-						oss << "unexpected response=" << responseMessage;
-						sessionResult.errorMessage = oss.str();
-						closesocket(clientSocket);
-						clientSocket = INVALID_SOCKET;
-						return sessionResult;
-					}
-					--expectedIt->second;
-
-					if (options.verbose)
-					{
-						std::cout << "session[" << sessionIndex << "] response[" << sessionResult.receivedResponseCount
-							<< "]: " << responseMessage << "\n";
-					}
-
-					++cycleReceivedResponseCount;
-					++sessionResult.receivedResponseCount;
+					std::ostringstream oss;
+					oss << "unexpected opcode: " << contentPacketView.opcode;
+					sessionResult.errorMessage = oss.str();
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
 				}
+
+				GameServer::Generated::Echo::FEchoRp responsePacket;
+				if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, responsePacket))
+				{
+					sessionResult.errorMessage = "response packet deserialize failed.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				const std::string& responseMessage = responsePacket.message;
+
+				auto expectedIt = expectedResponseCounts.find(responseMessage);
+				if (expectedIt == expectedResponseCounts.end() || expectedIt->second <= 0)
+				{
+					std::ostringstream oss;
+					oss << "unexpected response=" << responseMessage;
+					sessionResult.errorMessage = oss.str();
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+				--expectedIt->second;
+
+				if (options.verbose)
+				{
+					std::cout << "session[" << sessionIndex << "] response[" << sessionResult.receivedResponseCount
+						<< "]: " << responseMessage << "\n";
+				}
+
+				++cycleReceivedResponseCount;
+				++sessionResult.receivedResponseCount;
 			}
 
 			for (const auto& [message, remainingCount] : expectedResponseCounts)
@@ -551,7 +636,7 @@ int main(int argc, char* argv[])
 	SClientOptions options{};
 	if (!ParseArguments(argc, argv, options))
 	{
-		std::cerr << "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] [--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] [--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] [--quiet]\n";
+		std::cerr << "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] [--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] [--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] [--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] [--quiet]\n";
 		return 1;
 	}
 

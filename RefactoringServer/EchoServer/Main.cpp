@@ -6,6 +6,7 @@
 #include "Foundation/Logging/FFileLogger.h"
 #include "Foundation/Logging/ILogger.h"
 #include "Generated/Packets/Echo/EchoPacketHandler.h"
+#include "Generated/Packets/Login/LoginPacketHandler.h"
 #include "Generated/Packets/PacketRouter.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "Packet/FDefaultPacketFramer.h"
@@ -15,6 +16,8 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <mutex>
+#include <unordered_map>
 #include <thread>
 #include <Windows.h>
 
@@ -43,6 +46,7 @@ namespace
 	class FEchoApplication final
 		: public GameServer::NetworkLib::IApplicationHandler
 		, public GameServer::Generated::Echo::FEchoPacketHandlerBase
+		, public GameServer::Generated::Login::FLoginPacketHandlerBase
 	{
 	public:
 		FEchoApplication(
@@ -52,6 +56,7 @@ namespace
 			, m_runtimeOptions(runtimeOptions)
 		{
 			m_packetRouter.SetEchoHandler(this);
+			m_packetRouter.SetLoginHandler(this);
 		}
 
 	public:
@@ -81,6 +86,11 @@ namespace
 
 		void OnClientDisconnected(std::uint64_t sessionId) override
 		{
+			{
+				std::lock_guard<std::mutex> lock(m_loginMutex);
+				m_loggedInUsers.erase(sessionId);
+			}
+
 			std::ostringstream oss;
 			oss << "client disconnected. sessionId=" << sessionId;
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
@@ -93,6 +103,12 @@ namespace
 
 		bool HandleEchoRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Echo::FEchoRq& packet) override
 		{
+			if (!IsLoggedIn(sessionId))
+			{
+				Log(GameServer::Foundation::ELogLevel::Warn, "echo request rejected before login.");
+				return false;
+			}
+
 			if (m_runtimeOptions.logPackets)
 			{
 				std::ostringstream oss;
@@ -135,7 +151,42 @@ namespace
 			return true;
 		}
 
+		bool HandleLoginRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Login::FLoginRq& packet) override
+		{
+			const bool success = packet.userId != 0;
+			{
+				std::lock_guard<std::mutex> lock(m_loginMutex);
+				if (success)
+				{
+					m_loggedInUsers[sessionId] = packet.userId;
+				}
+				else
+				{
+					m_loggedInUsers.erase(sessionId);
+				}
+			}
+
+			{
+				std::ostringstream oss;
+				oss << "login " << (success ? "succeeded" : "failed")
+					<< ". sessionId=" << sessionId
+					<< " userId=" << packet.userId;
+				Log(success ? GameServer::Foundation::ELogLevel::Info : GameServer::Foundation::ELogLevel::Warn, oss.str());
+			}
+
+			GameServer::Generated::Login::FLoginRp responsePacket;
+			responsePacket.userId = packet.userId;
+			responsePacket.success = success;
+			return GameServer::Generated::Login::SendGeneratedPacket(server, sessionId, responsePacket);
+		}
+
 	private:
+		bool IsLoggedIn(std::uint64_t sessionId)
+		{
+			std::lock_guard<std::mutex> lock(m_loginMutex);
+			return m_loggedInUsers.contains(sessionId);
+		}
+
 		void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const
 		{
 			if (m_logger != nullptr)
@@ -148,6 +199,8 @@ namespace
 		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
 		SServerRuntimeOptions m_runtimeOptions;
 		GameServer::Generated::FPacketRouter m_packetRouter;
+		std::mutex m_loginMutex;
+		std::unordered_map<std::uint64_t, std::uint32_t> m_loggedInUsers;
 	};
 }
 
