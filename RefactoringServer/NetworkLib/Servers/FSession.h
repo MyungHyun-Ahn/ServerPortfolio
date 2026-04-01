@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Containers/FLockFreeQueue.h"
+#include "Servers/FSendBuffer.h"
+
 #include <WinSock2.h>
 
 #include <atomic>
@@ -30,7 +33,7 @@ namespace GameServer::NetworkLib
 
 	public:
 		FSession() = default;
-		~FSession() = default;
+		~FSession();
 
 		void Initialize(SOCKET socket, std::uint64_t sessionId, std::uint32_t slotIndex, std::uint32_t generation);
 		void Reset() noexcept;
@@ -53,8 +56,20 @@ namespace GameServer::NetworkLib
 		const std::vector<char>& GetRecvBuffer() const noexcept;
 
 		SIoContext& GetRecvContext() noexcept;
+		SIoContext& GetSendContext() noexcept;
+
+		void EnqueueSendBuffer(FSendBuffer* sendBuffer) noexcept;
+		bool TryBeginSend() noexcept;
+		void EndSend() noexcept;
+		bool FillSendBatch(std::size_t maxSendCount) noexcept;
+		const std::vector<WSABUF>& GetSendWsabufs() const noexcept;
+		void ReleaseActiveSendBuffers() noexcept;
 
 	private:
+		void ReleaseQueuedSendBuffers() noexcept;
+
+	private:
+		inline static constexpr std::size_t kDefaultSendBatchCapacity = 32;
 		SOCKET m_socket = INVALID_SOCKET;
 		std::uint64_t m_sessionId = 0;
 		std::uint32_t m_slotIndex = 0;
@@ -62,6 +77,11 @@ namespace GameServer::NetworkLib
 		std::atomic<long> m_refCount = 1;
 		std::atomic<bool> m_closing = false;
 		SIoContext m_recvContext{};
+		SIoContext m_sendContext{};
 		std::vector<char> m_recvBuffer;
+		Containers::FLockFreeQueue<FSendBuffer*> m_sendQueue;
+		std::vector<FSendBuffer*> m_activeSendBuffers;
+		std::vector<WSABUF> m_sendWsabufs;
+		std::atomic<bool> m_sendInFlight = false;
 	};
 }

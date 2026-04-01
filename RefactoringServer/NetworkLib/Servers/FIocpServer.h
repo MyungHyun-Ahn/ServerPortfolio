@@ -35,6 +35,7 @@ namespace GameServer::NetworkLib
 		void AcceptLoop();
 		void WorkerLoop();
 		bool PostRecv(FSession& sessionContext);
+		bool PostSend(FSession& sessionContext);
 		void CloseSession(FSession& sessionContext);
 		void ReleaseSession(FSession* sessionContext);
 		FSession* AcquireSession(std::uint64_t sessionId);
@@ -44,6 +45,7 @@ namespace GameServer::NetworkLib
 		void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const;
 
 	private:
+		inline static constexpr std::size_t kMaxSendBatchCount = 32;
 		SServerConfig m_serverConfig{};
 		IApplicationHandler* m_applicationHandler = nullptr;
 		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;

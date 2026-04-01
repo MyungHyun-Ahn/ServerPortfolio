@@ -107,6 +107,7 @@
     <ClInclude Include="Memory\FTlsMemoryPool.h" />
     <ClInclude Include="Servers\BackendTypes.h" />
     <ClInclude Include="Servers\FServerFactory.h" />
+    <ClInclude Include="Servers\FSendBuffer.h" />
     <ClInclude Include="Servers\FSession.h" />
     <ClInclude Include="Servers\IApplicationHandler.h" />
     <ClInclude Include="Servers\IServer.h" />

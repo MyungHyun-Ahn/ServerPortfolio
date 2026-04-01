@@ -4,6 +4,11 @@
 
 namespace GameServer::NetworkLib
 {
+	FSession::~FSession()
+	{
+		Reset();
+	}
+
 	void FSession::SIoContext::Prepare(EIoType newIoType, FSession* newOwnerSession, std::uint32_t bufferSize)
 	{
 		ZeroMemory(&overlapped, sizeof(overlapped));
@@ -27,11 +32,17 @@ namespace GameServer::NetworkLib
 		m_refCount.store(1);
 		m_closing.store(false);
 		m_recvBuffer.clear();
+		m_activeSendBuffers.clear();
+		m_sendWsabufs.clear();
+		m_sendInFlight.store(false);
 		m_recvContext = {};
+		m_sendContext = {};
 	}
 
 	void FSession::Reset() noexcept
 	{
+		ReleaseActiveSendBuffers();
+		ReleaseQueuedSendBuffers();
 		m_socket = INVALID_SOCKET;
 		m_sessionId = 0;
 		m_slotIndex = 0;
@@ -39,7 +50,9 @@ namespace GameServer::NetworkLib
 		m_refCount.store(1);
 		m_closing.store(false);
 		m_recvContext = {};
+		m_sendContext = {};
 		m_recvBuffer.clear();
+		m_sendInFlight.store(false);
 	}
 
 	SOCKET FSession::GetSocket() const noexcept
@@ -106,5 +119,75 @@ namespace GameServer::NetworkLib
 	FSession::SIoContext& FSession::GetRecvContext() noexcept
 	{
 		return m_recvContext;
+	}
+
+	FSession::SIoContext& FSession::GetSendContext() noexcept
+	{
+		return m_sendContext;
+	}
+
+	void FSession::EnqueueSendBuffer(FSendBuffer* sendBuffer) noexcept
+	{
+		m_sendQueue.Enqueue(sendBuffer);
+	}
+
+	bool FSession::TryBeginSend() noexcept
+	{
+		bool expected = false;
+		return m_sendInFlight.compare_exchange_strong(expected, true);
+	}
+
+	void FSession::EndSend() noexcept
+	{
+		m_sendInFlight.store(false);
+	}
+
+	bool FSession::FillSendBatch(std::size_t maxSendCount) noexcept
+	{
+		m_activeSendBuffers.clear();
+		m_sendWsabufs.clear();
+
+		m_activeSendBuffers.reserve(maxSendCount);
+		m_sendWsabufs.reserve(maxSendCount);
+
+		while (m_activeSendBuffers.size() < maxSendCount)
+		{
+			FSendBuffer* sendBuffer = nullptr;
+			if (!m_sendQueue.Dequeue(&sendBuffer))
+			{
+				break;
+			}
+
+			m_activeSendBuffers.push_back(sendBuffer);
+			m_sendWsabufs.push_back(sendBuffer->MakeWsabuf());
+		}
+
+		return !m_activeSendBuffers.empty();
+	}
+
+	const std::vector<WSABUF>& FSession::GetSendWsabufs() const noexcept
+	{
+		return m_sendWsabufs;
+	}
+
+	void FSession::ReleaseActiveSendBuffers() noexcept
+	{
+		for (FSendBuffer* sendBuffer : m_activeSendBuffers)
+		{
+			delete sendBuffer;
+		}
+
+		m_activeSendBuffers.clear();
+		m_sendWsabufs.clear();
+	}
+
+	void FSession::ReleaseQueuedSendBuffers() noexcept
+	{
+		FSendBuffer* sendBuffer = nullptr;
+		while (m_sendQueue.Dequeue(&sendBuffer))
+		{
+			delete sendBuffer;
+			sendBuffer = nullptr;
+		}
 	}
 }

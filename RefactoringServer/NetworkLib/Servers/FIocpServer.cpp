@@ -151,9 +151,7 @@ namespace GameServer::NetworkLib
 			return false;
 		}
 
-		auto* ioContext = new FSession::SIoContext();
-		ioContext->ioType = FSession::EIoType::Send;
-		ioContext->ownerSession = sessionContext;
+		std::vector<char> framedBuffer;
 		if (m_packetFramer != nullptr)
 		{
 			std::vector<char> payloadBuffer(buffer, buffer + length);
@@ -174,37 +172,20 @@ namespace GameServer::NetworkLib
 			outgoingPacket.payload = payloadBuffer.data();
 			outgoingPacket.payloadLength = static_cast<std::int32_t>(payloadBuffer.size());
 
-			if (!m_packetFramer->BuildPacket(outgoingPacket, ioContext->buffer))
+			if (!m_packetFramer->BuildPacket(outgoingPacket, framedBuffer))
 			{
 				Log(GameServer::Foundation::ELogLevel::Error, "BuildPacket failed during send path.");
-				delete ioContext;
 				ReleaseSession(sessionContext);
 				return false;
 			}
 		}
 		else
 		{
-			ioContext->buffer.assign(buffer, buffer + length);
+			framedBuffer.assign(buffer, buffer + length);
 		}
 
-		ioContext->wsabuf.buf = ioContext->buffer.data();
-		ioContext->wsabuf.len = static_cast<ULONG>(ioContext->buffer.size());
-		sessionContext->AcquireRef();
-
-		DWORD sentBytes = 0;
-		const int sendResult = WSASend(sessionContext->GetSocket(), &ioContext->wsabuf, 1, &sentBytes, 0, &ioContext->overlapped, nullptr);
-		if (sendResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
-		{
-			const int errorCode = WSAGetLastError();
-			std::ostringstream oss;
-			oss << "WSASend failed. sessionId=" << sessionId << " error=" << errorCode;
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
-			CloseSession(*sessionContext);
-			delete ioContext;
-			ReleaseSession(sessionContext);
-			ReleaseSession(sessionContext);
-			return false;
-		}
+		sessionContext->EnqueueSendBuffer(new FSendBuffer(std::move(framedBuffer)));
+		PostSend(*sessionContext);
 
 		ReleaseSession(sessionContext);
 		return true;
@@ -355,10 +336,6 @@ namespace GameServer::NetworkLib
 			FSession* sessionContext = ioContext->ownerSession;
 			if (sessionContext == nullptr)
 			{
-				if (ioContext->ioType == FSession::EIoType::Send)
-				{
-					delete ioContext;
-				}
 				continue;
 			}
 
@@ -370,11 +347,12 @@ namespace GameServer::NetworkLib
 					oss << "I/O completion failed. sessionId=" << sessionContext->GetSessionId() << " error=" << GetLastError();
 					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 				}
-				CloseSession(*sessionContext);
 				if (ioContext->ioType == FSession::EIoType::Send)
 				{
-					delete ioContext;
+					sessionContext->ReleaseActiveSendBuffers();
+					sessionContext->EndSend();
 				}
+				CloseSession(*sessionContext);
 				ReleaseSession(sessionContext);
 				continue;
 			}
@@ -444,7 +422,12 @@ namespace GameServer::NetworkLib
 			}
 			else
 			{
-				delete ioContext;
+				sessionContext->ReleaseActiveSendBuffers();
+				sessionContext->EndSend();
+				if (!sessionContext->IsClosing())
+				{
+					PostSend(*sessionContext);
+				}
 			}
 
 			ReleaseSession(sessionContext);
@@ -468,6 +451,58 @@ namespace GameServer::NetworkLib
 			oss << "WSARecv failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
 			Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 			ReleaseSession(&sessionContext);
+			return false;
+		}
+
+		return true;
+	}
+
+	bool FIocpServer::PostSend(FSession& sessionContext)
+	{
+		if (!sessionContext.TryBeginSend())
+		{
+			return false;
+		}
+
+		if (sessionContext.IsClosing())
+		{
+			sessionContext.EndSend();
+			return false;
+		}
+
+		if (!sessionContext.FillSendBatch(kMaxSendBatchCount))
+		{
+			sessionContext.EndSend();
+			return false;
+		}
+
+		FSession::SIoContext& sendContext = sessionContext.GetSendContext();
+		sendContext.Prepare(FSession::EIoType::Send, &sessionContext);
+
+		sessionContext.AcquireRef();
+
+		DWORD sentBytes = 0;
+		DWORD sendFlags = 0;
+		const std::vector<WSABUF>& sendBuffers = sessionContext.GetSendWsabufs();
+		const int sendResult = WSASend(
+			sessionContext.GetSocket(),
+			const_cast<WSABUF*>(sendBuffers.data()),
+			static_cast<DWORD>(sendBuffers.size()),
+			&sentBytes,
+			sendFlags,
+			&sendContext.overlapped,
+			nullptr);
+
+		if (sendResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
+		{
+			const int errorCode = WSAGetLastError();
+			std::ostringstream oss;
+			oss << "WSASend failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			sessionContext.ReleaseActiveSendBuffers();
+			sessionContext.EndSend();
+			ReleaseSession(&sessionContext);
+			CloseSession(sessionContext);
 			return false;
 		}
 
