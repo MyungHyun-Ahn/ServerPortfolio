@@ -1,6 +1,7 @@
 #include "Pch.h"
 
 #include "Crypto/IPacketCipher.h"
+#include "Packet/FPacketSerialization.h"
 #include "Packet/IPacketFramer.h"
 #include "Servers/FIocpServer.h"
 #include "Servers/IApplicationHandler.h"
@@ -136,7 +137,7 @@ namespace GameServer::NetworkLib
 
 	bool FIocpServer::Send(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length)
 	{
-		if (buffer == nullptr || length <= 0)
+		if ((buffer == nullptr && length > 0) || length < 0)
 		{
 			Log(GameServer::Foundation::ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
 			return false;
@@ -154,7 +155,12 @@ namespace GameServer::NetworkLib
 		std::vector<char> framedBuffer;
 		if (m_packetFramer != nullptr)
 		{
-			std::vector<char> payloadBuffer(buffer, buffer + length);
+			std::vector<char> payloadBuffer;
+			if (length > 0)
+			{
+				payloadBuffer.assign(buffer, buffer + length);
+			}
+			payloadBuffer = GameServer::NetworkLib::Packet::BuildContentPayload(opcode, std::move(payloadBuffer));
 			std::uint8_t randomKey = 0;
 			if (m_packetCipher != nullptr)
 			{
@@ -163,7 +169,6 @@ namespace GameServer::NetworkLib
 			}
 
 			GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
-			outgoingPacket.opcode = opcode;
 			outgoingPacket.randomKey = randomKey;
 			outgoingPacket.checkSum =
 				GameServer::NetworkLib::Packet::CalculatePacketChecksum(
@@ -407,15 +412,25 @@ namespace GameServer::NetworkLib
 							break;
 						}
 
-						if (m_packetCipher != nullptr && packetView.payloadLength > 0)
+					if (m_packetCipher != nullptr && packetView.payloadLength > 0)
+					{
+						m_packetCipher->Decode(const_cast<char*>(packetView.payload), packetView.payloadLength, packetView.randomKey);
+					}
+
+						GameServer::NetworkLib::Packet::FPacketView contentPacketView;
+						if (!GameServer::NetworkLib::Packet::TryParseContentPacketView(packetView, contentPacketView))
 						{
-							m_packetCipher->Decode(const_cast<char*>(packetView.payload), packetView.payloadLength, packetView.randomKey);
+							std::ostringstream oss;
+							oss << "Content header parse failed. sessionId=" << sessionContext->GetSessionId();
+							Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+							CloseSession(*sessionContext);
+							break;
 						}
 
 						m_applicationHandler->OnPacketReceived(
 							*this,
 							sessionContext->GetSessionId(),
-							packetView);
+							contentPacketView);
 						m_receivedPacketCount.fetch_add(1, std::memory_order_relaxed);
 
 						const std::size_t consumedPacketSize =

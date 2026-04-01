@@ -1,7 +1,9 @@
 #include "Pch.h"
 
 #include "Crypto/FDefaultPacketCipher.h"
+#include "Generated/Packets/Echo/EchoPackets.h"
 #include "Packet/FDefaultPacketFramer.h"
+#include "Packet/FPacketSerialization.h"
 
 #include <algorithm>
 #include <atomic>
@@ -17,8 +19,6 @@
 namespace
 {
 	constexpr std::uint8_t kPacketKey = 0x37;
-	constexpr std::uint16_t kEchoRequestOpcode = 1000;
-	constexpr std::uint16_t kEchoResponseOpcode = 1001;
 
 	struct SClientOptions
 	{
@@ -350,19 +350,20 @@ namespace
 					++expectedResponseCounts[expectedResponse];
 				}
 
+				GameServer::Generated::Echo::FEchoRq requestPacket;
+				requestPacket.message = requestMessage;
+				std::vector<char> serializedPayload = GameServer::NetworkLib::Packet::SerializeContentPacket(requestPacket);
 				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x31 + requestSequence + sessionIndex) & 0xFF);
-				std::vector<char> encryptedPayload(requestMessage.begin(), requestMessage.end());
-				packetCipher.Encode(encryptedPayload.data(), static_cast<int>(encryptedPayload.size()), requestRandomKey);
+				packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), requestRandomKey);
 
 				GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
-				outgoingPacket.opcode = kEchoRequestOpcode;
 				outgoingPacket.randomKey = requestRandomKey;
 				outgoingPacket.checkSum =
 					GameServer::NetworkLib::Packet::CalculatePacketChecksum(
-						encryptedPayload.data(),
-						static_cast<std::int32_t>(encryptedPayload.size()));
-				outgoingPacket.payload = encryptedPayload.data();
-				outgoingPacket.payloadLength = static_cast<std::int32_t>(encryptedPayload.size());
+						serializedPayload.data(),
+						static_cast<std::int32_t>(serializedPayload.size()));
+				outgoingPacket.payload = serializedPayload.data();
+				outgoingPacket.payloadLength = static_cast<std::int32_t>(serializedPayload.size());
 
 				std::vector<char> outboundPacket;
 				if (!packetFramer.BuildPacket(outgoingPacket, outboundPacket))
@@ -434,18 +435,43 @@ namespace
 						return sessionResult;
 					}
 
-					if (framedPacket.opcode != kEchoResponseOpcode)
+					packetCipher.Decode(framedPacket.payload.data(), static_cast<int>(framedPacket.payload.size()), framedPacket.randomKey);
+
+					GameServer::NetworkLib::Packet::FPacketView transportPacketView{};
+					transportPacketView.randomKey = framedPacket.randomKey;
+					transportPacketView.checkSum = framedPacket.checkSum;
+					transportPacketView.payload = framedPacket.payload.data();
+					transportPacketView.payloadLength = static_cast<std::int32_t>(framedPacket.payload.size());
+
+					GameServer::NetworkLib::Packet::FPacketView contentPacketView{};
+					if (!GameServer::NetworkLib::Packet::TryParseContentPacketView(transportPacketView, contentPacketView))
+					{
+						sessionResult.errorMessage = "response content header parse failed.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					if (contentPacketView.opcode != GameServer::Generated::Echo::FEchoRp::kOpcode)
 					{
 						std::ostringstream oss;
-						oss << "unexpected opcode: " << framedPacket.opcode;
+						oss << "unexpected opcode: " << contentPacketView.opcode;
 						sessionResult.errorMessage = oss.str();
 						closesocket(clientSocket);
 						clientSocket = INVALID_SOCKET;
 						return sessionResult;
 					}
 
-					std::string responseMessage(framedPacket.payload.begin(), framedPacket.payload.end());
-					packetCipher.Decode(responseMessage.data(), static_cast<int>(responseMessage.size()), framedPacket.randomKey);
+					GameServer::Generated::Echo::FEchoRp responsePacket;
+					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, responsePacket))
+					{
+						sessionResult.errorMessage = "response packet deserialize failed.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					const std::string& responseMessage = responsePacket.message;
 
 					auto expectedIt = expectedResponseCounts.find(responseMessage);
 					if (expectedIt == expectedResponseCounts.end() || expectedIt->second <= 0)

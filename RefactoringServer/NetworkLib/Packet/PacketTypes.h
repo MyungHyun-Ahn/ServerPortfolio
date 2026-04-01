@@ -8,7 +8,6 @@ namespace GameServer::NetworkLib::Packet
 #pragma pack(push, 1)
 	struct SPacketHeader
 	{
-		std::uint16_t opcode = 0;
 		std::uint16_t payloadLength = 0;
 		std::uint8_t randomKey = 0;
 		std::uint8_t checkSum = 0;
@@ -17,7 +16,6 @@ namespace GameServer::NetworkLib::Packet
 
 	struct SOutgoingPacket
 	{
-		std::uint16_t opcode = 0;
 		std::uint8_t randomKey = 0;
 		std::uint8_t checkSum = 0;
 		const char* payload = nullptr;
@@ -26,7 +24,6 @@ namespace GameServer::NetworkLib::Packet
 
 	struct SFramedPacket
 	{
-		std::uint16_t opcode = 0;
 		std::uint8_t randomKey = 0;
 		std::uint8_t checkSum = 0;
 		std::vector<char> payload;

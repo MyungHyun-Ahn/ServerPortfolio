@@ -101,8 +101,13 @@
     <ClInclude Include="Crypto\IPacketCipher.h" />
     <ClInclude Include="Crypto\PacketCipherTypes.h" />
     <ClInclude Include="Packet\FDefaultPacketFramer.h" />
+    <ClInclude Include="Packet\ContentHeader.h" />
+    <ClInclude Include="Packet\FPacketReader.h" />
+    <ClInclude Include="Packet\FPacketSerialization.h" />
     <ClInclude Include="Packet\FPacketView.h" />
+    <ClInclude Include="Packet\FPacketWriter.h" />
     <ClInclude Include="Packet\FRecvBuffer.h" />
+    <ClInclude Include="Packet\IContentPacket.h" />
     <ClInclude Include="Packet\IPacketFramer.h" />
     <ClInclude Include="Packet\PacketTypes.h" />
     <ClInclude Include="Memory\FLockFreeMemoryPool.h" />

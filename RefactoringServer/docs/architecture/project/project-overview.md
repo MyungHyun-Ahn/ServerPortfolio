@@ -10,6 +10,10 @@
   - 공용 로깅, 진단, 설정 등 여러 모듈이 함께 쓰는 기반 계층 예정
 - `NetworkLib`
   - 새 네트워크 코어 라이브러리
+- `Contents`
+  - 콘텐츠 카테고리별 런타임 처리 모듈 루트
+- `Packet`
+  - 콘텐츠 카테고리별 패킷 스키마 루트
 - `EchoServer`
   - `NetworkLib` 최소 구동 검증용 서버
 - `EchoClient`
@@ -46,4 +50,5 @@
 - `NetworkLib` 송신 큐와 세션 핸들 모델 고정
 - 패킷 프레이밍 계층 추가
 - `EchoServer` 다음 단계 샘플 서버 정의
+- 콘텐츠 단위 디렉터리와 패킷 스키마 정착
 - 이후 `Gateway` 또는 `WorldServer` 역할 분리

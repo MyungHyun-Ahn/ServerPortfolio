@@ -2,9 +2,11 @@
 #include "Containers/FLockFreeStack.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "Crypto/FNullPacketCipher.h"
+#include "Generated/Packets/Echo/EchoPackets.h"
 #include "Crypto/IPacketCipher.h"
 #include "Memory/FTlsMemoryPool.h"
 #include "Packet/FDefaultPacketFramer.h"
+#include "Packet/FPacketSerialization.h"
 #include "Packet/FPacketView.h"
 #include "Packet/FRecvBuffer.h"
 
@@ -313,19 +315,19 @@ namespace
 		FDefaultPacketFramer framer;
 		std::vector<char> packetBuffer;
 		const std::string payload = "framed-echo-payload";
+		std::vector<char> contentPayload = BuildContentPayload(3001, std::vector<char>(payload.begin(), payload.end()));
 		SOutgoingPacket outgoingPacket{};
-		outgoingPacket.opcode = 3001;
 		outgoingPacket.randomKey = 0x44;
-		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
-		outgoingPacket.payload = payload.data();
-		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
+		outgoingPacket.checkSum = CalculatePacketChecksum(contentPayload.data(), static_cast<std::int32_t>(contentPayload.size()));
+		outgoingPacket.payload = contentPayload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(contentPayload.size());
 
 		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
 		{
 			return { false, "Packet framer round trip", "BuildPacket failed" };
 		}
 
-		if (packetBuffer.size() != payload.size() + sizeof(SPacketHeader))
+		if (packetBuffer.size() != contentPayload.size() + sizeof(SPacketHeader))
 		{
 			return { false, "Packet framer round trip", "packet size mismatch" };
 		}
@@ -342,11 +344,6 @@ namespace
 			return { false, "Packet framer round trip", "receive buffer should be empty after extraction" };
 		}
 
-		if (framedPacket.opcode != outgoingPacket.opcode)
-		{
-			return { false, "Packet framer round trip", "opcode mismatch after extraction" };
-		}
-
 		if (framedPacket.randomKey != 0x44)
 		{
 			return { false, "Packet framer round trip", "randomKey mismatch after extraction" };
@@ -357,7 +354,24 @@ namespace
 			return { false, "Packet framer round trip", "checksum mismatch after extraction" };
 		}
 
-		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)
+		FPacketView transportPacketView{};
+		transportPacketView.randomKey = framedPacket.randomKey;
+		transportPacketView.checkSum = framedPacket.checkSum;
+		transportPacketView.payload = framedPacket.payload.data();
+		transportPacketView.payloadLength = static_cast<std::int32_t>(framedPacket.payload.size());
+
+		FPacketView contentPacketView{};
+		if (!TryParseContentPacketView(transportPacketView, contentPacketView))
+		{
+			return { false, "Packet framer round trip", "content packet view parse failed" };
+		}
+
+		if (contentPacketView.opcode != 3001)
+		{
+			return { false, "Packet framer round trip", "opcode mismatch after extraction" };
+		}
+
+		if (std::string(contentPacketView.payload, contentPacketView.payload + contentPacketView.payloadLength) != payload)
 		{
 			return { false, "Packet framer round trip", "payload mismatch after extraction" };
 		}
@@ -372,12 +386,12 @@ namespace
 		FDefaultPacketFramer framer;
 		std::vector<char> packetBuffer;
 		const std::string payload = "partial-frame";
+		std::vector<char> contentPayload = BuildContentPayload(3002, std::vector<char>(payload.begin(), payload.end()));
 		SOutgoingPacket outgoingPacket{};
-		outgoingPacket.opcode = 3002;
 		outgoingPacket.randomKey = 0x21;
-		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
-		outgoingPacket.payload = payload.data();
-		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
+		outgoingPacket.checkSum = CalculatePacketChecksum(contentPayload.data(), static_cast<std::int32_t>(contentPayload.size()));
+		outgoingPacket.payload = contentPayload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(contentPayload.size());
 
 		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
 		{
@@ -403,17 +417,29 @@ namespace
 			return { false, "Packet framer partial receive", "packet should be extracted after remaining bytes arrive" };
 		}
 
-		if (framedPacket.opcode != outgoingPacket.opcode)
-		{
-			return { false, "Packet framer partial receive", "opcode mismatch after partial receive assembly" };
-		}
-
 		if (framedPacket.checkSum != outgoingPacket.checkSum)
 		{
 			return { false, "Packet framer partial receive", "checksum mismatch after partial receive assembly" };
 		}
 
-		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)
+		FPacketView transportPacketView{};
+		transportPacketView.randomKey = framedPacket.randomKey;
+		transportPacketView.checkSum = framedPacket.checkSum;
+		transportPacketView.payload = framedPacket.payload.data();
+		transportPacketView.payloadLength = static_cast<std::int32_t>(framedPacket.payload.size());
+
+		FPacketView contentPacketView{};
+		if (!TryParseContentPacketView(transportPacketView, contentPacketView))
+		{
+			return { false, "Packet framer partial receive", "content packet view parse failed" };
+		}
+
+		if (contentPacketView.opcode != 3002)
+		{
+			return { false, "Packet framer partial receive", "opcode mismatch after partial receive assembly" };
+		}
+
+		if (std::string(contentPacketView.payload, contentPacketView.payload + contentPacketView.payloadLength) != payload)
 		{
 			return { false, "Packet framer partial receive", "payload mismatch after partial receive assembly" };
 		}
@@ -429,13 +455,13 @@ namespace
 		FRecvBuffer recvBuffer(64);
 		std::vector<char> packetBuffer;
 		const std::string payload = "recv-ring-buffer";
+		std::vector<char> contentPayload = BuildContentPayload(3003, std::vector<char>(payload.begin(), payload.end()));
 
 		SOutgoingPacket outgoingPacket{};
-		outgoingPacket.opcode = 3003;
 		outgoingPacket.randomKey = 0x31;
-		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
-		outgoingPacket.payload = payload.data();
-		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
+		outgoingPacket.checkSum = CalculatePacketChecksum(contentPayload.data(), static_cast<std::int32_t>(contentPayload.size()));
+		outgoingPacket.payload = contentPayload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(contentPayload.size());
 
 		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
 		{
@@ -474,12 +500,24 @@ namespace
 			return { false, "Packet framer recv buffer", "packet should be extracted from recv buffer" };
 		}
 
-		if (framedPacket.opcode != outgoingPacket.opcode)
+		FPacketView transportPacketView{};
+		transportPacketView.randomKey = framedPacket.randomKey;
+		transportPacketView.checkSum = framedPacket.checkSum;
+		transportPacketView.payload = framedPacket.payload.data();
+		transportPacketView.payloadLength = static_cast<std::int32_t>(framedPacket.payload.size());
+
+		FPacketView contentPacketView{};
+		if (!TryParseContentPacketView(transportPacketView, contentPacketView))
+		{
+			return { false, "Packet framer recv buffer", "content packet view parse failed" };
+		}
+
+		if (contentPacketView.opcode != 3003)
 		{
 			return { false, "Packet framer recv buffer", "opcode mismatch after recv buffer extraction" };
 		}
 
-		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)
+		if (std::string(contentPacketView.payload, contentPacketView.payload + contentPacketView.payloadLength) != payload)
 		{
 			return { false, "Packet framer recv buffer", "payload mismatch after recv buffer extraction" };
 		}
@@ -500,13 +538,13 @@ namespace
 		FRecvBuffer recvBuffer(64);
 		std::vector<char> packetBuffer;
 		const std::string payload = "packet-view";
+		std::vector<char> contentPayload = BuildContentPayload(3004, std::vector<char>(payload.begin(), payload.end()));
 
 		SOutgoingPacket outgoingPacket{};
-		outgoingPacket.opcode = 3004;
 		outgoingPacket.randomKey = 0x55;
-		outgoingPacket.checkSum = CalculatePacketChecksum(payload.data(), static_cast<std::int32_t>(payload.size()));
-		outgoingPacket.payload = payload.data();
-		outgoingPacket.payloadLength = static_cast<std::int32_t>(payload.size());
+		outgoingPacket.checkSum = CalculatePacketChecksum(contentPayload.data(), static_cast<std::int32_t>(contentPayload.size()));
+		outgoingPacket.payload = contentPayload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(contentPayload.size());
 
 		if (!framer.BuildPacket(outgoingPacket, packetBuffer))
 		{
@@ -528,13 +566,29 @@ namespace
 			return { false, "Packet framer packet view", "TryExtractPacketView failed" };
 		}
 
-		const char* expectedPayloadPtr = recvBuffer.GetReadPointer() + sizeof(SPacketHeader);
-		if (packetView.payload != expectedPayloadPtr)
+		if (packetView.opcode != 0)
+		{
+			return { false, "Packet framer packet view", "transport packet view opcode should not be set" };
+		}
+
+		FPacketView contentPacketView{};
+		if (!TryParseContentPacketView(packetView, contentPacketView))
+		{
+			return { false, "Packet framer packet view", "content packet view parse failed" };
+		}
+
+		const char* expectedPayloadPtr = recvBuffer.GetReadPointer() + sizeof(SPacketHeader) + sizeof(SContentHeader);
+		if (contentPacketView.payload != expectedPayloadPtr)
 		{
 			return { false, "Packet framer packet view", "payload pointer should point into recv buffer" };
 		}
 
-		if (std::string(packetView.payload, packetView.payload + packetView.payloadLength) != payload)
+		if (contentPacketView.opcode != 3004)
+		{
+			return { false, "Packet framer packet view", "opcode mismatch" };
+		}
+
+		if (std::string(contentPacketView.payload, contentPacketView.payload + contentPacketView.payloadLength) != payload)
 		{
 			return { false, "Packet framer packet view", "payload mismatch" };
 		}
@@ -545,6 +599,31 @@ namespace
 		}
 
 		return { true, "Packet framer packet view", "passed" };
+	}
+
+	STestResult RunGeneratedEchoPacketRoundTripTest()
+	{
+		GameServer::Generated::Echo::FEchoRq requestPacket;
+		requestPacket.message = "generated-echo-message";
+
+		std::vector<char> payload = GameServer::NetworkLib::Packet::SerializeContentBody(requestPacket);
+		GameServer::Generated::Echo::FEchoRq decodedPacket;
+		if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
+		{
+			return { false, "Generated echo packet round trip", "DeserializeContentPacket failed" };
+		}
+
+		if (decodedPacket.GetOpcode() != requestPacket.GetOpcode())
+		{
+			return { false, "Generated echo packet round trip", "opcode mismatch" };
+		}
+
+		if (decodedPacket.message != requestPacket.message)
+		{
+			return { false, "Generated echo packet round trip", "message mismatch" };
+		}
+
+		return { true, "Generated echo packet round trip", "passed" };
 	}
 
 	template <>
@@ -646,6 +725,7 @@ int main()
 	results.push_back(RunPacketFramerPartialReceiveTest());
 	results.push_back(RunPacketFramerRecvBufferTest());
 	results.push_back(RunPacketFramerPacketViewTest());
+	results.push_back(RunGeneratedEchoPacketRoundTripTest());
 
 	bool allPassed = true;
 	for (const STestResult& result : results)

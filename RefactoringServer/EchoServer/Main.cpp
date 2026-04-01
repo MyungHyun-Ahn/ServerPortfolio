@@ -5,6 +5,8 @@
 #include "Foundation/Logging/FConsoleLogger.h"
 #include "Foundation/Logging/FFileLogger.h"
 #include "Foundation/Logging/ILogger.h"
+#include "Generated/Packets/Echo/EchoPacketHandler.h"
+#include "Generated/Packets/PacketRouter.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "Packet/FDefaultPacketFramer.h"
 #include "Servers/FServerFactory.h"
@@ -19,9 +21,6 @@
 
 namespace
 {
-	constexpr std::uint16_t kEchoRequestOpcode = 1000;
-	constexpr std::uint16_t kEchoResponseOpcode = 1001;
-
 	struct SServerRuntimeOptions
 	{
 		int sendThreadCount = 1;
@@ -41,7 +40,9 @@ namespace
 		return std::filesystem::path(modulePath.data()).parent_path();
 	}
 
-	class FEchoApplication final : public GameServer::NetworkLib::IApplicationHandler
+	class FEchoApplication final
+		: public GameServer::NetworkLib::IApplicationHandler
+		, public GameServer::Generated::Echo::FEchoPacketHandlerBase
 	{
 	public:
 		FEchoApplication(
@@ -50,6 +51,7 @@ namespace
 			: m_logger(std::move(logger))
 			, m_runtimeOptions(runtimeOptions)
 		{
+			m_packetRouter.SetEchoHandler(this);
 		}
 
 	public:
@@ -69,48 +71,11 @@ namespace
 
 		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) override
 		{
-			std::string message(packetView.payload, packetView.payload + packetView.payloadLength);
-			if (m_runtimeOptions.logPackets)
+			if (!m_packetRouter.DispatchPacket(server, sessionId, packetView) && m_runtimeOptions.logPackets)
 			{
 				std::ostringstream oss;
-				oss << "received. sessionId=" << sessionId << " opcode=" << packetView.opcode << " message=" << message;
-				Log(GameServer::Foundation::ELogLevel::Info, oss.str());
-			}
-
-			if (packetView.opcode == kEchoRequestOpcode)
-			{
-				if (m_runtimeOptions.sendThreadCount == 1 && m_runtimeOptions.responsesPerThread == 1)
-				{
-					server.Send(sessionId, kEchoResponseOpcode, message.data(), static_cast<std::int32_t>(message.size()));
-					return;
-				}
-
-				std::vector<std::thread> sendThreads;
-				sendThreads.reserve(static_cast<std::size_t>(m_runtimeOptions.sendThreadCount));
-				for (int threadIndex = 0; threadIndex < m_runtimeOptions.sendThreadCount; ++threadIndex)
-				{
-					sendThreads.emplace_back([&, threadIndex, sessionId, message]()
-					{
-						for (int responseIndex = 0; responseIndex < m_runtimeOptions.responsesPerThread; ++responseIndex)
-						{
-							std::ostringstream responseBuilder;
-							responseBuilder << message
-								<< "|t=" << threadIndex
-								<< "|r=" << responseIndex;
-							const std::string responseMessage = responseBuilder.str();
-							server.Send(
-								sessionId,
-								kEchoResponseOpcode,
-								responseMessage.data(),
-								static_cast<std::int32_t>(responseMessage.size()));
-						}
-					});
-				}
-
-				for (std::thread& sendThread : sendThreads)
-				{
-					sendThread.join();
-				}
+				oss << "Unhandled packet. sessionId=" << sessionId << " opcode=" << packetView.opcode;
+				Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 			}
 		}
 
@@ -126,6 +91,50 @@ namespace
 			Log(GameServer::Foundation::ELogLevel::Info, "EchoServer stopped.");
 		}
 
+		bool HandleEchoRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Echo::FEchoRq& packet) override
+		{
+			if (m_runtimeOptions.logPackets)
+			{
+				std::ostringstream oss;
+				oss << "received. sessionId=" << sessionId << " opcode=" << packet.GetOpcode() << " message=" << packet.message;
+				Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			}
+
+			if (m_runtimeOptions.sendThreadCount == 1 && m_runtimeOptions.responsesPerThread == 1)
+			{
+				GameServer::Generated::Echo::FEchoRp responsePacket;
+				responsePacket.message = packet.message;
+				return GameServer::Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
+			}
+
+			std::vector<std::thread> sendThreads;
+			sendThreads.reserve(static_cast<std::size_t>(m_runtimeOptions.sendThreadCount));
+			for (int threadIndex = 0; threadIndex < m_runtimeOptions.sendThreadCount; ++threadIndex)
+			{
+				sendThreads.emplace_back([&, threadIndex, sessionId, message = packet.message]()
+				{
+					for (int responseIndex = 0; responseIndex < m_runtimeOptions.responsesPerThread; ++responseIndex)
+					{
+						std::ostringstream responseBuilder;
+						responseBuilder << message
+							<< "|t=" << threadIndex
+							<< "|r=" << responseIndex;
+
+						GameServer::Generated::Echo::FEchoRp responsePacket;
+						responsePacket.message = responseBuilder.str();
+						GameServer::Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
+					}
+				});
+			}
+
+			for (std::thread& sendThread : sendThreads)
+			{
+				sendThread.join();
+			}
+
+			return true;
+		}
+
 	private:
 		void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const
 		{
@@ -138,6 +147,7 @@ namespace
 	private:
 		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
 		SServerRuntimeOptions m_runtimeOptions;
+		GameServer::Generated::FPacketRouter m_packetRouter;
 	};
 }
 

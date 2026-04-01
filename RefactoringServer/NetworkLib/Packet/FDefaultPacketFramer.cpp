@@ -14,7 +14,6 @@ namespace GameServer::NetworkLib::Packet
 		}
 
 		SPacketHeader packetHeader{};
-		packetHeader.opcode = packet.opcode;
 		packetHeader.payloadLength = static_cast<std::uint16_t>(packet.payloadLength);
 		packetHeader.randomKey = packet.randomKey;
 		packetHeader.checkSum = packet.checkSum;
@@ -47,7 +46,6 @@ namespace GameServer::NetworkLib::Packet
 		}
 
 		outPacket.randomKey = packetHeader.randomKey;
-		outPacket.opcode = packetHeader.opcode;
 		outPacket.checkSum = packetHeader.checkSum;
 		outPacket.payload.resize(packetHeader.payloadLength);
 
@@ -80,7 +78,6 @@ namespace GameServer::NetworkLib::Packet
 		}
 
 		outPacket.randomKey = packetHeader.randomKey;
-		outPacket.opcode = packetHeader.opcode;
 		outPacket.checkSum = packetHeader.checkSum;
 		outPacket.payload.resize(packetHeader.payloadLength);
 
@@ -125,7 +122,7 @@ namespace GameServer::NetworkLib::Packet
 			return false;
 		}
 
-		outPacketView.opcode = packetHeader.opcode;
+		outPacketView.opcode = 0;
 		outPacketView.randomKey = packetHeader.randomKey;
 		outPacketView.checkSum = packetHeader.checkSum;
 		outPacketView.payload = packetStart + sizeof(SPacketHeader);
