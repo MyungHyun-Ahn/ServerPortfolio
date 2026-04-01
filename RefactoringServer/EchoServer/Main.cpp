@@ -1,3 +1,5 @@
+#include "Pch.h"
+
 #include "Servers/FServerFactory.h"
 #include "Servers/IApplicationHandler.h"
 #include "Logging/ILogger.h"
@@ -5,10 +7,6 @@
 #include "Logging/FConsoleLogger.h"
 #include "Logging/FFileLogger.h"
 
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <string>
 
 namespace
 {

@@ -1,10 +1,8 @@
+#include "Pch.h"
+
 #include "Logging/FFileLogger.h"
 
 #include "LogFormatting.h"
-
-#include <filesystem>
-#include <fstream>
-#include <mutex>
 
 namespace
 {

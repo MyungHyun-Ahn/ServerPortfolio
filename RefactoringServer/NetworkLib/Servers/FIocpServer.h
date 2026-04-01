@@ -1,13 +1,7 @@
 #pragma once
 
 #include "Servers/BackendTypes.h"
-#include "Servers/IApplicationHandler.h"
-#include "Logging/ILogger.h"
 #include "Servers/IServer.h"
-
-#include <WinSock2.h>
-#include <Windows.h>
-#include <WS2tcpip.h>
 
 #include <atomic>
 #include <cstdint>
@@ -18,6 +12,9 @@
 
 namespace GameServer::NetworkLib
 {
+	class IApplicationHandler;
+	class ILogger;
+
 	class FIocpServer final : public IServer
 	{
 	public:

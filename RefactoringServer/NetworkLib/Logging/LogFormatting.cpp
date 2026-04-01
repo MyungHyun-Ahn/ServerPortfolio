@@ -1,10 +1,6 @@
+#include "Pch.h"
+
 #include "LogFormatting.h"
-
-#include <Windows.h>
-
-#include <chrono>
-#include <iomanip>
-#include <sstream>
 
 namespace
 {

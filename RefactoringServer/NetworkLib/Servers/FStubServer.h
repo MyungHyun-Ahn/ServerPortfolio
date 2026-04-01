@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Servers/IApplicationHandler.h"
 #include "Servers/IServer.h"
 
 namespace GameServer::NetworkLib

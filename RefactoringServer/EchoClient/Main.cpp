@@ -1,8 +1,4 @@
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-
-#include <iostream>
-#include <string>
+#include "Pch.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 

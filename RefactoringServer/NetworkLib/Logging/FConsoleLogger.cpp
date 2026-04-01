@@ -1,9 +1,8 @@
+#include "Pch.h"
+
 #include "Logging/FConsoleLogger.h"
 
 #include "LogFormatting.h"
-
-#include <iostream>
-#include <mutex>
 
 namespace
 {
