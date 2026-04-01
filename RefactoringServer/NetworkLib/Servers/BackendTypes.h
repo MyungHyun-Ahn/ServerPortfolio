@@ -47,4 +47,14 @@ namespace GameServer::NetworkLib
 		std::shared_ptr<GameServer::NetworkLib::Crypto::IPacketCipher> packetCipher;
 		std::shared_ptr<GameServer::NetworkLib::Packet::IPacketFramer> packetFramer;
 	};
+
+	struct SServerStats
+	{
+		std::uint32_t activeSessionCount = 0;
+		std::uint64_t acceptedSessionCount = 0;
+		std::uint64_t receivedPacketCount = 0;
+		std::uint64_t sentPacketCount = 0;
+		std::uint64_t wsaRecvCallCount = 0;
+		std::uint64_t wsaSendCallCount = 0;
+	};
 }

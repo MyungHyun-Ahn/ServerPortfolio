@@ -28,4 +28,9 @@ namespace GameServer::NetworkLib
 	{
 		return m_backendKind;
 	}
+
+	SServerStats FStubServer::GetStatsSnapshot() const
+	{
+		return {};
+	}
 }

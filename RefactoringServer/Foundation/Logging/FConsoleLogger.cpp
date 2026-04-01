@@ -24,6 +24,6 @@ namespace GameServer::Foundation
 		}
 
 		const std::lock_guard<std::mutex> lock(g_consoleMutex);
-		std::cout << Logging::BuildLine(m_logConfig, logLevel, category, message) << '\n';
+		std::cout << Logging::BuildLine(m_logConfig, logLevel, category, message) << std::endl;
 	}
 }

@@ -25,6 +25,7 @@ namespace GameServer::NetworkLib
 		void Stop() override;
 		bool Send(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) override;
 		EBackendKind GetBackendKind() const override;
+		SServerStats GetStatsSnapshot() const override;
 
 	private:
 		bool InitializeWinsock();
@@ -58,6 +59,12 @@ namespace GameServer::NetworkLib
 		std::unique_ptr<std::atomic<FSession*>[]> m_sessionSlots;
 		std::unique_ptr<std::atomic<std::uint32_t>[]> m_generations;
 		std::atomic<std::uint32_t> m_packetRandomKeySeed = 1;
+		std::atomic<std::uint32_t> m_activeSessionCount = 0;
+		std::atomic<std::uint64_t> m_acceptedSessionCount = 0;
+		std::atomic<std::uint64_t> m_receivedPacketCount = 0;
+		std::atomic<std::uint64_t> m_sentPacketCount = 0;
+		std::atomic<std::uint64_t> m_wsaRecvCallCount = 0;
+		std::atomic<std::uint64_t> m_wsaSendCallCount = 0;
 		std::atomic<bool> m_isRunning = false;
 		std::atomic<bool> m_winsockInitialized = false;
 	};

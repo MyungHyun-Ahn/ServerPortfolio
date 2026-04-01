@@ -9,21 +9,14 @@ namespace GameServer::NetworkLib
 		Reset();
 	}
 
-	void FSession::SIoContext::Prepare(EIoType newIoType, FSession* newOwnerSession, std::uint32_t bufferSize)
+	void FSession::SIoContext::Prepare(EIoType newIoType, FSession* newOwnerSession)
 	{
 		ZeroMemory(&overlapped, sizeof(overlapped));
 		ioType = newIoType;
 		ownerSession = newOwnerSession;
-		if (bufferSize > 0)
-		{
-			buffer.resize(bufferSize);
-		}
-
-		wsabuf.buf = buffer.empty() ? nullptr : buffer.data();
-		wsabuf.len = static_cast<ULONG>(buffer.size());
 	}
 
-	void FSession::Initialize(SOCKET socket, std::uint64_t sessionId, std::uint32_t slotIndex, std::uint32_t generation)
+	void FSession::Initialize(SOCKET socket, std::uint64_t sessionId, std::uint32_t slotIndex, std::uint32_t generation, std::size_t recvBufferCapacity)
 	{
 		m_socket = socket;
 		m_sessionId = sessionId;
@@ -31,10 +24,12 @@ namespace GameServer::NetworkLib
 		m_generation = generation;
 		m_refCount.store(1);
 		m_closing.store(false);
-		m_recvBuffer.clear();
+		m_recvBuffer.Initialize(recvBufferCapacity);
 		m_activeSendBuffers.clear();
 		m_sendWsabufs.clear();
 		m_sendInFlight.store(false);
+		m_liveSendIoCount.store(0);
+		m_maxObservedConcurrentSendIoCount.store(0);
 		m_recvContext = {};
 		m_sendContext = {};
 	}
@@ -51,8 +46,10 @@ namespace GameServer::NetworkLib
 		m_closing.store(false);
 		m_recvContext = {};
 		m_sendContext = {};
-		m_recvBuffer.clear();
+		m_recvBuffer.Clear();
 		m_sendInFlight.store(false);
+		m_liveSendIoCount.store(0);
+		m_maxObservedConcurrentSendIoCount.store(0);
 	}
 
 	SOCKET FSession::GetSocket() const noexcept
@@ -101,17 +98,22 @@ namespace GameServer::NetworkLib
 		return m_refCount.fetch_sub(1) - 1;
 	}
 
-	void FSession::AppendRecvBytes(const char* buffer, std::size_t length)
+	void FSession::BuildRecvWsabufs(WSABUF (&outBuffers)[2], DWORD& outBufferCount) noexcept
 	{
-		m_recvBuffer.insert(m_recvBuffer.end(), buffer, buffer + length);
+		m_recvBuffer.BuildRecvWsabufs(outBuffers, outBufferCount);
 	}
 
-	std::vector<char>& FSession::GetRecvBuffer() noexcept
+	bool FSession::CommitRecvBytes(std::size_t length) noexcept
+	{
+		return m_recvBuffer.CommitWrite(length);
+	}
+
+	Packet::FRecvBuffer& FSession::GetRecvBuffer() noexcept
 	{
 		return m_recvBuffer;
 	}
 
-	const std::vector<char>& FSession::GetRecvBuffer() const noexcept
+	const Packet::FRecvBuffer& FSession::GetRecvBuffer() const noexcept
 	{
 		return m_recvBuffer;
 	}
@@ -140,6 +142,28 @@ namespace GameServer::NetworkLib
 	void FSession::EndSend() noexcept
 	{
 		m_sendInFlight.store(false);
+	}
+
+	int FSession::BeginSendIo() noexcept
+	{
+		const int liveSendIoCount = m_liveSendIoCount.fetch_add(1) + 1;
+		int currentMax = m_maxObservedConcurrentSendIoCount.load();
+		while (liveSendIoCount > currentMax &&
+			!m_maxObservedConcurrentSendIoCount.compare_exchange_weak(currentMax, liveSendIoCount))
+		{
+		}
+
+		return liveSendIoCount;
+	}
+
+	int FSession::FinishSendIo() noexcept
+	{
+		return m_liveSendIoCount.fetch_sub(1) - 1;
+	}
+
+	int FSession::GetMaxObservedConcurrentSendIoCount() const noexcept
+	{
+		return m_maxObservedConcurrentSendIoCount.load();
 	}
 
 	bool FSession::FillSendBatch(std::size_t maxSendCount) noexcept

@@ -22,6 +22,13 @@ namespace
 	constexpr std::uint16_t kEchoRequestOpcode = 1000;
 	constexpr std::uint16_t kEchoResponseOpcode = 1001;
 
+	struct SServerRuntimeOptions
+	{
+		int sendThreadCount = 1;
+		int responsesPerThread = 1;
+		bool logPackets = false;
+	};
+
 	std::filesystem::path GetExecutableDirectory()
 	{
 		std::array<char, MAX_PATH> modulePath = {};
@@ -37,8 +44,11 @@ namespace
 	class FEchoApplication final : public GameServer::NetworkLib::IApplicationHandler
 	{
 	public:
-		explicit FEchoApplication(std::shared_ptr<GameServer::Foundation::ILogger> logger)
+		FEchoApplication(
+			std::shared_ptr<GameServer::Foundation::ILogger> logger,
+			SServerRuntimeOptions runtimeOptions)
 			: m_logger(std::move(logger))
+			, m_runtimeOptions(runtimeOptions)
 		{
 		}
 
@@ -60,13 +70,47 @@ namespace
 		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) override
 		{
 			std::string message(packetView.payload, packetView.payload + packetView.payloadLength);
-			std::ostringstream oss;
-			oss << "received. sessionId=" << sessionId << " opcode=" << packetView.opcode << " message=" << message;
-			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			if (m_runtimeOptions.logPackets)
+			{
+				std::ostringstream oss;
+				oss << "received. sessionId=" << sessionId << " opcode=" << packetView.opcode << " message=" << message;
+				Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			}
 
 			if (packetView.opcode == kEchoRequestOpcode)
 			{
-				server.Send(sessionId, kEchoResponseOpcode, packetView.payload, packetView.payloadLength);
+				if (m_runtimeOptions.sendThreadCount == 1 && m_runtimeOptions.responsesPerThread == 1)
+				{
+					server.Send(sessionId, kEchoResponseOpcode, message.data(), static_cast<std::int32_t>(message.size()));
+					return;
+				}
+
+				std::vector<std::thread> sendThreads;
+				sendThreads.reserve(static_cast<std::size_t>(m_runtimeOptions.sendThreadCount));
+				for (int threadIndex = 0; threadIndex < m_runtimeOptions.sendThreadCount; ++threadIndex)
+				{
+					sendThreads.emplace_back([&, threadIndex, sessionId, message]()
+					{
+						for (int responseIndex = 0; responseIndex < m_runtimeOptions.responsesPerThread; ++responseIndex)
+						{
+							std::ostringstream responseBuilder;
+							responseBuilder << message
+								<< "|t=" << threadIndex
+								<< "|r=" << responseIndex;
+							const std::string responseMessage = responseBuilder.str();
+							server.Send(
+								sessionId,
+								kEchoResponseOpcode,
+								responseMessage.data(),
+								static_cast<std::int32_t>(responseMessage.size()));
+						}
+					});
+				}
+
+				for (std::thread& sendThread : sendThreads)
+				{
+					sendThread.join();
+				}
 			}
 		}
 
@@ -93,6 +137,7 @@ namespace
 
 	private:
 		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
+		SServerRuntimeOptions m_runtimeOptions;
 	};
 }
 
@@ -101,12 +146,13 @@ int main(int argc, char* argv[])
 	GameServer::NetworkLib::SServerConfig serverConfig{};
 	bool requestManualDump = false;
 	bool runHeadless = false;
+	SServerRuntimeOptions runtimeOptions{};
 	const std::filesystem::path executableDirectory = GetExecutableDirectory();
 	serverConfig.backendKind = GameServer::NetworkLib::EBackendKind::Iocp;
 	serverConfig.bindIp = "127.0.0.1";
 	serverConfig.port = 19000;
 	serverConfig.workerThreadCount = 2;
-	serverConfig.maxSessionCount = 64;
+	serverConfig.maxSessionCount = 512;
 	serverConfig.recvBufferSize = 1024;
 	serverConfig.logConfig.minimumLevel = GameServer::Foundation::ELogLevel::Info;
 	serverConfig.logConfig.outputDirectory = (executableDirectory / "logs" / "EchoServer").string();
@@ -139,6 +185,18 @@ int main(int argc, char* argv[])
 			{
 				runHeadless = true;
 			}
+			else if (argument == "--send-thread-count" && argumentIndex + 1 < argc)
+			{
+				runtimeOptions.sendThreadCount = std::max(1, std::atoi(argv[++argumentIndex]));
+			}
+			else if (argument == "--responses-per-thread" && argumentIndex + 1 < argc)
+			{
+				runtimeOptions.responsesPerThread = std::max(1, std::atoi(argv[++argumentIndex]));
+			}
+			else if (argument == "--log-packets")
+			{
+				runtimeOptions.logPackets = true;
+			}
 		}
 	}
 
@@ -159,7 +217,7 @@ int main(int argc, char* argv[])
 		return dumpWritten ? 0 : 1;
 	}
 
-	FEchoApplication echoApplication(compositeLogger);
+	FEchoApplication echoApplication(compositeLogger, runtimeOptions);
 	std::unique_ptr<GameServer::NetworkLib::IServer> server = GameServer::NetworkLib::FServerFactory::Create(serverConfig.backendKind);
 	if (server == nullptr)
 	{
@@ -178,9 +236,27 @@ int main(int argc, char* argv[])
 	if (runHeadless)
 	{
 		compositeLogger->Log(GameServer::Foundation::ELogLevel::Info, "EchoServer", "Headless mode enabled.");
+		GameServer::NetworkLib::SServerStats previousStats = server->GetStatsSnapshot();
 		while (true)
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			const GameServer::NetworkLib::SServerStats currentStats = server->GetStatsSnapshot();
+			const std::uint64_t acceptTps = currentStats.acceptedSessionCount - previousStats.acceptedSessionCount;
+			const std::uint64_t recvTps = currentStats.receivedPacketCount - previousStats.receivedPacketCount;
+			const std::uint64_t sendTps = currentStats.sentPacketCount - previousStats.sentPacketCount;
+			const std::uint64_t wsaRecvTps = currentStats.wsaRecvCallCount - previousStats.wsaRecvCallCount;
+			const std::uint64_t wsaSendTps = currentStats.wsaSendCallCount - previousStats.wsaSendCallCount;
+			std::cout
+				<< "[EchoStats] sessions=" << currentStats.activeSessionCount
+				<< " acceptTPS=" << acceptTps
+				<< " recvTPS=" << recvTps
+				<< " sendTPS=" << sendTps
+				<< " wsaSendTPS=" << wsaSendTps
+				<< " wsaRecvTPS=" << wsaRecvTps
+				<< " totalWSASendCalls=" << currentStats.wsaSendCallCount
+				<< " totalWSARecvCalls=" << currentStats.wsaRecvCallCount
+				<< std::endl;
+			previousStats = currentStats;
 		}
 	}
 

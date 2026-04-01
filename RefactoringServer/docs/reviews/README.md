@@ -9,6 +9,7 @@
 - 메모리 풀 테스트 이력은 [testing-history.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\memory\testing-history.md)를 본다.
 - 네트워크 패킷 암호화 리뷰는 [packet-cipher-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-cipher-review.md)를 본다.
 - 네트워크 패킷 프레이밍 리뷰는 [packet-framer-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-framer-review.md)를 본다.
+- 네트워크 세션 recv buffer 리뷰는 [session-recv-buffer-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\session-recv-buffer-review.md)를 본다.
 - 네트워크 세션 송신 큐 리뷰는 [session-send-queue-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\session-send-queue-review.md)를 본다.
 
 ## 2. 문서 배치 원칙

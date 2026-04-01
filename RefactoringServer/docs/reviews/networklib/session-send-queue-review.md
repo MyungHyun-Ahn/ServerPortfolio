@@ -1,65 +1,139 @@
 # NetworkLib Session Send Queue Review
 
 ## 1. 범위
-- [`FSession.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)
-- [`FSession.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)
-- [`FSendBuffer.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSendBuffer.h)
-- [`FIocpServer.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.h)
-- [`FIocpServer.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)
+- [FSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)
+- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)
+- [FSendBuffer.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSendBuffer.h)
+- [FIocpServer.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.h)
+- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
 
 ## 2. 변경 목적
-- 기존 `Send()`는 호출마다 `WSASend`를 직접 걸어 단일 송신은 단순했지만, 같은 세션에서 짧은 시간에 여러 송신이 몰리면 송신 요청 수와 버퍼 수명주기 관리가 곧바로 복잡해진다.
-- 레거시 프로젝트의 `N-Send` 의도처럼 "여러 송신 요청을 세션 단위 큐에 모은 뒤, 진행 중인 송신이 없을 때만 실제 `WSASend`를 건다"는 구조가 필요했다.
-- 이 변경은 세션 단위 송신 큐와 단일 in-flight send 규칙을 도입해, 송신 경합을 lock-free enqueue + batched send 방식으로 정리하는 것이 목적이다.
+- 같은 세션에 대해 여러 스레드가 동시에 `Send()`를 호출해도 실제 overlapped `WSASend`는 세션당 1개만 진행되게 만들 필요가 있었다.
+- 레거시 프로젝트의 `N-Send` 의도처럼, 송신 요청은 세션 내부 큐에 쌓고 실제 I/O는 배치로 묶어서 보내는 구조가 목표였다.
+- 장시간 검증을 위해 burst 테스트만이 아니라, 유지 시간 동안 지속적으로 요청/응답이 오가는 구조와 서버 측 통계 출력도 필요했다.
 
 ## 3. 설계 요약
 ### 3-1. 세션 소유 송신 큐
-- [`FSession`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)는 [`FLockFreeQueue<FSendBuffer*>`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Containers\FLockFreeQueue.h) 기반의 `m_sendQueue`를 가진다.
-- `Send()` 호출은 프레이밍과 암호화를 마친 뒤 [`FSendBuffer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSendBuffer.h)를 생성해서 세션 큐에 enqueue 한다.
-- 이 단계는 I/O 호출을 직접 수행하지 않으므로, 여러 송신 요청이 들어와도 큐 적재는 비교적 짧은 경로로 끝난다.
+- [FSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)은 `FLockFreeQueue<FSendBuffer*>` 기반 `m_sendQueue`를 가진다.
+- [FIocpServer::Send](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)은 프레이밍과 암호화를 마친 버퍼를 즉시 `WSASend` 하지 않고 세션 큐에 넣는다.
 
-### 3-2. 단일 in-flight send
-- [`FSession::TryBeginSend()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)는 `m_sendInFlight`를 CAS로 전환한다.
-- 이미 송신이 진행 중이면 추가 `WSASend`는 걸지 않고, 큐에 쌓인 상태로 남긴다.
-- 송신 완료 시 [`FSession::EndSend()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)로 상태를 내리고, 곧바로 [`FIocpServer::PostSend()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)을 다시 시도해 다음 배치를 이어서 보낸다.
+### 3-2. 세션당 단일 in-flight send
+- [FSession::TryBeginSend](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)은 `m_sendInFlight`를 `false -> true`로 CAS 한다.
+- 이미 send I/O가 진행 중이면 새 `WSASend`는 걸지 않고 큐에만 쌓인다.
+- send 완료 시 [FSession::EndSend](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)로 플래그를 내리고 다음 배치를 다시 시도한다.
 
-### 3-3. Batched WSASend
-- [`FSession::FillSendBatch()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)는 큐에서 최대 `kMaxSendBatchCount` 개의 버퍼를 꺼내 `m_activeSendBuffers`, `m_sendWsabufs`를 채운다.
-- [`FIocpServer::PostSend()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)은 이 `WSABUF` 배열을 한 번의 `WSASend`로 넘긴다.
-- 이 구조로 송신 요청이 몰릴 때 시스템 콜 수를 줄이고, 레거시 `N-Send`의 "여러 패킷을 한 번에 묶어 보내는" 의도를 현재 구조에 맞게 가져왔다.
+### 3-3. 런타임 검증 가드
+- [FSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)에 `m_liveSendIoCount`, `m_maxObservedConcurrentSendIoCount`를 두었다.
+- [FIocpServer::PostSend](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)에서 실제 `WSASend` 직전 `BeginSendIo()`를 호출한다.
+- 동시에 2개 이상 send I/O가 잡히면 `Concurrent WSASend detected` 로그를 남기고 세션을 종료한다.
+- 세션 종료 시 `maxConcurrentSendIo=`를 로그에 남겨 실제 관측 최대값을 확인할 수 있다.
 
-## 4. 판단 근거
-### 4-1. 왜 세션이 송신 큐를 가져야 하는가
-- 송신 큐가 서버 전역에 있으면 세션별 순서 보장과 종료 시 정리가 어려워진다.
-- 세션 소유 큐로 두면 "이 큐에 든 버퍼는 이 세션 소켓으로만 나간다"는 소유권이 분명해진다.
-- 세션 종료 시 [`FSession::ReleaseActiveSendBuffers()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp), [`FSession::ReleaseQueuedSendBuffers()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)로 정리 경로도 한곳에 모인다.
+### 3-4. Batched WSASend
+- [FSession::FillSendBatch](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)은 큐에서 최대 `kMaxSendBatchCount`개를 꺼내 `WSABUF[]`를 만든다.
+- [FIocpServer::PostSend](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)은 이 배열을 한 번의 `WSASend`로 넘긴다.
 
-### 4-2. 왜 lock-free queue를 선택했는가
-- 여러 스레드에서 같은 세션으로 송신 요청이 몰릴 가능성을 고려하면, 짧은 enqueue 경로는 락보다 `Interlocked` 기반 큐가 현재 프로젝트 철학과 더 잘 맞는다.
-- 이미 [`FLockFreeQueue`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Containers\FLockFreeQueue.h)는 별도 스트레스/soak 테스트를 통과했고, 이 프로젝트의 "lock-free 코어 유지" 방향과도 일치한다.
+### 3-5. 장시간 송수신 검증용 통계
+- [IServer.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h)에 `GetStatsSnapshot()`을 추가했다.
+- [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)는 아래를 원자 카운터로 집계한다.
+  - 누적 accept 수
+  - 활성 세션 수
+  - 수신 패킷 수
+  - 송신 패킷 수
+  - `WSARecv` 호출 수
+  - `WSASend` 호출 수
+- [EchoServer/Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)는 `--headless` 실행 중 1초마다 `EchoStats`를 콘솔에 출력한다.
+- 현재 출력 항목:
+  - `acceptTPS`
+  - `recvTPS`
+  - `sendTPS`
+  - `wsaRecvTPS`
+  - `wsaSendTPS`
+  - `totalWSARecvCalls`
+  - `totalWSASendCalls`
 
-### 4-3. 왜 세션 소유 I/O context로 바꿨는가
-- recv/send 모두 호출마다 I/O context를 새로 할당/해제하면 수명주기 추적이 번거롭고 실패 경로에서 정리 포인트가 많아진다.
-- [`FSession::SIoContext`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)를 세션이 소유하게 하여, recv/send 각각 하나의 context를 재사용하는 구조로 단순화했다.
+## 4. 클라이언트 검증 보강
+- [EchoClient/Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)는 이제 한 프로세스에서 여러 세션을 유지할 수 있다.
+- 주요 옵션:
+  - `--sessions`
+  - `--hold-seconds`
+  - `--interval-ms`
+  - `--packets-per-send`
+  - `--reconnect-probability-percent`
+  - `--reconnect-delay-ms`
+- 각 세션은 유지 시간 동안 주기적으로 요청을 보내고, 응답 집합 전체를 검증한다.
+- 따라서 이전의 "burst 후 idle"이 아니라 실제로 장시간 `Send/Recv`가 반복되는 검증이 가능해졌다.
+- `--packets-per-send`는 여러 프레임을 하나의 `send()` 호출에 이어붙여 보내므로, 애플리케이션 패킷 수와 소켓 send 호출 수를 분리해서 볼 수 있다.
+- `--reconnect-probability-percent`는 주기 사이클마다 일정 확률로 연결을 끊고 다시 붙게 하므로, accept/close 반복 경로를 장시간 검증할 수 있다.
 
 ## 5. 확인된 사실
-- [`NetworkLib.vcxproj`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\NetworkLib.vcxproj) x64 Debug 빌드 성공
-- [`EchoServer.vcxproj`](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\EchoServer.vcxproj) x64 Debug 빌드 성공
-- [`EchoClient.vcxproj`](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\EchoClient.vcxproj) x64 Debug 빌드 성공
-- [`EchoServer.exe`](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoServer.exe) `--headless` 실행 후 [`EchoClient.exe`](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)로 아래 조건 검증 성공
-  - `--count 8`
-  - `--payload-size 48`
-  - `--send-chunk-size 5`
-  - `--send-chunk-delay-ms 1`
-  - `--recv-buffer-size 11`
-- 위 검증에서 8개 응답이 모두 정상 payload로 돌아왔고, 최종 출력은 `echo validation succeeded.` 였다.
+### 5-1. 기본 멀티스레드 send 검증
+- 서버:
+  - [EchoServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoServer.exe)
+  - `--headless --send-thread-count 4 --responses-per-thread 4`
+- 클라이언트:
+  - [EchoClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)
+  - `--count 8 --payload-size 48 --send-chunk-size 5 --send-chunk-delay-ms 1 --recv-buffer-size 11 --response-thread-count 4 --responses-per-thread 4`
+- 결과:
+  - 총 `128` 응답 성공
+  - `echo validation succeeded.` 확인
+  - `Concurrent WSASend detected` 로그 미발생
 
-## 6. 현재 한계
-- 현재 `FSendBuffer`는 `new/delete` 기반이다. 송신 빈도가 매우 높아지면 전용 송신 버퍼 풀 또는 TLS 메모리 풀 연계가 필요할 수 있다.
-- 현재 구조는 "세션당 한 번에 하나의 `WSASend`" 규칙을 둔다. 이 규칙은 단순성과 순서 보장에는 유리하지만, 고성능 최적화 단계에서는 더 공격적인 송신 파이프라인과 비교가 필요할 수 있다.
-- 송신 큐 길이 제한이나 back-pressure 정책은 아직 없다. 큐가 과도하게 길어질 때의 운영 정책은 이후 별도 설계가 필요하다.
+### 5-2. 더 강한 burst 검증
+- 서버:
+  - `--headless --send-thread-count 8 --responses-per-thread 8`
+- 클라이언트:
+  - `--count 16 --payload-size 64 --send-chunk-size 7 --send-chunk-delay-ms 1 --recv-buffer-size 13 --response-thread-count 8 --responses-per-thread 8 --quiet`
+- 결과:
+  - 총 `1024` 응답 성공
+  - `echo validation succeeded.` 확인
+  - 세션 종료 로그에서 `maxConcurrentSendIo=1` 확인
 
-## 7. 다음 확인 항목
-- `FSendBuffer`를 메모리 풀 기반으로 바꿨을 때의 효과 비교
-- 세션 종료 직전 대량 enqueue 상황에서의 정리 경로 추가 검증
-- 실제 게임 패킷 dispatch 구조가 올라왔을 때도 현재 세션 송신 큐 경계가 적절한지 재검토
+### 5-3. 지속 송수신 검증
+- 서버:
+  - `--headless --send-thread-count 4 --responses-per-thread 4`
+- 클라이언트:
+  - `--sessions 4 --count 2 --payload-size 32 --send-chunk-size 4 --send-chunk-delay-ms 1 --recv-buffer-size 9 --response-thread-count 4 --responses-per-thread 4 --hold-seconds 3 --interval-ms 500 --quiet`
+- 결과:
+  - 총 `640` 응답 성공
+  - 서버 콘솔에 아래 통계 출력 확인
+
+```text
+[EchoStats] sessions=4 recvTPS=8 sendTPS=128 WSASendCalls=16 WSARecvCalls=81
+[EchoStats] sessions=4 recvTPS=12 sendTPS=192 WSASendCalls=52 WSARecvCalls=212
+[EchoStats] sessions=4 recvTPS=12 sendTPS=192 WSASendCalls=88 WSARecvCalls=321
+```
+
+- 종료 로그에서도 세션별 `maxConcurrentSendIo=1` 확인
+
+### 5-4. 패킷 묶음 송신 + 확률 재접속 검증
+- 서버:
+  - [EchoServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoServer.exe)
+  - `--headless --send-thread-count 1 --responses-per-thread 1`
+- 클라이언트:
+  - [EchoClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)
+  - `--sessions 8 --count 8 --payload-size 48 --packets-per-send 4 --send-chunk-size 8 --send-chunk-delay-ms 1 --recv-buffer-size 16 --response-thread-count 1 --responses-per-thread 1 --hold-seconds 3 --interval-ms 500 --reconnect-probability-percent 30 --reconnect-delay-ms 50 --quiet`
+- 결과:
+  - 총 `192` 응답 성공
+  - 확률 재접속으로 `acceptTPS`가 증가하는 구간 확인
+  - 서버 출력 예시:
+
+```text
+[EchoStats] sessions=8 acceptTPS=3 recvTPS=38 sendTPS=38 wsaSendTPS=38 wsaRecvTPS=247 totalWSASendCalls=135 totalWSARecvCalls=941
+[EchoStats] sessions=0 acceptTPS=0 recvTPS=57 sendTPS=57 wsaSendTPS=57 wsaRecvTPS=363 totalWSASendCalls=192 totalWSARecvCalls=1304
+```
+
+  - `1:1 echo` 모드에서는 `recvTPS`와 `sendTPS`가 같게 나오는 것 확인
+  - 세션 종료 로그에서 `maxConcurrentSendIo=1` 유지 확인
+
+## 6. 판단
+- 현재 구조는 "여러 스레드의 동시 `Send()` 호출"과 "세션당 단일 in-flight `WSASend`" 규칙을 양립시키는 데 성공했다.
+- 검증 근거는 단순 응답 성공만이 아니라, 실제 런타임 가드와 `maxConcurrentSendIo` 계측까지 포함한다.
+- 지속 송수신 상태에서 TPS와 `WSASend`/`WSARecv` 호출 수를 콘솔로 관측할 수 있으므로 장시간 테스트 기반도 마련됐다.
+- `packets-per-send`와 확률 재접속 옵션이 추가되어, 패킷 배치 송신과 accept/close 반복도 같은 테스트 클라이언트로 검증할 수 있다.
+
+## 7. 남은 확인 항목
+- 100세션 이상, 2시간 이상 장시간 실행 로그를 기준으로 최종 안정성 검증
+- `FSendBuffer`를 메모리 풀 기반으로 바꿨을 때의 성능 비교
+- 너무 긴 송신 큐가 쌓일 때의 back-pressure 정책

@@ -185,6 +185,7 @@ namespace GameServer::NetworkLib
 		}
 
 		sessionContext->EnqueueSendBuffer(new FSendBuffer(std::move(framedBuffer)));
+		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
 		PostSend(*sessionContext);
 
 		ReleaseSession(sessionContext);
@@ -194,6 +195,18 @@ namespace GameServer::NetworkLib
 	EBackendKind FIocpServer::GetBackendKind() const
 	{
 		return EBackendKind::Iocp;
+	}
+
+	SServerStats FIocpServer::GetStatsSnapshot() const
+	{
+		SServerStats stats{};
+		stats.activeSessionCount = m_activeSessionCount.load(std::memory_order_relaxed);
+		stats.acceptedSessionCount = m_acceptedSessionCount.load(std::memory_order_relaxed);
+		stats.receivedPacketCount = m_receivedPacketCount.load(std::memory_order_relaxed);
+		stats.sentPacketCount = m_sentPacketCount.load(std::memory_order_relaxed);
+		stats.wsaRecvCallCount = m_wsaRecvCallCount.load(std::memory_order_relaxed);
+		stats.wsaSendCallCount = m_wsaSendCallCount.load(std::memory_order_relaxed);
+		return stats;
 	}
 
 	bool FIocpServer::InitializeWinsock()
@@ -349,6 +362,7 @@ namespace GameServer::NetworkLib
 				}
 				if (ioContext->ioType == FSession::EIoType::Send)
 				{
+					sessionContext->FinishSendIo();
 					sessionContext->ReleaseActiveSendBuffers();
 					sessionContext->EndSend();
 				}
@@ -402,6 +416,7 @@ namespace GameServer::NetworkLib
 							*this,
 							sessionContext->GetSessionId(),
 							packetView);
+						m_receivedPacketCount.fetch_add(1, std::memory_order_relaxed);
 
 						const std::size_t consumedPacketSize =
 							sizeof(GameServer::NetworkLib::Packet::SPacketHeader) + static_cast<std::size_t>(packetView.payloadLength);
@@ -424,6 +439,7 @@ namespace GameServer::NetworkLib
 			}
 			else
 			{
+				sessionContext->FinishSendIo();
 				sessionContext->ReleaseActiveSendBuffers();
 				sessionContext->EndSend();
 				if (!sessionContext->IsClosing())
@@ -452,6 +468,7 @@ namespace GameServer::NetworkLib
 			return false;
 		}
 		sessionContext.AcquireRef();
+		m_wsaRecvCallCount.fetch_add(1, std::memory_order_relaxed);
 
 		const int recvResult = WSARecv(sessionContext.GetSocket(), recvBuffers, recvBufferCount, &recvBytes, &recvFlags, &recvContext.overlapped, nullptr);
 		if (recvResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
@@ -490,10 +507,25 @@ namespace GameServer::NetworkLib
 		sendContext.Prepare(FSession::EIoType::Send, &sessionContext);
 
 		sessionContext.AcquireRef();
+		const int concurrentSendIoCount = sessionContext.BeginSendIo();
+		if (concurrentSendIoCount > 1)
+		{
+			std::ostringstream oss;
+			oss << "Concurrent WSASend detected. sessionId=" << sessionContext.GetSessionId()
+				<< " concurrentSendIoCount=" << concurrentSendIoCount;
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			sessionContext.FinishSendIo();
+			sessionContext.ReleaseActiveSendBuffers();
+			sessionContext.EndSend();
+			ReleaseSession(&sessionContext);
+			CloseSession(sessionContext);
+			return false;
+		}
 
 		DWORD sentBytes = 0;
 		DWORD sendFlags = 0;
 		const std::vector<WSABUF>& sendBuffers = sessionContext.GetSendWsabufs();
+		m_wsaSendCallCount.fetch_add(1, std::memory_order_relaxed);
 		const int sendResult = WSASend(
 			sessionContext.GetSocket(),
 			const_cast<WSABUF*>(sendBuffers.data()),
@@ -509,6 +541,7 @@ namespace GameServer::NetworkLib
 			std::ostringstream oss;
 			oss << "WSASend failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
 			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			sessionContext.FinishSendIo();
 			sessionContext.ReleaseActiveSendBuffers();
 			sessionContext.EndSend();
 			ReleaseSession(&sessionContext);
@@ -530,9 +563,11 @@ namespace GameServer::NetworkLib
 		closesocket(sessionContext.GetSocket());
 		sessionContext.SetSocket(INVALID_SOCKET);
 		m_sessionSlots[sessionContext.GetSlotIndex()].store(nullptr);
+		m_activeSessionCount.fetch_sub(1, std::memory_order_relaxed);
 		{
 			std::ostringstream oss;
 			oss << "Session closed. sessionId=" << sessionContext.GetSessionId();
+			oss << " maxConcurrentSendIo=" << sessionContext.GetMaxObservedConcurrentSendIoCount();
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnClientDisconnected(sessionContext.GetSessionId());
@@ -619,6 +654,8 @@ namespace GameServer::NetworkLib
 			oss << "Client connected. sessionId=" << newSessionContext->GetSessionId();
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
+		m_activeSessionCount.fetch_add(1, std::memory_order_relaxed);
+		m_acceptedSessionCount.fetch_add(1, std::memory_order_relaxed);
 		m_applicationHandler->OnClientConnected(newSessionContext->GetSessionId());
 		if (!PostRecv(*newSessionContext))
 		{

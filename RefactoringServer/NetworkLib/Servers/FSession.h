@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Containers/FLockFreeQueue.h"
+#include "Packet/FRecvBuffer.h"
 #include "Servers/FSendBuffer.h"
 
 #include <WinSock2.h>
@@ -23,19 +24,17 @@ namespace GameServer::NetworkLib
 		struct SIoContext
 		{
 			OVERLAPPED overlapped{};
-			WSABUF wsabuf{};
 			EIoType ioType = EIoType::Recv;
 			FSession* ownerSession = nullptr;
-			std::vector<char> buffer;
 
-			void Prepare(EIoType newIoType, FSession* newOwnerSession, std::uint32_t bufferSize = 0);
+			void Prepare(EIoType newIoType, FSession* newOwnerSession);
 		};
 
 	public:
 		FSession() = default;
 		~FSession();
 
-		void Initialize(SOCKET socket, std::uint64_t sessionId, std::uint32_t slotIndex, std::uint32_t generation);
+		void Initialize(SOCKET socket, std::uint64_t sessionId, std::uint32_t slotIndex, std::uint32_t generation, std::size_t recvBufferCapacity);
 		void Reset() noexcept;
 
 		SOCKET GetSocket() const noexcept;
@@ -51,9 +50,10 @@ namespace GameServer::NetworkLib
 		long AcquireRef() noexcept;
 		long ReleaseRef() noexcept;
 
-		void AppendRecvBytes(const char* buffer, std::size_t length);
-		std::vector<char>& GetRecvBuffer() noexcept;
-		const std::vector<char>& GetRecvBuffer() const noexcept;
+		void BuildRecvWsabufs(WSABUF (&outBuffers)[2], DWORD& outBufferCount) noexcept;
+		bool CommitRecvBytes(std::size_t length) noexcept;
+		Packet::FRecvBuffer& GetRecvBuffer() noexcept;
+		const Packet::FRecvBuffer& GetRecvBuffer() const noexcept;
 
 		SIoContext& GetRecvContext() noexcept;
 		SIoContext& GetSendContext() noexcept;
@@ -61,6 +61,9 @@ namespace GameServer::NetworkLib
 		void EnqueueSendBuffer(FSendBuffer* sendBuffer) noexcept;
 		bool TryBeginSend() noexcept;
 		void EndSend() noexcept;
+		int BeginSendIo() noexcept;
+		int FinishSendIo() noexcept;
+		int GetMaxObservedConcurrentSendIoCount() const noexcept;
 		bool FillSendBatch(std::size_t maxSendCount) noexcept;
 		const std::vector<WSABUF>& GetSendWsabufs() const noexcept;
 		void ReleaseActiveSendBuffers() noexcept;
@@ -78,10 +81,12 @@ namespace GameServer::NetworkLib
 		std::atomic<bool> m_closing = false;
 		SIoContext m_recvContext{};
 		SIoContext m_sendContext{};
-		std::vector<char> m_recvBuffer;
+		Packet::FRecvBuffer m_recvBuffer;
 		Containers::FLockFreeQueue<FSendBuffer*> m_sendQueue;
 		std::vector<FSendBuffer*> m_activeSendBuffers;
 		std::vector<WSABUF> m_sendWsabufs;
 		std::atomic<bool> m_sendInFlight = false;
+		std::atomic<int> m_liveSendIoCount = 0;
+		std::atomic<int> m_maxObservedConcurrentSendIoCount = 0;
 	};
 }
