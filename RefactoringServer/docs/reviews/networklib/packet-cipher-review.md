@@ -54,32 +54,48 @@
 - no-op 구현체가 있어 테스트와 정책 교체가 쉬워졌다.
 - 체크섬 계산도 같은 경계 안에서 일관되게 제공한다.
 
-## 6. 현재 한계와 리스크
+## 6. 현재 적용 상태
+- 현재 `Default` 패킷 암호화는 `NetworkLib` 코어 내부 송수신 경계가 아니라 응용 계층 검증용으로 먼저 연결돼 있다.
+- 적용 지점:
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
+- 현재 검증 방식:
+  - 요청/응답 payload 앞 1바이트를 `randomKey`로 사용
+  - 나머지 payload를 `FDefaultPacketCipher`로 인코딩/디코딩
+  - `EchoClient`가 복호화 후 원문 `echo-test`와 일치하는지 확인
 
-### 6-1. 실제 네트워크 경로에는 아직 연결되지 않았다
-- 현재는 `LockFreeTests`를 통한 단위 수준 검증까지만 끝난 상태다.
-- `EchoServer` 송수신 경로, 패킷 프레이밍 계층, session 경계에는 아직 미적용이다.
+## 7. 현재 한계와 리스크
 
-### 6-2. 인터페이스 경계는 생겼지만 생성 정책은 아직 없다
+### 7-1. `NetworkLib` 코어 송수신 경계에는 아직 직접 연결되지 않았다
+- 현재는 `EchoServer`/`EchoClient` 응용 계층에서 암복호화를 수행한다.
+- 실제 `NetworkLib` 내부 send/recv 경계, 패킷 프레이밍 계층, session 경계에는 아직 미적용이다.
+
+### 7-2. 인터페이스 경계는 생겼지만 생성 정책은 아직 없다
 - 지금은 테스트 코드에서 직접 구현체를 생성한다.
 - 이후 서버 설정과 팩토리 정책을 연결해야 실제 운영 경로에서 의미가 생긴다.
 
-### 6-3. `FNullPacketCipher`도 체크섬은 계산한다
+### 7-3. `FNullPacketCipher`도 체크섬은 계산한다
 - no-op cipher라도 현재는 체크섬 계산을 제공한다.
 - 이 정책이 맞는지는 이후 패킷 프레이밍 계층 설계와 함께 다시 검토할 수 있다.
 
-## 7. 검증 근거
+## 8. 검증 근거
 - 빌드:
   - [NetworkLib.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\NetworkLib.vcxproj)
   - [LockFreeTests.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\LockFreeTests.vcxproj)
+  - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\EchoServer.vcxproj)
+  - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\EchoClient.vcxproj)
 - 실행:
   - [LockFreeTests.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\LockFreeTests.exe)
+  - [EchoServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoServer.exe)
+  - [EchoClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)
 - 확인된 테스트:
   - `Packet cipher round trip`
   - `Null packet cipher`
+  - 암호화된 `echo-test` 요청/응답 왕복
 - 두 테스트 모두 `IPacketCipher` 포인터 경유로 호출했고 PASS를 확인했다.
+ - `EchoClient`는 복호화 후 `response: echo-test`, `echo validation succeeded.`를 출력했다.
 
-## 8. 다음 작업 후보
+## 9. 다음 작업 후보
 - 서버 설정에서 cipher 선택 정책 연결
 - 패킷 프레이밍 계층과 연동
 - `EchoServer` 송수신 경로에 실제 적용

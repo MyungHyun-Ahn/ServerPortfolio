@@ -1,9 +1,14 @@
 #include "Pch.h"
 
+#include "Crypto/FDefaultPacketCipher.h"
+
 #pragma comment(lib, "Ws2_32.lib")
 
 int main()
 {
+	constexpr std::uint8_t kPacketKey = 0x37;
+	constexpr std::uint8_t kRequestRandomKey = 0x5A;
+
 	WSADATA wsaData{};
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 	{
@@ -32,8 +37,18 @@ int main()
 		return 1;
 	}
 
+	GameServer::NetworkLib::Crypto::SDefaultPacketCipherConfig cipherConfig{};
+	cipherConfig.packetKey = kPacketKey;
+	GameServer::NetworkLib::Crypto::FDefaultPacketCipher packetCipher(cipherConfig);
+
 	const std::string requestMessage = "echo-test";
-	if (send(clientSocket, requestMessage.data(), static_cast<int>(requestMessage.size()), 0) == SOCKET_ERROR)
+	std::string encryptedRequest;
+	encryptedRequest.resize(requestMessage.size() + 1);
+	encryptedRequest[0] = static_cast<char>(kRequestRandomKey);
+	std::copy(requestMessage.begin(), requestMessage.end(), encryptedRequest.begin() + 1);
+	packetCipher.Encode(encryptedRequest.data() + 1, static_cast<int>(requestMessage.size()), kRequestRandomKey);
+
+	if (send(clientSocket, encryptedRequest.data(), static_cast<int>(encryptedRequest.size()), 0) == SOCKET_ERROR)
 	{
 		std::cerr << "send failed.\n";
 		closesocket(clientSocket);
@@ -51,7 +66,17 @@ int main()
 		return 1;
 	}
 
-	const std::string responseMessage(recvBuffer, recvBuffer + recvBytes);
+	if (recvBytes <= 1)
+	{
+		std::cerr << "recv payload too short.\n";
+		closesocket(clientSocket);
+		WSACleanup();
+		return 1;
+	}
+
+	const std::uint8_t responseRandomKey = static_cast<std::uint8_t>(recvBuffer[0]);
+	std::string responseMessage(recvBuffer + 1, recvBuffer + recvBytes);
+	packetCipher.Decode(responseMessage.data(), static_cast<int>(responseMessage.size()), responseRandomKey);
 	std::cout << "response: " << responseMessage << "\n";
 
 	shutdown(clientSocket, SD_BOTH);
