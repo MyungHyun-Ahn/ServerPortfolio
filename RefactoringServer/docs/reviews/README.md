@@ -10,6 +10,7 @@
 - 네트워크 패킷 암호화 리뷰는 [packet-cipher-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-cipher-review.md)를 본다.
 - 네트워크 패킷 프레이밍 리뷰는 [packet-framer-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-framer-review.md)를 본다.
 - 네트워크 패킷 생성기/라우팅 리뷰는 [packet-codegen-and-routing-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-codegen-and-routing-review.md)를 본다.
+- 네트워크 패킷 컨테이너 지원 리뷰는 [packet-container-support-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-container-support-review.md)를 본다.
 - 네트워크 세션 recv buffer 리뷰는 [session-recv-buffer-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\session-recv-buffer-review.md)를 본다.
 - 네트워크 세션 송신 큐 리뷰는 [session-send-queue-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\session-send-queue-review.md)를 본다.
 

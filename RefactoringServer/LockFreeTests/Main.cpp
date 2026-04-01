@@ -2,6 +2,7 @@
 #include "Containers/FLockFreeStack.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "Crypto/FNullPacketCipher.h"
+#include "Generated/Packets/Chat/ChatPackets.h"
 #include "Generated/Packets/Echo/EchoPackets.h"
 #include "Crypto/IPacketCipher.h"
 #include "Memory/FTlsMemoryPool.h"
@@ -626,6 +627,51 @@ namespace
 		return { true, "Generated echo packet round trip", "passed" };
 	}
 
+	STestResult RunGeneratedChatContainerPacketRoundTripTest()
+	{
+		GameServer::Generated::Chat::FRoomSnapshotRp responsePacket;
+		responsePacket.roomId = 77;
+		responsePacket.participants = { "alpha", "bravo", "charlie" };
+		responsePacket.unreadCounts = {
+			{ "alpha", 1 },
+			{ "bravo", 3 },
+			{ "charlie", 5 }
+		};
+		responsePacket.metadata = {
+			{ "topic", "general" },
+			{ "owner", "alpha" }
+		};
+
+		std::vector<char> payload = GameServer::NetworkLib::Packet::SerializeContentBody(responsePacket);
+		GameServer::Generated::Chat::FRoomSnapshotRp decodedPacket;
+		if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
+		{
+			return { false, "Generated chat container packet round trip", "DeserializeContentPacket failed" };
+		}
+
+		if (decodedPacket.roomId != responsePacket.roomId)
+		{
+			return { false, "Generated chat container packet round trip", "roomId mismatch" };
+		}
+
+		if (decodedPacket.participants != responsePacket.participants)
+		{
+			return { false, "Generated chat container packet round trip", "participants mismatch" };
+		}
+
+		if (decodedPacket.unreadCounts != responsePacket.unreadCounts)
+		{
+			return { false, "Generated chat container packet round trip", "unreadCounts mismatch" };
+		}
+
+		if (decodedPacket.metadata != responsePacket.metadata)
+		{
+			return { false, "Generated chat container packet round trip", "metadata mismatch" };
+		}
+
+		return { true, "Generated chat container packet round trip", "passed" };
+	}
+
 	template <>
 	STestResult RunParallelSumTest<TQueue>(const char* testName)
 	{
@@ -726,6 +772,7 @@ int main()
 	results.push_back(RunPacketFramerRecvBufferTest());
 	results.push_back(RunPacketFramerPacketViewTest());
 	results.push_back(RunGeneratedEchoPacketRoundTripTest());
+	results.push_back(RunGeneratedChatContainerPacketRoundTripTest());
 
 	bool allPassed = true;
 	for (const STestResult& result : results)
