@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Servers/BackendTypes.h"
+#include "Servers/FSession.h"
 #include "Servers/IServer.h"
 
 #include <atomic>
@@ -26,35 +27,6 @@ namespace GameServer::NetworkLib
 		EBackendKind GetBackendKind() const override;
 
 	private:
-		enum class EIoType : std::uint32_t
-		{
-			Recv,
-			Send
-		};
-
-		struct SSessionContext;
-
-		struct SIoContext
-		{
-			OVERLAPPED overlapped{};
-			WSABUF wsabuf{};
-			EIoType ioType = EIoType::Recv;
-			SSessionContext* ownerSession = nullptr;
-			std::vector<char> buffer;
-		};
-
-		struct SSessionContext
-		{
-			SOCKET socket = INVALID_SOCKET;
-			std::uint64_t sessionId = 0;
-			std::uint32_t slotIndex = 0;
-			std::uint32_t generation = 0;
-			std::atomic<long> refCount = 1;
-			std::atomic<bool> closing = false;
-			SIoContext recvContext{};
-			std::vector<char> recvBuffer;
-		};
-
 		bool InitializeWinsock();
 		bool OpenListenSocket();
 		void CloseListenSocket();
@@ -62,10 +34,10 @@ namespace GameServer::NetworkLib
 		void StopWorkers();
 		void AcceptLoop();
 		void WorkerLoop();
-		bool PostRecv(SSessionContext& sessionContext);
-		void CloseSession(SSessionContext& sessionContext);
-		void ReleaseSession(SSessionContext* sessionContext);
-		SSessionContext* AcquireSession(std::uint64_t sessionId);
+		bool PostRecv(FSession& sessionContext);
+		void CloseSession(FSession& sessionContext);
+		void ReleaseSession(FSession* sessionContext);
+		FSession* AcquireSession(std::uint64_t sessionId);
 		bool AttachAcceptedSocket(SOCKET clientSocket);
 		std::uint64_t ComposeSessionId(std::uint32_t slotIndex, std::uint32_t generation) const;
 		std::uint8_t GeneratePacketRandomKey() noexcept;
@@ -81,7 +53,7 @@ namespace GameServer::NetworkLib
 		SOCKET m_listenSocket = INVALID_SOCKET;
 		std::thread m_acceptThread;
 		std::vector<std::thread> m_workerThreads;
-		std::unique_ptr<std::atomic<SSessionContext*>[]> m_sessionSlots;
+		std::unique_ptr<std::atomic<FSession*>[]> m_sessionSlots;
 		std::unique_ptr<std::atomic<std::uint32_t>[]> m_generations;
 		std::atomic<std::uint32_t> m_packetRandomKeySeed = 1;
 		std::atomic<bool> m_isRunning = false;

@@ -37,7 +37,7 @@ namespace GameServer::NetworkLib
 			return false;
 		}
 
-		m_sessionSlots = std::make_unique<std::atomic<SSessionContext*>[]>(m_serverConfig.maxSessionCount);
+		m_sessionSlots = std::make_unique<std::atomic<FSession*>[]>(m_serverConfig.maxSessionCount);
 		m_generations = std::make_unique<std::atomic<std::uint32_t>[]>(m_serverConfig.maxSessionCount);
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
@@ -101,7 +101,7 @@ namespace GameServer::NetworkLib
 
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
-			SSessionContext* sessionContext = m_sessionSlots[slotIndex].exchange(nullptr);
+			FSession* sessionContext = m_sessionSlots[slotIndex].exchange(nullptr);
 			if (sessionContext != nullptr)
 			{
 				CloseSession(*sessionContext);
@@ -142,7 +142,7 @@ namespace GameServer::NetworkLib
 			return false;
 		}
 
-		SSessionContext* sessionContext = AcquireSession(sessionId);
+		FSession* sessionContext = AcquireSession(sessionId);
 		if (sessionContext == nullptr)
 		{
 			std::ostringstream oss;
@@ -151,8 +151,8 @@ namespace GameServer::NetworkLib
 			return false;
 		}
 
-		auto* ioContext = new SIoContext();
-		ioContext->ioType = EIoType::Send;
+		auto* ioContext = new FSession::SIoContext();
+		ioContext->ioType = FSession::EIoType::Send;
 		ioContext->ownerSession = sessionContext;
 		if (m_packetFramer != nullptr)
 		{
@@ -189,10 +189,10 @@ namespace GameServer::NetworkLib
 
 		ioContext->wsabuf.buf = ioContext->buffer.data();
 		ioContext->wsabuf.len = static_cast<ULONG>(ioContext->buffer.size());
-		sessionContext->refCount.fetch_add(1);
+		sessionContext->AcquireRef();
 
 		DWORD sentBytes = 0;
-		const int sendResult = WSASend(sessionContext->socket, &ioContext->wsabuf, 1, &sentBytes, 0, &ioContext->overlapped, nullptr);
+		const int sendResult = WSASend(sessionContext->GetSocket(), &ioContext->wsabuf, 1, &sentBytes, 0, &ioContext->overlapped, nullptr);
 		if (sendResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 		{
 			const int errorCode = WSAGetLastError();
@@ -351,11 +351,11 @@ namespace GameServer::NetworkLib
 				break;
 			}
 
-			auto* ioContext = reinterpret_cast<SIoContext*>(overlapped);
-			SSessionContext* sessionContext = ioContext->ownerSession;
+			auto* ioContext = reinterpret_cast<FSession::SIoContext*>(overlapped);
+			FSession* sessionContext = ioContext->ownerSession;
 			if (sessionContext == nullptr)
 			{
-				if (ioContext->ioType == EIoType::Send)
+				if (ioContext->ioType == FSession::EIoType::Send)
 				{
 					delete ioContext;
 				}
@@ -367,11 +367,11 @@ namespace GameServer::NetworkLib
 				if (queuedResult == FALSE)
 				{
 					std::ostringstream oss;
-					oss << "I/O completion failed. sessionId=" << sessionContext->sessionId << " error=" << GetLastError();
+					oss << "I/O completion failed. sessionId=" << sessionContext->GetSessionId() << " error=" << GetLastError();
 					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 				}
 				CloseSession(*sessionContext);
-				if (ioContext->ioType == EIoType::Send)
+				if (ioContext->ioType == FSession::EIoType::Send)
 				{
 					delete ioContext;
 				}
@@ -379,19 +379,18 @@ namespace GameServer::NetworkLib
 				continue;
 			}
 
-			if (ioContext->ioType == EIoType::Recv)
+			if (ioContext->ioType == FSession::EIoType::Recv)
 			{
-				sessionContext->recvBuffer.insert(
-					sessionContext->recvBuffer.end(),
+				sessionContext->AppendRecvBytes(
 					ioContext->buffer.data(),
-					ioContext->buffer.data() + transferredBytes);
+					transferredBytes);
 
 				if (m_packetFramer != nullptr)
 				{
 					while (true)
 					{
 						GameServer::NetworkLib::Packet::SFramedPacket framedPacket;
-						if (!m_packetFramer->TryExtractPacket(sessionContext->recvBuffer, framedPacket))
+						if (!m_packetFramer->TryExtractPacket(sessionContext->GetRecvBuffer(), framedPacket))
 						{
 							break;
 						}
@@ -403,7 +402,7 @@ namespace GameServer::NetworkLib
 						if (actualChecksum != framedPacket.checkSum)
 						{
 							std::ostringstream oss;
-							oss << "Packet checksum mismatch. sessionId=" << sessionContext->sessionId
+							oss << "Packet checksum mismatch. sessionId=" << sessionContext->GetSessionId()
 								<< " opcode=" << framedPacket.opcode
 								<< " expected=" << static_cast<int>(framedPacket.checkSum)
 								<< " actual=" << static_cast<int>(actualChecksum);
@@ -419,7 +418,7 @@ namespace GameServer::NetworkLib
 
 						m_applicationHandler->OnPacketReceived(
 							*this,
-							sessionContext->sessionId,
+							sessionContext->GetSessionId(),
 							framedPacket.opcode,
 							framedPacket.payload.data(),
 							static_cast<std::int32_t>(framedPacket.payload.size()));
@@ -429,7 +428,7 @@ namespace GameServer::NetworkLib
 				{
 					m_applicationHandler->OnPacketReceived(
 						*this,
-						sessionContext->sessionId,
+						sessionContext->GetSessionId(),
 						0,
 						ioContext->buffer.data(),
 						static_cast<std::int32_t>(transferredBytes));
@@ -438,7 +437,7 @@ namespace GameServer::NetworkLib
 				if (!PostRecv(*sessionContext))
 				{
 					std::ostringstream oss;
-					oss << "PostRecv failed after packet dispatch. sessionId=" << sessionContext->sessionId;
+					oss << "PostRecv failed after packet dispatch. sessionId=" << sessionContext->GetSessionId();
 					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 					CloseSession(*sessionContext);
 				}
@@ -452,25 +451,21 @@ namespace GameServer::NetworkLib
 		}
 	}
 
-	bool FIocpServer::PostRecv(SSessionContext& sessionContext)
+	bool FIocpServer::PostRecv(FSession& sessionContext)
 	{
 		DWORD recvFlags = 0;
 		DWORD recvBytes = 0;
 
-		ZeroMemory(&sessionContext.recvContext.overlapped, sizeof(sessionContext.recvContext.overlapped));
-		sessionContext.recvContext.ioType = EIoType::Recv;
-		sessionContext.recvContext.ownerSession = &sessionContext;
-		sessionContext.recvContext.buffer.resize(m_serverConfig.recvBufferSize);
-		sessionContext.recvContext.wsabuf.buf = sessionContext.recvContext.buffer.data();
-		sessionContext.recvContext.wsabuf.len = static_cast<ULONG>(sessionContext.recvContext.buffer.size());
-		sessionContext.refCount.fetch_add(1);
+		FSession::SIoContext& recvContext = sessionContext.GetRecvContext();
+		recvContext.Prepare(FSession::EIoType::Recv, &sessionContext, m_serverConfig.recvBufferSize);
+		sessionContext.AcquireRef();
 
-		const int recvResult = WSARecv(sessionContext.socket, &sessionContext.recvContext.wsabuf, 1, &recvBytes, &recvFlags, &sessionContext.recvContext.overlapped, nullptr);
+		const int recvResult = WSARecv(sessionContext.GetSocket(), &recvContext.wsabuf, 1, &recvBytes, &recvFlags, &recvContext.overlapped, nullptr);
 		if (recvResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 		{
 			const int errorCode = WSAGetLastError();
 			std::ostringstream oss;
-			oss << "WSARecv failed. sessionId=" << sessionContext.sessionId << " error=" << errorCode;
+			oss << "WSARecv failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
 			Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 			ReleaseSession(&sessionContext);
 			return false;
@@ -479,40 +474,39 @@ namespace GameServer::NetworkLib
 		return true;
 	}
 
-	void FIocpServer::CloseSession(SSessionContext& sessionContext)
+	void FIocpServer::CloseSession(FSession& sessionContext)
 	{
-		bool expected = false;
-		if (!sessionContext.closing.compare_exchange_strong(expected, true))
+		if (!sessionContext.TryMarkClosing())
 		{
 			return;
 		}
 
-		shutdown(sessionContext.socket, SD_BOTH);
-		closesocket(sessionContext.socket);
-		sessionContext.socket = INVALID_SOCKET;
-		m_sessionSlots[sessionContext.slotIndex].store(nullptr);
+		shutdown(sessionContext.GetSocket(), SD_BOTH);
+		closesocket(sessionContext.GetSocket());
+		sessionContext.SetSocket(INVALID_SOCKET);
+		m_sessionSlots[sessionContext.GetSlotIndex()].store(nullptr);
 		{
 			std::ostringstream oss;
-			oss << "Session closed. sessionId=" << sessionContext.sessionId;
+			oss << "Session closed. sessionId=" << sessionContext.GetSessionId();
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
-		m_applicationHandler->OnClientDisconnected(sessionContext.sessionId);
+		m_applicationHandler->OnClientDisconnected(sessionContext.GetSessionId());
 	}
 
-	void FIocpServer::ReleaseSession(SSessionContext* sessionContext)
+	void FIocpServer::ReleaseSession(FSession* sessionContext)
 	{
 		if (sessionContext == nullptr)
 		{
 			return;
 		}
 
-		if (sessionContext->refCount.fetch_sub(1) == 1)
+		if (sessionContext->ReleaseRef() == 0)
 		{
 			delete sessionContext;
 		}
 	}
 
-	FIocpServer::SSessionContext* FIocpServer::AcquireSession(std::uint64_t sessionId)
+	FSession* FIocpServer::AcquireSession(std::uint64_t sessionId)
 	{
 		const std::uint32_t slotIndex = static_cast<std::uint32_t>(sessionId & 0xFFFFFFFFULL);
 		if (slotIndex >= m_serverConfig.maxSessionCount)
@@ -520,14 +514,14 @@ namespace GameServer::NetworkLib
 			return nullptr;
 		}
 
-		SSessionContext* sessionContext = m_sessionSlots[slotIndex].load();
-		if (sessionContext == nullptr || sessionContext->sessionId != sessionId || sessionContext->closing.load())
+		FSession* sessionContext = m_sessionSlots[slotIndex].load();
+		if (sessionContext == nullptr || sessionContext->GetSessionId() != sessionId || sessionContext->IsClosing())
 		{
 			return nullptr;
 		}
 
-		sessionContext->refCount.fetch_add(1);
-		if (sessionContext->sessionId != sessionId || sessionContext->closing.load())
+		sessionContext->AcquireRef();
+		if (sessionContext->GetSessionId() != sessionId || sessionContext->IsClosing())
 		{
 			ReleaseSession(sessionContext);
 			return nullptr;
@@ -538,16 +532,15 @@ namespace GameServer::NetworkLib
 
 	bool FIocpServer::AttachAcceptedSocket(SOCKET clientSocket)
 	{
-		SSessionContext* newSessionContext = nullptr;
+		FSession* newSessionContext = nullptr;
 
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
-			SSessionContext* expected = nullptr;
-			auto* candidateSession = new SSessionContext();
-			candidateSession->socket = clientSocket;
-			candidateSession->slotIndex = slotIndex;
-			candidateSession->generation = m_generations[slotIndex].fetch_add(1);
-			candidateSession->sessionId = ComposeSessionId(slotIndex, candidateSession->generation);
+			FSession* expected = nullptr;
+			auto* candidateSession = new FSession();
+			const std::uint32_t generation = m_generations[slotIndex].fetch_add(1);
+			const std::uint64_t sessionId = ComposeSessionId(slotIndex, generation);
+			candidateSession->Initialize(clientSocket, sessionId, slotIndex, generation);
 
 			if (m_sessionSlots[slotIndex].compare_exchange_strong(expected, candidateSession))
 			{
@@ -569,17 +562,17 @@ namespace GameServer::NetworkLib
 			std::ostringstream oss;
 			oss << "CreateIoCompletionPort attach failed. error=" << GetLastError();
 			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
-			m_sessionSlots[newSessionContext->slotIndex].store(nullptr);
+			m_sessionSlots[newSessionContext->GetSlotIndex()].store(nullptr);
 			delete newSessionContext;
 			return false;
 		}
 
 		{
 			std::ostringstream oss;
-			oss << "Client connected. sessionId=" << newSessionContext->sessionId;
+			oss << "Client connected. sessionId=" << newSessionContext->GetSessionId();
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
-		m_applicationHandler->OnClientConnected(newSessionContext->sessionId);
+		m_applicationHandler->OnClientConnected(newSessionContext->GetSessionId());
 		if (!PostRecv(*newSessionContext))
 		{
 			CloseSession(*newSessionContext);
