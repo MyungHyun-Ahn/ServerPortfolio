@@ -33,7 +33,6 @@
 ### 4-2. 권장 헤더 초안
 - `std::uint16_t payloadLength`
 - `std::uint8_t randomKey`
-- `std::uint8_t flags`
 
 ### 4-3. 해석 순서
 - 헤더 크기만큼 수신되었는지 확인

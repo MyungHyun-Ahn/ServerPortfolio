@@ -171,7 +171,6 @@ namespace GameServer::NetworkLib
 				GameServer::NetworkLib::Packet::CalculatePacketChecksum(
 					payloadBuffer.data(),
 					static_cast<std::int32_t>(payloadBuffer.size()));
-			outgoingPacket.flags = static_cast<std::uint8_t>(GameServer::NetworkLib::Packet::EPacketFlags::None);
 			outgoingPacket.payload = payloadBuffer.data();
 			outgoingPacket.payloadLength = static_cast<std::int32_t>(payloadBuffer.size());
 

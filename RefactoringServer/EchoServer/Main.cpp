@@ -11,7 +11,9 @@
 #include "Servers/IApplicationHandler.h"
 
 #include <array>
+#include <chrono>
 #include <filesystem>
+#include <thread>
 #include <Windows.h>
 
 
@@ -98,6 +100,7 @@ int main(int argc, char* argv[])
 {
 	GameServer::NetworkLib::SServerConfig serverConfig{};
 	bool requestManualDump = false;
+	bool runHeadless = false;
 	const std::filesystem::path executableDirectory = GetExecutableDirectory();
 	serverConfig.backendKind = GameServer::NetworkLib::EBackendKind::Iocp;
 	serverConfig.bindIp = "127.0.0.1";
@@ -131,6 +134,10 @@ int main(int argc, char* argv[])
 			else if (argument == "--manual-dump")
 			{
 				requestManualDump = true;
+			}
+			else if (argument == "--headless")
+			{
+				runHeadless = true;
 			}
 		}
 	}
@@ -166,6 +173,15 @@ int main(int argc, char* argv[])
 		compositeLogger->Log(GameServer::Foundation::ELogLevel::Error, "EchoServer", "server start failed.");
 		GameServer::Foundation::FCrashDump::Shutdown();
 		return 1;
+	}
+
+	if (runHeadless)
+	{
+		compositeLogger->Log(GameServer::Foundation::ELogLevel::Info, "EchoServer", "Headless mode enabled.");
+		while (true)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
 	}
 
 	compositeLogger->Log(GameServer::Foundation::ELogLevel::Info, "EchoServer", "Press Enter to stop server.");

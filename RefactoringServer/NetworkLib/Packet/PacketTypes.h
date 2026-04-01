@@ -5,11 +5,6 @@
 
 namespace GameServer::NetworkLib::Packet
 {
-	enum class EPacketFlags : std::uint8_t
-	{
-		None = 0
-	};
-
 #pragma pack(push, 1)
 	struct SPacketHeader
 	{
@@ -17,7 +12,6 @@ namespace GameServer::NetworkLib::Packet
 		std::uint16_t payloadLength = 0;
 		std::uint8_t randomKey = 0;
 		std::uint8_t checkSum = 0;
-		std::uint8_t flags = static_cast<std::uint8_t>(EPacketFlags::None);
 	};
 #pragma pack(pop)
 
@@ -26,7 +20,6 @@ namespace GameServer::NetworkLib::Packet
 		std::uint16_t opcode = 0;
 		std::uint8_t randomKey = 0;
 		std::uint8_t checkSum = 0;
-		std::uint8_t flags = static_cast<std::uint8_t>(EPacketFlags::None);
 		const char* payload = nullptr;
 		std::int32_t payloadLength = 0;
 	};
@@ -36,7 +29,6 @@ namespace GameServer::NetworkLib::Packet
 		std::uint16_t opcode = 0;
 		std::uint8_t randomKey = 0;
 		std::uint8_t checkSum = 0;
-		std::uint8_t flags = static_cast<std::uint8_t>(EPacketFlags::None);
 		std::vector<char> payload;
 	};
 

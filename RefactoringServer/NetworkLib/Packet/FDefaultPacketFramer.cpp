@@ -18,7 +18,6 @@ namespace GameServer::NetworkLib::Packet
 		packetHeader.payloadLength = static_cast<std::uint16_t>(packet.payloadLength);
 		packetHeader.randomKey = packet.randomKey;
 		packetHeader.checkSum = packet.checkSum;
-		packetHeader.flags = packet.flags;
 
 		outPacket.resize(sizeof(SPacketHeader) + packet.payloadLength);
 		std::memcpy(outPacket.data(), &packetHeader, sizeof(SPacketHeader));
@@ -50,7 +49,6 @@ namespace GameServer::NetworkLib::Packet
 		outPacket.randomKey = packetHeader.randomKey;
 		outPacket.opcode = packetHeader.opcode;
 		outPacket.checkSum = packetHeader.checkSum;
-		outPacket.flags = packetHeader.flags;
 		outPacket.payload.resize(packetHeader.payloadLength);
 
 		if (packetHeader.payloadLength > 0)

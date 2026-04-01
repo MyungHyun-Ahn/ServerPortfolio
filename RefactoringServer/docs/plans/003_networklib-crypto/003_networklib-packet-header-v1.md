@@ -27,7 +27,6 @@
 - `std::uint16_t payloadLength`
 - `std::uint8_t randomKey`
 - `std::uint8_t checkSum`
-- `std::uint8_t flags`
 
 ### 4-2. 필드 의미
 - `opcode`
@@ -38,8 +37,6 @@
   - `IPacketCipher` 입력용 임시 키
 - `checkSum`
   - payload 기준 단순 합산 체크섬
-- `flags`
-  - 압축, 분할, 예약 비트 등 이후 확장용
 
 ## 5. 처리 순서
 
@@ -63,7 +60,7 @@
 - `IApplicationHandler::OnPacketReceived()`
   - `sessionId`, `opcode`, `payload`, `payloadLength`
 - `IPacketFramer`
-  - `SOutgoingPacket`, `SFramedPacket` 기준으로 헤더 필드 전체를 다룬다.
+  - `SOutgoingPacket`, `SFramedPacket` 기준으로 헤더 필드를 다룬다.
 
 ## 7. 1차 적용 범위
 - `FDefaultPacketFramer`를 Packet Header V1 형식으로 수정

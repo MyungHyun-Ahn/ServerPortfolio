@@ -43,7 +43,6 @@
   - `payloadLength`
   - `randomKey`
   - `checkSum`
-  - `flags`
 
 ## 4. 처리 순서
 
@@ -75,6 +74,7 @@
 - [EchoClient/Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
   - 요청 패킷 생성 시 `opcode`, `checkSum`을 포함한다.
   - 응답 수신 시 `opcode`, `checkSum`을 검증한다.
+  - 다중 요청, 분할 송신, 누적 수신을 테스트 인자로 제어할 수 있다.
 
 ## 7. 검증 근거
 - 빌드 성공:
@@ -90,11 +90,14 @@
   - [EchoClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)
     - `response: echo-test`
     - `echo validation succeeded.`
+    - `--count 8 --payload-size 48 --send-chunk-size 5 --send-chunk-delay-ms 1 --recv-buffer-size 11`
+      - 다중 패킷 왕복 성공
+      - 분할 송신 성공
+      - 작은 recv buffer 기반 누적 수신 성공
 
 ## 8. 현재 한계
 - 헤더에 `sequence`, `version`, `magic`은 아직 없다.
-- 현재 `flags`는 예약 상태다.
-- `EchoClient`는 단일 `recv()`로 응답 하나를 받는 단순 검증용 구조라 다중 패킷 누적 수신 검증은 아직 약하다.
+- `EchoClient`는 이제 누적 수신을 지원하지만, 의도적으로 응답 순서를 뒤섞는 서버 시나리오까지 검증하는 구조는 아직 아니다.
 
 ## 9. 결론
 - 새 `NetworkLib`는 레거시 패킷 구조를 그대로 복제하지 않았다.
