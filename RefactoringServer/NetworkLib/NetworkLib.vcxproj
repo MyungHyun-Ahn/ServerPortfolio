@@ -83,6 +83,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Containers\LockFreeSmoke.cpp" />
+    <ClCompile Include="Crypto\FDefaultPacketCipher.cpp" />
+    <ClCompile Include="Crypto\FNullPacketCipher.cpp" />
     <ClCompile Include="Servers\FServerFactory.cpp" />
     <ClCompile Include="Servers\FIocpServer.cpp" />
     <ClCompile Include="Servers\FStubServer.cpp" />
@@ -92,6 +94,10 @@
     <ClInclude Include="Containers\LockFreeCommon.h" />
     <ClInclude Include="Containers\FLockFreeQueue.h" />
     <ClInclude Include="Containers\FLockFreeStack.h" />
+    <ClInclude Include="Crypto\FDefaultPacketCipher.h" />
+    <ClInclude Include="Crypto\FNullPacketCipher.h" />
+    <ClInclude Include="Crypto\IPacketCipher.h" />
+    <ClInclude Include="Crypto\PacketCipherTypes.h" />
     <ClInclude Include="Memory\FLockFreeMemoryPool.h" />
     <ClInclude Include="Memory\FTlsMemoryPool.h" />
     <ClInclude Include="Servers\BackendTypes.h" />

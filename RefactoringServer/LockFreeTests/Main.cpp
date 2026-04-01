@@ -1,10 +1,15 @@
 #include "Containers/FLockFreeQueue.h"
 #include "Containers/FLockFreeStack.h"
+#include "Crypto/FDefaultPacketCipher.h"
+#include "Crypto/FNullPacketCipher.h"
+#include "Crypto/IPacketCipher.h"
 #include "Memory/FTlsMemoryPool.h"
 
 #include <atomic>
+#include <array>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -225,6 +230,79 @@ namespace
 		return { true, "TLS memory pool parallel", "passed" };
 	}
 
+	STestResult RunPacketCipherRoundTripTest()
+	{
+		using namespace GameServer::NetworkLib::Crypto;
+
+		SDefaultPacketCipherConfig config{};
+		config.enabled = true;
+		config.packetKey = 0x37;
+
+		std::shared_ptr<IPacketCipher> cipher = std::make_shared<FDefaultPacketCipher>(config);
+		std::string originalMessage = "packet-cipher-roundtrip";
+		std::string encodedMessage = originalMessage;
+		const std::uint8_t randomKey = 0x5A;
+
+		if (!cipher->GetConfig().enabled)
+		{
+			return { false, "Packet cipher round trip", "cipher config should be visible through interface" };
+		}
+
+		const std::uint8_t originalChecksum = cipher->CalculateChecksum(originalMessage.data(), static_cast<int>(originalMessage.size()));
+		cipher->Encode(encodedMessage.data(), static_cast<int>(encodedMessage.size()), randomKey);
+		if (encodedMessage == originalMessage)
+		{
+			return { false, "Packet cipher round trip", "encoded message should differ from original plaintext" };
+		}
+
+		cipher->Decode(encodedMessage.data(), static_cast<int>(encodedMessage.size()), randomKey);
+		if (encodedMessage != originalMessage)
+		{
+			return { false, "Packet cipher round trip", "decoded message does not match original plaintext" };
+		}
+
+		const std::uint8_t decodedChecksum = cipher->CalculateChecksum(encodedMessage.data(), static_cast<int>(encodedMessage.size()));
+		if (decodedChecksum != originalChecksum)
+		{
+			return { false, "Packet cipher round trip", "checksum mismatch after decode" };
+		}
+
+		return { true, "Packet cipher round trip", "passed" };
+	}
+
+	STestResult RunNullPacketCipherTest()
+	{
+		using namespace GameServer::NetworkLib::Crypto;
+
+		SPacketCipherConfig config{};
+		config.enabled = false;
+
+		std::shared_ptr<IPacketCipher> cipher = std::make_shared<FNullPacketCipher>(config);
+		std::string originalMessage = "packet-cipher-null";
+		std::string transformedMessage = originalMessage;
+
+		const std::uint8_t originalChecksum = cipher->CalculateChecksum(originalMessage.data(), static_cast<int>(originalMessage.size()));
+		cipher->Encode(transformedMessage.data(), static_cast<int>(transformedMessage.size()), 0x11);
+		if (transformedMessage != originalMessage)
+		{
+			return { false, "Null packet cipher", "encode should not modify payload" };
+		}
+
+		cipher->Decode(transformedMessage.data(), static_cast<int>(transformedMessage.size()), 0x22);
+		if (transformedMessage != originalMessage)
+		{
+			return { false, "Null packet cipher", "decode should not modify payload" };
+		}
+
+		const std::uint8_t transformedChecksum = cipher->CalculateChecksum(transformedMessage.data(), static_cast<int>(transformedMessage.size()));
+		if (transformedChecksum != originalChecksum)
+		{
+			return { false, "Null packet cipher", "checksum should remain stable for no-op cipher" };
+		}
+
+		return { true, "Null packet cipher", "passed" };
+	}
+
 	template <>
 	STestResult RunParallelSumTest<TQueue>(const char* testName)
 	{
@@ -318,6 +396,8 @@ int main()
 	results.push_back(RunParallelSumTest<TQueue>("Queue parallel sum"));
 	results.push_back(RunParallelSumTest<TStack>("Stack parallel sum"));
 	results.push_back(RunTlsMemoryPoolParallelTest());
+	results.push_back(RunPacketCipherRoundTripTest());
+	results.push_back(RunNullPacketCipherTest());
 
 	bool allPassed = true;
 	for (const STestResult& result : results)

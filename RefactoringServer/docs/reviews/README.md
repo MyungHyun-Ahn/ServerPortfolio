@@ -7,6 +7,7 @@
 - 로깅 관련 리뷰는 [logger-module-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\logging\logger-module-review.md)를 본다.
 - 메모리 풀 관련 리뷰는 [memory-pool-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\memory\memory-pool-review.md)를 본다.
 - 메모리 풀 테스트 이력은 [testing-history.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\memory\testing-history.md)를 본다.
+- 네트워크 패킷 암호화 리뷰는 [packet-cipher-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-cipher-review.md)를 본다.
 
 ## 2. 문서 배치 원칙
 - 테스트 계획과 실행 이력도 `reviews/` 아래 카테고리 문서로 함께 관리한다.
