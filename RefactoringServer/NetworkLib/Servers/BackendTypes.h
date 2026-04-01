@@ -17,6 +17,15 @@ namespace GameServer::Foundation
 
 namespace GameServer::NetworkLib
 {
+	namespace Crypto
+	{
+		class IPacketCipher;
+	}
+
+	namespace Packet
+	{
+		class IPacketFramer;
+	}
 
 	enum class EBackendKind : std::uint32_t
 	{
@@ -35,5 +44,7 @@ namespace GameServer::NetworkLib
 		std::uint32_t recvBufferSize = 1024;
 		GameServer::Foundation::SLogConfig logConfig{};
 		std::shared_ptr<GameServer::Foundation::ILogger> logger;
+		std::shared_ptr<GameServer::NetworkLib::Crypto::IPacketCipher> packetCipher;
+		std::shared_ptr<GameServer::NetworkLib::Packet::IPacketFramer> packetFramer;
 	};
 }

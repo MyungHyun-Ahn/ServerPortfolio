@@ -85,6 +85,7 @@
     <ClCompile Include="Containers\LockFreeSmoke.cpp" />
     <ClCompile Include="Crypto\FDefaultPacketCipher.cpp" />
     <ClCompile Include="Crypto\FNullPacketCipher.cpp" />
+    <ClCompile Include="Packet\FDefaultPacketFramer.cpp" />
     <ClCompile Include="Servers\FServerFactory.cpp" />
     <ClCompile Include="Servers\FIocpServer.cpp" />
     <ClCompile Include="Servers\FStubServer.cpp" />
@@ -98,6 +99,9 @@
     <ClInclude Include="Crypto\FNullPacketCipher.h" />
     <ClInclude Include="Crypto\IPacketCipher.h" />
     <ClInclude Include="Crypto\PacketCipherTypes.h" />
+    <ClInclude Include="Packet\FDefaultPacketFramer.h" />
+    <ClInclude Include="Packet\IPacketFramer.h" />
+    <ClInclude Include="Packet\PacketTypes.h" />
     <ClInclude Include="Memory\FLockFreeMemoryPool.h" />
     <ClInclude Include="Memory\FTlsMemoryPool.h" />
     <ClInclude Include="Servers\BackendTypes.h" />

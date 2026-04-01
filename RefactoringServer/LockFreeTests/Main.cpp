@@ -4,6 +4,7 @@
 #include "Crypto/FNullPacketCipher.h"
 #include "Crypto/IPacketCipher.h"
 #include "Memory/FTlsMemoryPool.h"
+#include "Packet/FDefaultPacketFramer.h"
 
 #include <atomic>
 #include <array>
@@ -303,6 +304,89 @@ namespace
 		return { true, "Null packet cipher", "passed" };
 	}
 
+	STestResult RunPacketFramerRoundTripTest()
+	{
+		using namespace GameServer::NetworkLib::Packet;
+
+		FDefaultPacketFramer framer;
+		std::vector<char> packetBuffer;
+		const std::string payload = "framed-echo-payload";
+
+		if (!framer.BuildPacket(payload.data(), static_cast<std::int32_t>(payload.size()), 0x44, packetBuffer))
+		{
+			return { false, "Packet framer round trip", "BuildPacket failed" };
+		}
+
+		if (packetBuffer.size() != payload.size() + sizeof(SPacketHeader))
+		{
+			return { false, "Packet framer round trip", "packet size mismatch" };
+		}
+
+		SFramedPacket framedPacket;
+		std::vector<char> receiveBuffer = packetBuffer;
+		if (!framer.TryExtractPacket(receiveBuffer, framedPacket))
+		{
+			return { false, "Packet framer round trip", "TryExtractPacket failed" };
+		}
+
+		if (!receiveBuffer.empty())
+		{
+			return { false, "Packet framer round trip", "receive buffer should be empty after extraction" };
+		}
+
+		if (framedPacket.randomKey != 0x44)
+		{
+			return { false, "Packet framer round trip", "randomKey mismatch after extraction" };
+		}
+
+		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)
+		{
+			return { false, "Packet framer round trip", "payload mismatch after extraction" };
+		}
+
+		return { true, "Packet framer round trip", "passed" };
+	}
+
+	STestResult RunPacketFramerPartialReceiveTest()
+	{
+		using namespace GameServer::NetworkLib::Packet;
+
+		FDefaultPacketFramer framer;
+		std::vector<char> packetBuffer;
+		const std::string payload = "partial-frame";
+
+		if (!framer.BuildPacket(payload.data(), static_cast<std::int32_t>(payload.size()), 0x21, packetBuffer))
+		{
+			return { false, "Packet framer partial receive", "BuildPacket failed" };
+		}
+
+		std::vector<char> receiveBuffer(packetBuffer.begin(), packetBuffer.begin() + 2);
+		SFramedPacket framedPacket;
+		if (framer.TryExtractPacket(receiveBuffer, framedPacket))
+		{
+			return { false, "Packet framer partial receive", "packet should not be extracted before header is complete" };
+		}
+
+		receiveBuffer.insert(receiveBuffer.end(), packetBuffer.begin() + 2, packetBuffer.end() - 3);
+		if (framer.TryExtractPacket(receiveBuffer, framedPacket))
+		{
+			return { false, "Packet framer partial receive", "packet should not be extracted before payload is complete" };
+		}
+
+		receiveBuffer.insert(receiveBuffer.end(), packetBuffer.end() - 3, packetBuffer.end());
+		if (!framer.TryExtractPacket(receiveBuffer, framedPacket))
+		{
+			return { false, "Packet framer partial receive", "packet should be extracted after remaining bytes arrive" };
+		}
+
+		if (std::string(framedPacket.payload.begin(), framedPacket.payload.end()) != payload)
+		{
+			return { false, "Packet framer partial receive", "payload mismatch after partial receive assembly" };
+		}
+
+		return { true, "Packet framer partial receive", "passed" };
+	}
+
 	template <>
 	STestResult RunParallelSumTest<TQueue>(const char* testName)
 	{
@@ -398,6 +482,8 @@ int main()
 	results.push_back(RunTlsMemoryPoolParallelTest());
 	results.push_back(RunPacketCipherRoundTripTest());
 	results.push_back(RunNullPacketCipherTest());
+	results.push_back(RunPacketFramerRoundTripTest());
+	results.push_back(RunPacketFramerPartialReceiveTest());
 
 	bool allPassed = true;
 	for (const STestResult& result : results)

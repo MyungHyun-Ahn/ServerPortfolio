@@ -6,6 +6,7 @@
 #include "Foundation/Logging/FFileLogger.h"
 #include "Foundation/Logging/ILogger.h"
 #include "Crypto/FDefaultPacketCipher.h"
+#include "Packet/FDefaultPacketFramer.h"
 #include "Servers/FServerFactory.h"
 #include "Servers/IApplicationHandler.h"
 
@@ -16,9 +17,6 @@
 
 namespace
 {
-	constexpr std::uint8_t kPacketKey = 0x37;
-	constexpr std::uint8_t kResponseRandomKey = 0x6C;
-
 	std::filesystem::path GetExecutableDirectory()
 	{
 		std::array<char, MAX_PATH> modulePath = {};
@@ -37,9 +35,6 @@ namespace
 		explicit FEchoApplication(std::shared_ptr<GameServer::Foundation::ILogger> logger)
 			: m_logger(std::move(logger))
 		{
-			GameServer::NetworkLib::Crypto::SDefaultPacketCipherConfig cipherConfig{};
-			cipherConfig.packetKey = kPacketKey;
-			m_packetCipher = std::make_shared<GameServer::NetworkLib::Crypto::FDefaultPacketCipher>(cipherConfig);
 		}
 
 	public:
@@ -59,25 +54,11 @@ namespace
 
 		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const char* buffer, std::int32_t length) override
 		{
-			if (length <= 1 || buffer == nullptr)
-			{
-				Log(GameServer::Foundation::ELogLevel::Warn, "received invalid encrypted packet.");
-				return;
-			}
-
-			const std::uint8_t randomKey = static_cast<std::uint8_t>(buffer[0]);
-			std::string message(buffer + 1, buffer + length);
-			m_packetCipher->Decode(message.data(), static_cast<int>(message.size()), randomKey);
+			std::string message(buffer, buffer + length);
 			std::ostringstream oss;
 			oss << "received. sessionId=" << sessionId << " message=" << message;
 			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
-
-			std::string responsePacket;
-			responsePacket.resize(message.size() + 1);
-			responsePacket[0] = static_cast<char>(kResponseRandomKey);
-			std::copy(message.begin(), message.end(), responsePacket.begin() + 1);
-			m_packetCipher->Encode(responsePacket.data() + 1, static_cast<int>(message.size()), kResponseRandomKey);
-			server.Send(sessionId, responsePacket.data(), static_cast<std::int32_t>(responsePacket.size()));
+			server.Send(sessionId, buffer, length);
 		}
 
 		void OnClientDisconnected(std::uint64_t sessionId) override
@@ -103,7 +84,6 @@ namespace
 
 	private:
 		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
-		std::shared_ptr<GameServer::NetworkLib::Crypto::FDefaultPacketCipher> m_packetCipher;
 	};
 }
 
@@ -123,6 +103,10 @@ int main(int argc, char* argv[])
 	serverConfig.logConfig.consoleEnabled = true;
 	serverConfig.logConfig.fileEnabled = true;
 	serverConfig.logConfig.includeThreadId = true;
+	GameServer::NetworkLib::Crypto::SDefaultPacketCipherConfig packetCipherConfig{};
+	packetCipherConfig.packetKey = 0x37;
+	serverConfig.packetCipher = std::make_shared<GameServer::NetworkLib::Crypto::FDefaultPacketCipher>(packetCipherConfig);
+	serverConfig.packetFramer = std::make_shared<GameServer::NetworkLib::Packet::FDefaultPacketFramer>();
 
 	if (argc >= 2)
 	{

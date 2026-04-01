@@ -52,6 +52,7 @@ namespace GameServer::NetworkLib
 			std::atomic<long> refCount = 1;
 			std::atomic<bool> closing = false;
 			SIoContext recvContext{};
+			std::vector<char> recvBuffer;
 		};
 
 		bool InitializeWinsock();
@@ -67,18 +68,22 @@ namespace GameServer::NetworkLib
 		SSessionContext* AcquireSession(std::uint64_t sessionId);
 		bool AttachAcceptedSocket(SOCKET clientSocket);
 		std::uint64_t ComposeSessionId(std::uint32_t slotIndex, std::uint32_t generation) const;
+		std::uint8_t GeneratePacketRandomKey() noexcept;
 		void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const;
 
 	private:
 		SServerConfig m_serverConfig{};
 		IApplicationHandler* m_applicationHandler = nullptr;
 		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
+		std::shared_ptr<GameServer::NetworkLib::Crypto::IPacketCipher> m_packetCipher;
+		std::shared_ptr<GameServer::NetworkLib::Packet::IPacketFramer> m_packetFramer;
 		HANDLE m_iocpHandle = nullptr;
 		SOCKET m_listenSocket = INVALID_SOCKET;
 		std::thread m_acceptThread;
 		std::vector<std::thread> m_workerThreads;
 		std::unique_ptr<std::atomic<SSessionContext*>[]> m_sessionSlots;
 		std::unique_ptr<std::atomic<std::uint32_t>[]> m_generations;
+		std::atomic<std::uint32_t> m_packetRandomKeySeed = 1;
 		std::atomic<bool> m_isRunning = false;
 		std::atomic<bool> m_winsockInitialized = false;
 	};

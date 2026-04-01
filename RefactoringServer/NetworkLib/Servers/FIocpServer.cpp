@@ -1,5 +1,7 @@
 #include "Pch.h"
 
+#include "Crypto/IPacketCipher.h"
+#include "Packet/IPacketFramer.h"
 #include "Servers/FIocpServer.h"
 #include "Servers/IApplicationHandler.h"
 #include "Foundation/Logging/ILogger.h"
@@ -26,6 +28,15 @@ namespace GameServer::NetworkLib
 		m_serverConfig = serverConfig;
 		m_applicationHandler = &applicationHandler;
 		m_logger = m_serverConfig.logger;
+		m_packetCipher = m_serverConfig.packetCipher;
+		m_packetFramer = m_serverConfig.packetFramer;
+		if (m_packetCipher != nullptr && m_packetFramer == nullptr)
+		{
+			Log(GameServer::Foundation::ELogLevel::Error, "Packet cipher requires packet framer.");
+			m_isRunning = false;
+			return false;
+		}
+
 		m_sessionSlots = std::make_unique<std::atomic<SSessionContext*>[]>(m_serverConfig.maxSessionCount);
 		m_generations = std::make_unique<std::atomic<std::uint32_t>[]>(m_serverConfig.maxSessionCount);
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
@@ -118,6 +129,8 @@ namespace GameServer::NetworkLib
 		}
 
 		Log(GameServer::Foundation::ELogLevel::Info, "Server stopped.");
+		m_packetCipher.reset();
+		m_packetFramer.reset();
 		m_logger.reset();
 	}
 
@@ -141,7 +154,29 @@ namespace GameServer::NetworkLib
 		auto* ioContext = new SIoContext();
 		ioContext->ioType = EIoType::Send;
 		ioContext->ownerSession = sessionContext;
-		ioContext->buffer.assign(buffer, buffer + length);
+		if (m_packetFramer != nullptr)
+		{
+			std::vector<char> payloadBuffer(buffer, buffer + length);
+			std::uint8_t randomKey = 0;
+			if (m_packetCipher != nullptr)
+			{
+				randomKey = GeneratePacketRandomKey();
+				m_packetCipher->Encode(payloadBuffer.data(), static_cast<int>(payloadBuffer.size()), randomKey);
+			}
+
+			if (!m_packetFramer->BuildPacket(payloadBuffer.data(), static_cast<std::int32_t>(payloadBuffer.size()), randomKey, ioContext->buffer))
+			{
+				Log(GameServer::Foundation::ELogLevel::Error, "BuildPacket failed during send path.");
+				delete ioContext;
+				ReleaseSession(sessionContext);
+				return false;
+			}
+		}
+		else
+		{
+			ioContext->buffer.assign(buffer, buffer + length);
+		}
+
 		ioContext->wsabuf.buf = ioContext->buffer.data();
 		ioContext->wsabuf.len = static_cast<ULONG>(ioContext->buffer.size());
 		sessionContext->refCount.fetch_add(1);
@@ -336,7 +371,38 @@ namespace GameServer::NetworkLib
 
 			if (ioContext->ioType == EIoType::Recv)
 			{
-				m_applicationHandler->OnPacketReceived(*this, sessionContext->sessionId, ioContext->buffer.data(), static_cast<std::int32_t>(transferredBytes));
+				sessionContext->recvBuffer.insert(
+					sessionContext->recvBuffer.end(),
+					ioContext->buffer.data(),
+					ioContext->buffer.data() + transferredBytes);
+
+				if (m_packetFramer != nullptr)
+				{
+					while (true)
+					{
+						GameServer::NetworkLib::Packet::SFramedPacket framedPacket;
+						if (!m_packetFramer->TryExtractPacket(sessionContext->recvBuffer, framedPacket))
+						{
+							break;
+						}
+
+						if (m_packetCipher != nullptr && !framedPacket.payload.empty())
+						{
+							m_packetCipher->Decode(framedPacket.payload.data(), static_cast<int>(framedPacket.payload.size()), framedPacket.randomKey);
+						}
+
+						m_applicationHandler->OnPacketReceived(
+							*this,
+							sessionContext->sessionId,
+							framedPacket.payload.data(),
+							static_cast<std::int32_t>(framedPacket.payload.size()));
+					}
+				}
+				else
+				{
+					m_applicationHandler->OnPacketReceived(*this, sessionContext->sessionId, ioContext->buffer.data(), static_cast<std::int32_t>(transferredBytes));
+				}
+
 				if (!PostRecv(*sessionContext))
 				{
 					std::ostringstream oss;
@@ -495,6 +561,11 @@ namespace GameServer::NetworkLib
 	std::uint64_t FIocpServer::ComposeSessionId(std::uint32_t slotIndex, std::uint32_t generation) const
 	{
 		return (static_cast<std::uint64_t>(generation) << 32ULL) | static_cast<std::uint64_t>(slotIndex);
+	}
+
+	std::uint8_t FIocpServer::GeneratePacketRandomKey() noexcept
+	{
+		return static_cast<std::uint8_t>(m_packetRandomKeySeed.fetch_add(1, std::memory_order_relaxed) & 0xFF);
 	}
 
 	void FIocpServer::Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const
