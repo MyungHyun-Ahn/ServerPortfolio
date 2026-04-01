@@ -77,6 +77,17 @@
   - `array<T, N>`
   - `map<K, V>`
   - `unordered_map<K, V>`
+- Official policy is **one container level only**.
+- This means `T`, `K`, and `V` may be scalar or `string`, but may not be another container type.
+- Allowed examples:
+  - `vector<string>`
+  - `map<string, uint32>`
+  - `unordered_map<string, string>`
+- Rejected examples:
+  - `vector<vector<int32>>`
+  - `map<string, vector<uint32>>`
+  - `unordered_map<string, map<string, int32>>`
+- If nested container support is needed later, it should use handwritten override of `Serialize` / `Deserialize` instead of expanding the default generator contract immediately.
 - Unsupported types must fail generation loudly.
 
 ## 5. Generated C++ Output
