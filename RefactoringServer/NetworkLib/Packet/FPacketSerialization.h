@@ -79,7 +79,9 @@ namespace GameServer::NetworkLib::Packet
 	template <typename TPacket>
 	inline bool SendContentPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
 	{
-		std::vector<char> payload = SerializeContentBody(packet);
+		FPacketWriter writer;
+		packet.Serialize(writer);
+		const std::vector<char>& payload = writer.GetBuffer();
 		return server.Send(
 			sessionId,
 			packet.GetOpcode(),

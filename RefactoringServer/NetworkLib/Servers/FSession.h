@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Containers/FLockFreeQueue.h"
+#include "Memory/FTlsMemoryPool.h"
 #include "Packet/FRecvBuffer.h"
 #include "Servers/FSendBuffer.h"
 
@@ -14,6 +15,12 @@ namespace GameServer::NetworkLib
 {
 	class FSession
 	{
+	public:
+		static FSession* Create() noexcept;
+		static void Destroy(FSession* session) noexcept;
+		static LONG GetPoolCapacity() noexcept;
+		static LONG GetPoolUsage() noexcept;
+
 	public:
 		enum class EIoType : std::uint32_t
 		{
@@ -88,5 +95,8 @@ namespace GameServer::NetworkLib
 		std::atomic<bool> m_sendInFlight = false;
 		std::atomic<int> m_liveSendIoCount = 0;
 		std::atomic<int> m_maxObservedConcurrentSendIoCount = 0;
+
+	private:
+		inline static Memory::FTlsMemoryPoolManager<FSession, 128, 2> s_sessionPool{};
 	};
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Packet/FPacketBuffer.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -8,6 +10,7 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace GameServer::NetworkLib::Packet
@@ -21,7 +24,34 @@ namespace GameServer::NetworkLib::Packet
 	class FPacketWriter
 	{
 	public:
-		FPacketWriter() = default;
+		FPacketWriter() noexcept
+			: m_buffer(FPacketBuffer::Create())
+		{
+		}
+
+		~FPacketWriter() noexcept
+		{
+			FPacketBuffer::Release(m_buffer);
+		}
+
+		FPacketWriter(const FPacketWriter&) = delete;
+		FPacketWriter& operator=(const FPacketWriter&) = delete;
+
+		FPacketWriter(FPacketWriter&& other) noexcept
+			: m_buffer(std::exchange(other.m_buffer, nullptr))
+		{
+		}
+
+		FPacketWriter& operator=(FPacketWriter&& other) noexcept
+		{
+			if (this != &other)
+			{
+				FPacketBuffer::Release(m_buffer);
+				m_buffer = std::exchange(other.m_buffer, nullptr);
+			}
+
+			return *this;
+		}
 
 	public:
 		void WriteBytes(const void* data, std::size_t size)
@@ -31,9 +61,10 @@ namespace GameServer::NetworkLib::Packet
 				return;
 			}
 
-			const std::size_t oldSize = m_buffer.size();
-			m_buffer.resize(oldSize + size);
-			std::memcpy(m_buffer.data() + oldSize, data, size);
+			std::vector<char>& buffer = m_buffer->GetBuffer();
+			const std::size_t oldSize = buffer.size();
+			buffer.resize(oldSize + size);
+			std::memcpy(buffer.data() + oldSize, data, size);
 		}
 
 		template <CPacketWritableScalar TValue>
@@ -95,15 +126,15 @@ namespace GameServer::NetworkLib::Packet
 
 		const std::vector<char>& GetBuffer() const noexcept
 		{
-			return m_buffer;
+			return m_buffer->GetBuffer();
 		}
 
 		std::vector<char> MoveBuffer() noexcept
 		{
-			return std::move(m_buffer);
+			return std::move(m_buffer->GetBuffer());
 		}
 
 	private:
-		std::vector<char> m_buffer;
+		FPacketBuffer* m_buffer = nullptr;
 	};
 }

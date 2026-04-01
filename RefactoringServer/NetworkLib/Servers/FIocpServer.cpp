@@ -189,7 +189,7 @@ namespace GameServer::NetworkLib
 			framedBuffer.assign(buffer, buffer + length);
 		}
 
-		sessionContext->EnqueueSendBuffer(new FSendBuffer(std::move(framedBuffer)));
+		sessionContext->EnqueueSendBuffer(FSendBuffer::Create(std::move(framedBuffer)));
 		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
 		PostSend(*sessionContext);
 
@@ -597,7 +597,7 @@ namespace GameServer::NetworkLib
 
 		if (sessionContext->ReleaseRef() == 0)
 		{
-			delete sessionContext;
+			FSession::Destroy(sessionContext);
 		}
 	}
 
@@ -632,7 +632,7 @@ namespace GameServer::NetworkLib
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
 			FSession* expected = nullptr;
-			auto* candidateSession = new FSession();
+			FSession* candidateSession = FSession::Create();
 			const std::uint32_t generation = m_generations[slotIndex].fetch_add(1);
 			const std::uint64_t sessionId = ComposeSessionId(slotIndex, generation);
 			const std::size_t recvBufferCapacity =
@@ -645,7 +645,7 @@ namespace GameServer::NetworkLib
 				break;
 			}
 
-			delete candidateSession;
+			FSession::Destroy(candidateSession);
 		}
 
 		if (newSessionContext == nullptr)
@@ -660,7 +660,7 @@ namespace GameServer::NetworkLib
 			oss << "CreateIoCompletionPort attach failed. error=" << GetLastError();
 			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			m_sessionSlots[newSessionContext->GetSlotIndex()].store(nullptr);
-			delete newSessionContext;
+			FSession::Destroy(newSessionContext);
 			return false;
 		}
 

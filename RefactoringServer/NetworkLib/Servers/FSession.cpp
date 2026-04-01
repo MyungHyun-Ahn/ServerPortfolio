@@ -4,6 +4,34 @@
 
 namespace GameServer::NetworkLib
 {
+	FSession* FSession::Create() noexcept
+	{
+		FSession* session = s_sessionPool.Alloc();
+		session->Reset();
+		return session;
+	}
+
+	void FSession::Destroy(FSession* session) noexcept
+	{
+		if (session == nullptr)
+		{
+			return;
+		}
+
+		session->Reset();
+		s_sessionPool.Free(session);
+	}
+
+	LONG FSession::GetPoolCapacity() noexcept
+	{
+		return s_sessionPool.GetCapacity();
+	}
+
+	LONG FSession::GetPoolUsage() noexcept
+	{
+		return s_sessionPool.GetUseCount();
+	}
+
 	FSession::~FSession()
 	{
 		Reset();
@@ -198,7 +226,7 @@ namespace GameServer::NetworkLib
 	{
 		for (FSendBuffer* sendBuffer : m_activeSendBuffers)
 		{
-			delete sendBuffer;
+			FSendBuffer::Release(sendBuffer);
 		}
 
 		m_activeSendBuffers.clear();
@@ -210,7 +238,7 @@ namespace GameServer::NetworkLib
 		FSendBuffer* sendBuffer = nullptr;
 		while (m_sendQueue.Dequeue(&sendBuffer))
 		{
-			delete sendBuffer;
+			FSendBuffer::Release(sendBuffer);
 			sendBuffer = nullptr;
 		}
 	}
