@@ -1,8 +1,8 @@
 #include "Pch.h"
 
-#include "Logging/FCompositeLogger.h"
+#include "FCompositeLogger.h"
 
-namespace GameServer::NetworkLib
+namespace GameServer::Foundation
 {
 	void FCompositeLogger::AddSink(std::shared_ptr<ILogger> logger)
 	{

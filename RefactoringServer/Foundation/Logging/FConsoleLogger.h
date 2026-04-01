@@ -1,9 +1,8 @@
 #pragma once
 
-#include "Servers/BackendTypes.h"
-#include "Logging/ILogger.h"
+#include "ILogger.h"
 
-namespace GameServer::NetworkLib
+namespace GameServer::Foundation
 {
 	class FConsoleLogger final : public ILogger
 	{

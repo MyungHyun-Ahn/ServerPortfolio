@@ -6,6 +6,8 @@
 - 장기 목표는 확장 가능한 MMORPG 서버지만, 현재 단계의 직접 목표는 `작게 검증 가능한 네트워크 코어`를 먼저 만드는 것이다.
 
 ## 2. 현재 프로젝트 구성
+- `Foundation`
+  - 공용 로깅, 진단, 설정 등 여러 모듈이 함께 쓰는 기반 계층 예정
 - `NetworkLib`
   - 새 네트워크 코어 라이브러리
 - `EchoServer`
@@ -38,6 +40,9 @@
 - `RIO`, `boost.asio` 실제 구현
 
 ## 5. 다음 큰 단계
+- `Foundation` 공용 모듈 루트 정착
+- `Logging`을 `Foundation/Logging`으로 이동
+- `CrashDump`를 `Foundation/Diagnostics`로 도입
 - `NetworkLib` 송신 큐와 세션 핸들 모델 고정
 - 패킷 프레이밍 계층 추가
 - `EchoServer` 다음 단계 샘플 서버 정의

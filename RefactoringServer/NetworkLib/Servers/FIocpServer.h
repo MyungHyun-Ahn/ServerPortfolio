@@ -13,7 +13,6 @@
 namespace GameServer::NetworkLib
 {
 	class IApplicationHandler;
-	class ILogger;
 
 	class FIocpServer final : public IServer
 	{
@@ -68,12 +67,12 @@ namespace GameServer::NetworkLib
 		SSessionContext* AcquireSession(std::uint64_t sessionId);
 		bool AttachAcceptedSocket(SOCKET clientSocket);
 		std::uint64_t ComposeSessionId(std::uint32_t slotIndex, std::uint32_t generation) const;
-		void Log(ELogLevel logLevel, const std::string& message) const;
+		void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const;
 
 	private:
 		SServerConfig m_serverConfig{};
 		IApplicationHandler* m_applicationHandler = nullptr;
-		std::shared_ptr<ILogger> m_logger;
+		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
 		HANDLE m_iocpHandle = nullptr;
 		SOCKET m_listenSocket = INVALID_SOCKET;
 		std::thread m_acceptThread;

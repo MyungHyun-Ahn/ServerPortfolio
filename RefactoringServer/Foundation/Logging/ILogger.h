@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Servers/BackendTypes.h"
+#include "LoggingTypes.h"
 
 #include <string_view>
 
-namespace GameServer::NetworkLib
+namespace GameServer::Foundation
 {
 	class ILogger
 	{

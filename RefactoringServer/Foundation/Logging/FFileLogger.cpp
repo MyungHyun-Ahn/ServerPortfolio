@@ -1,6 +1,6 @@
 #include "Pch.h"
 
-#include "Logging/FFileLogger.h"
+#include "FFileLogger.h"
 
 #include "LogFormatting.h"
 
@@ -9,7 +9,7 @@ namespace
 	std::mutex g_fileMutex;
 }
 
-namespace GameServer::NetworkLib
+namespace GameServer::Foundation
 {
 	FFileLogger::FFileLogger(const SLogConfig& logConfig)
 		: m_logConfig(logConfig)

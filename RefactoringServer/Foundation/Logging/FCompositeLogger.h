@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Logging/ILogger.h"
+#include "ILogger.h"
 
 #include <memory>
 #include <vector>
 
-namespace GameServer::NetworkLib
+namespace GameServer::Foundation
 {
 	class FCompositeLogger final : public ILogger
 	{

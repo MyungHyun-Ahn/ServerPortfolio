@@ -1,6 +1,6 @@
 #include "Pch.h"
 
-#include "Logging/FConsoleLogger.h"
+#include "FConsoleLogger.h"
 
 #include "LogFormatting.h"
 
@@ -9,7 +9,7 @@ namespace
 	std::mutex g_consoleMutex;
 }
 
-namespace GameServer::NetworkLib
+namespace GameServer::Foundation
 {
 	FConsoleLogger::FConsoleLogger(const SLogConfig& logConfig)
 		: m_logConfig(logConfig)

@@ -1,7 +1,7 @@
 # Logger Module Review
 
 ## 1. 문서 목적
-- `RefactoringServer/NetworkLib/Logging` 아래 1차 로거 모듈의 현재 구조와 판단 근거를 정리한다.
+- `RefactoringServer/Foundation/Logging` 아래 1차 로거 모듈의 현재 구조와 판단 근거를 정리한다.
 - 왜 이 모듈을 `util`이 아니라 `logging` 카테고리로 분리하는지 기록한다.
 - 이후 `async logger`, `crash dump 연계`, `백엔드 공통 진단 로그`로 확장할 때 기준 문서로 사용한다.
 
@@ -13,14 +13,14 @@
 
 ## 3. 현재 구현 범위
 - 인터페이스:
-  - [ILogger.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\ILogger.h)
+  - [ILogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\ILogger.h)
 - 싱크 구현:
-  - [FConsoleLogger.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\FConsoleLogger.h)
-  - [FFileLogger.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\FFileLogger.h)
-  - [FCompositeLogger.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\FCompositeLogger.h)
+  - [FConsoleLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\FConsoleLogger.h)
+  - [FFileLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\FFileLogger.h)
+  - [FCompositeLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\FCompositeLogger.h)
 - 공통 포맷:
-  - [LogFormatting.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\LogFormatting.h)
-  - [LogFormatting.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\LogFormatting.cpp)
+  - [LogFormatting.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\LogFormatting.h)
+  - [LogFormatting.cpp](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\LogFormatting.cpp)
 - 서버 연결 지점:
   - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)
   - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
@@ -69,7 +69,12 @@
 - 파일 열기 실패 시 현재는 조용히 return 한다.
 - 운영 단계에선 파일 쓰기 실패를 대체 경로(콘솔, fallback logger, once-only stderr)로 남기는 장치가 필요하다.
 
-## 7. 검증 근거
+## 7. 현재 배치 상태
+- 로거 모듈은 이제 `NetworkLib` 내부가 아니라 [Foundation](D:\Project\ServerPortfolio\RefactoringServer\Foundation) 아래에 배치되어 있다.
+- `NetworkLib`는 로거 구현을 직접 가지지 않고, `Foundation::ILogger`와 `Foundation::SLogConfig`를 참조하는 구조로 바뀌었다.
+- 이 변경으로 `Diagnostics` 같은 공용 운영 모듈도 같은 로깅 기반을 공유할 수 있는 방향이 확보됐다.
+
+## 8. 검증 근거
 - 빌드:
   - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\EchoServer.vcxproj)
   - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\EchoClient.vcxproj)
@@ -81,7 +86,7 @@
   - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)에서 `FCompositeLogger + FConsoleLogger + FFileLogger` 조합 생성
   - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)에서 시작/종료/오류/세션 이벤트 로그 호출
 
-## 8. 다음 작업 후보
+## 9. 다음 작업 후보
 - `logging/testing-history.md` 추가 후 파일 생성/출력 검증 이력 누적
 - `FNullLogger` 또는 테스트용 메모리 싱크 추가
 - `FCompositeLogger` sink 구성 완료 후 immutable로 고정하는 정책 추가

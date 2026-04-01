@@ -59,7 +59,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -74,7 +74,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -83,10 +83,6 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Containers\LockFreeSmoke.cpp" />
-    <ClCompile Include="Logging\FCompositeLogger.cpp" />
-    <ClCompile Include="Logging\FConsoleLogger.cpp" />
-    <ClCompile Include="Logging\FFileLogger.cpp" />
-    <ClCompile Include="Logging\LogFormatting.cpp" />
     <ClCompile Include="Servers\FServerFactory.cpp" />
     <ClCompile Include="Servers\FIocpServer.cpp" />
     <ClCompile Include="Servers\FStubServer.cpp" />
@@ -96,11 +92,6 @@
     <ClInclude Include="Containers\LockFreeCommon.h" />
     <ClInclude Include="Containers\FLockFreeQueue.h" />
     <ClInclude Include="Containers\FLockFreeStack.h" />
-    <ClInclude Include="Logging\FCompositeLogger.h" />
-    <ClInclude Include="Logging\FConsoleLogger.h" />
-    <ClInclude Include="Logging\FFileLogger.h" />
-    <ClInclude Include="Logging\ILogger.h" />
-    <ClInclude Include="Logging\LogFormatting.h" />
     <ClInclude Include="Memory\FLockFreeMemoryPool.h" />
     <ClInclude Include="Memory\FTlsMemoryPool.h" />
     <ClInclude Include="Servers\BackendTypes.h" />
@@ -109,6 +100,12 @@
     <ClInclude Include="Servers\IServer.h" />
     <ClInclude Include="Servers\FIocpServer.h" />
     <ClInclude Include="Servers\FStubServer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Foundation\Foundation.vcxproj">
+      <Project>{1E3B65A5-5AE3-4AA0-9471-88AB92F756D4}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

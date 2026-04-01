@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Servers/BackendTypes.h"
+#include "LoggingTypes.h"
 
 #include <string>
 #include <string_view>
 
-namespace GameServer::NetworkLib::Logging
+namespace GameServer::Foundation::Logging
 {
 	std::string BuildDateStamp();
 	std::string BuildLine(const SLogConfig& logConfig, ELogLevel logLevel, std::string_view category, std::string_view message);

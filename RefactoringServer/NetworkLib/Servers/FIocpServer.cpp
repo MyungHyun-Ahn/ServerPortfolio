@@ -2,7 +2,7 @@
 
 #include "Servers/FIocpServer.h"
 #include "Servers/IApplicationHandler.h"
-#include "Logging/ILogger.h"
+#include "Foundation/Logging/ILogger.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -19,7 +19,7 @@ namespace GameServer::NetworkLib
 	{
 		if (m_isRunning.exchange(true))
 		{
-			Log(ELogLevel::Warn, "Start requested while server is already running.");
+			Log(GameServer::Foundation::ELogLevel::Warn, "Start requested while server is already running.");
 			return false;
 		}
 
@@ -36,7 +36,7 @@ namespace GameServer::NetworkLib
 
 		if (!InitializeWinsock())
 		{
-			Log(ELogLevel::Error, "Winsock initialization failed.");
+			Log(GameServer::Foundation::ELogLevel::Error, "Winsock initialization failed.");
 			Stop();
 			return false;
 		}
@@ -46,14 +46,14 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "CreateIoCompletionPort failed. error=" << GetLastError();
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			Stop();
 			return false;
 		}
 
 		if (!OpenListenSocket())
 		{
-			Log(ELogLevel::Error, "Listen socket open failed.");
+			Log(GameServer::Foundation::ELogLevel::Error, "Listen socket open failed.");
 			Stop();
 			return false;
 		}
@@ -66,7 +66,7 @@ namespace GameServer::NetworkLib
 				<< " port=" << m_serverConfig.port
 				<< " workers=" << m_serverConfig.workerThreadCount
 				<< " maxSessions=" << m_serverConfig.maxSessionCount;
-			Log(ELogLevel::Info, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnServerStarted(*this);
 		return true;
@@ -79,7 +79,7 @@ namespace GameServer::NetworkLib
 			return;
 		}
 
-		Log(ELogLevel::Info, "Server stop requested.");
+		Log(GameServer::Foundation::ELogLevel::Info, "Server stop requested.");
 
 		CloseListenSocket();
 
@@ -117,7 +117,7 @@ namespace GameServer::NetworkLib
 			m_applicationHandler = nullptr;
 		}
 
-		Log(ELogLevel::Info, "Server stopped.");
+		Log(GameServer::Foundation::ELogLevel::Info, "Server stopped.");
 		m_logger.reset();
 	}
 
@@ -125,7 +125,7 @@ namespace GameServer::NetworkLib
 	{
 		if (buffer == nullptr || length <= 0)
 		{
-			Log(ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
+			Log(GameServer::Foundation::ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
 			return false;
 		}
 
@@ -134,7 +134,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "Send rejected because session was not found. sessionId=" << sessionId;
-			Log(ELogLevel::Warn, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 			return false;
 		}
 
@@ -153,7 +153,7 @@ namespace GameServer::NetworkLib
 			const int errorCode = WSAGetLastError();
 			std::ostringstream oss;
 			oss << "WSASend failed. sessionId=" << sessionId << " error=" << errorCode;
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			CloseSession(*sessionContext);
 			delete ioContext;
 			ReleaseSession(sessionContext);
@@ -178,7 +178,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "WSAStartup failed. error=" << startupResult;
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -193,7 +193,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "WSASocketW failed. error=" << WSAGetLastError();
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -204,7 +204,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "InetPtonA failed for bind ip. ip=" << m_serverConfig.bindIp;
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -215,7 +215,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "bind failed. error=" << WSAGetLastError();
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -223,7 +223,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "listen failed. error=" << WSAGetLastError();
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -278,7 +278,7 @@ namespace GameServer::NetworkLib
 				{
 					std::ostringstream oss;
 					oss << "accept failed. error=" << WSAGetLastError();
-					Log(ELogLevel::Warn, oss.str());
+					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				}
 				continue;
@@ -286,7 +286,7 @@ namespace GameServer::NetworkLib
 
 			if (!AttachAcceptedSocket(clientSocket))
 			{
-				Log(ELogLevel::Warn, "Accepted socket was rejected because no session slot was available.");
+				Log(GameServer::Foundation::ELogLevel::Warn, "Accepted socket was rejected because no session slot was available.");
 				closesocket(clientSocket);
 			}
 		}
@@ -323,7 +323,7 @@ namespace GameServer::NetworkLib
 				{
 					std::ostringstream oss;
 					oss << "I/O completion failed. sessionId=" << sessionContext->sessionId << " error=" << GetLastError();
-					Log(ELogLevel::Warn, oss.str());
+					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 				}
 				CloseSession(*sessionContext);
 				if (ioContext->ioType == EIoType::Send)
@@ -341,7 +341,7 @@ namespace GameServer::NetworkLib
 				{
 					std::ostringstream oss;
 					oss << "PostRecv failed after packet dispatch. sessionId=" << sessionContext->sessionId;
-					Log(ELogLevel::Warn, oss.str());
+					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 					CloseSession(*sessionContext);
 				}
 			}
@@ -373,7 +373,7 @@ namespace GameServer::NetworkLib
 			const int errorCode = WSAGetLastError();
 			std::ostringstream oss;
 			oss << "WSARecv failed. sessionId=" << sessionContext.sessionId << " error=" << errorCode;
-			Log(ELogLevel::Warn, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
 			ReleaseSession(&sessionContext);
 			return false;
 		}
@@ -396,7 +396,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "Session closed. sessionId=" << sessionContext.sessionId;
-			Log(ELogLevel::Info, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnClientDisconnected(sessionContext.sessionId);
 	}
@@ -462,7 +462,7 @@ namespace GameServer::NetworkLib
 
 		if (newSessionContext == nullptr)
 		{
-			Log(ELogLevel::Warn, "All session slots are in use.");
+			Log(GameServer::Foundation::ELogLevel::Warn, "All session slots are in use.");
 			return false;
 		}
 
@@ -470,7 +470,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "CreateIoCompletionPort attach failed. error=" << GetLastError();
-			Log(ELogLevel::Error, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
 			m_sessionSlots[newSessionContext->slotIndex].store(nullptr);
 			delete newSessionContext;
 			return false;
@@ -479,7 +479,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "Client connected. sessionId=" << newSessionContext->sessionId;
-			Log(ELogLevel::Info, oss.str());
+			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnClientConnected(newSessionContext->sessionId);
 		if (!PostRecv(*newSessionContext))
@@ -497,7 +497,7 @@ namespace GameServer::NetworkLib
 		return (static_cast<std::uint64_t>(generation) << 32ULL) | static_cast<std::uint64_t>(slotIndex);
 	}
 
-	void FIocpServer::Log(ELogLevel logLevel, const std::string& message) const
+	void FIocpServer::Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const
 	{
 		if (m_logger != nullptr)
 		{
