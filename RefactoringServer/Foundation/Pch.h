@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdint>
 #include <ctime>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>

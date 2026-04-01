@@ -46,5 +46,8 @@ x64
 
 # Local build outputs and runtime logs
 Out/
+logs/
+dumps/
 EchoServer/LogFile/
 RefactoringServer/EchoServer/logs/
+RefactoringServer/EchoServer/dumps/
