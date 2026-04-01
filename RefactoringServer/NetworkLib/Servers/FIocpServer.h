@@ -1,8 +1,9 @@
 #pragma once
 
-#include "NetworkLib/BackendTypes.h"
-#include "NetworkLib/IApplicationHandler.h"
-#include "NetworkLib/IServer.h"
+#include "Servers/BackendTypes.h"
+#include "Servers/IApplicationHandler.h"
+#include "Logging/ILogger.h"
+#include "Servers/IServer.h"
 
 #include <WinSock2.h>
 #include <Windows.h>
@@ -11,6 +12,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -69,10 +71,12 @@ namespace GameServer::NetworkLib
 		SSessionContext* AcquireSession(std::uint64_t sessionId);
 		bool AttachAcceptedSocket(SOCKET clientSocket);
 		std::uint64_t ComposeSessionId(std::uint32_t slotIndex, std::uint32_t generation) const;
+		void Log(ELogLevel logLevel, const std::string& message) const;
 
 	private:
 		SServerConfig m_serverConfig{};
 		IApplicationHandler* m_applicationHandler = nullptr;
+		std::shared_ptr<ILogger> m_logger;
 		HANDLE m_iocpHandle = nullptr;
 		SOCKET m_listenSocket = INVALID_SOCKET;
 		std::thread m_acceptThread;

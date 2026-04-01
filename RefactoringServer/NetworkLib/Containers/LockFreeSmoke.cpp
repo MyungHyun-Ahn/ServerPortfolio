@@ -1,6 +1,6 @@
-﻿#include "NetworkLib/Containers/FLockFreeQueue.h"
-#include "NetworkLib/Containers/FLockFreeStack.h"
-#include "NetworkLib/Memory/FTlsMemoryPool.h"
+﻿#include "Containers/FLockFreeQueue.h"
+#include "Containers/FLockFreeStack.h"
+#include "Memory/FTlsMemoryPool.h"
 
 namespace
 {

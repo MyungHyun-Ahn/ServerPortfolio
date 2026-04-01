@@ -1,7 +1,7 @@
-#include "NetworkLib/ServerFactory.h"
+#include "Servers/FServerFactory.h"
 
-#include "FIocpServer.h"
-#include "FStubServer.h"
+#include "Servers/FIocpServer.h"
+#include "Servers/FStubServer.h"
 
 namespace GameServer::NetworkLib
 {

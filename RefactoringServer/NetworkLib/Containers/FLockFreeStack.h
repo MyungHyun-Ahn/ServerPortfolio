@@ -1,7 +1,7 @@
 ﻿#pragma once
 
-#include "NetworkLib/Containers/LockFreeCommon.h"
-#include "NetworkLib/Memory/FTlsMemoryPool.h"
+#include "Containers/LockFreeCommon.h"
+#include "Memory/FTlsMemoryPool.h"
 
 namespace GameServer::NetworkLib::Containers
 {

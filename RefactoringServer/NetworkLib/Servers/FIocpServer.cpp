@@ -1,8 +1,8 @@
-#include "FIocpServer.h"
+#include "Servers/FIocpServer.h"
 
 #include <algorithm>
 #include <chrono>
-#include <iostream>
+#include <sstream>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -19,11 +19,13 @@ namespace GameServer::NetworkLib
 	{
 		if (m_isRunning.exchange(true))
 		{
+			Log(ELogLevel::Warn, "Start requested while server is already running.");
 			return false;
 		}
 
 		m_serverConfig = serverConfig;
 		m_applicationHandler = &applicationHandler;
+		m_logger = m_serverConfig.logger;
 		m_sessionSlots = std::make_unique<std::atomic<SSessionContext*>[]>(m_serverConfig.maxSessionCount);
 		m_generations = std::make_unique<std::atomic<std::uint32_t>[]>(m_serverConfig.maxSessionCount);
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
@@ -34,6 +36,7 @@ namespace GameServer::NetworkLib
 
 		if (!InitializeWinsock())
 		{
+			Log(ELogLevel::Error, "Winsock initialization failed.");
 			Stop();
 			return false;
 		}
@@ -41,18 +44,30 @@ namespace GameServer::NetworkLib
 		m_iocpHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
 		if (m_iocpHandle == nullptr)
 		{
+			std::ostringstream oss;
+			oss << "CreateIoCompletionPort failed. error=" << GetLastError();
+			Log(ELogLevel::Error, oss.str());
 			Stop();
 			return false;
 		}
 
 		if (!OpenListenSocket())
 		{
+			Log(ELogLevel::Error, "Listen socket open failed.");
 			Stop();
 			return false;
 		}
 
 		StartWorkers();
 		m_acceptThread = std::thread(&FIocpServer::AcceptLoop, this);
+		{
+			std::ostringstream oss;
+			oss << "Server started. ip=" << m_serverConfig.bindIp
+				<< " port=" << m_serverConfig.port
+				<< " workers=" << m_serverConfig.workerThreadCount
+				<< " maxSessions=" << m_serverConfig.maxSessionCount;
+			Log(ELogLevel::Info, oss.str());
+		}
 		m_applicationHandler->OnServerStarted(*this);
 		return true;
 	}
@@ -63,6 +78,8 @@ namespace GameServer::NetworkLib
 		{
 			return;
 		}
+
+		Log(ELogLevel::Info, "Server stop requested.");
 
 		CloseListenSocket();
 
@@ -99,18 +116,25 @@ namespace GameServer::NetworkLib
 			m_applicationHandler->OnServerStopped();
 			m_applicationHandler = nullptr;
 		}
+
+		Log(ELogLevel::Info, "Server stopped.");
+		m_logger.reset();
 	}
 
 	bool FIocpServer::Send(std::uint64_t sessionId, const char* buffer, std::int32_t length)
 	{
 		if (buffer == nullptr || length <= 0)
 		{
+			Log(ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
 			return false;
 		}
 
 		SSessionContext* sessionContext = AcquireSession(sessionId);
 		if (sessionContext == nullptr)
 		{
+			std::ostringstream oss;
+			oss << "Send rejected because session was not found. sessionId=" << sessionId;
+			Log(ELogLevel::Warn, oss.str());
 			return false;
 		}
 
@@ -126,6 +150,10 @@ namespace GameServer::NetworkLib
 		const int sendResult = WSASend(sessionContext->socket, &ioContext->wsabuf, 1, &sentBytes, 0, &ioContext->overlapped, nullptr);
 		if (sendResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 		{
+			const int errorCode = WSAGetLastError();
+			std::ostringstream oss;
+			oss << "WSASend failed. sessionId=" << sessionId << " error=" << errorCode;
+			Log(ELogLevel::Error, oss.str());
 			CloseSession(*sessionContext);
 			delete ioContext;
 			ReleaseSession(sessionContext);
@@ -145,8 +173,12 @@ namespace GameServer::NetworkLib
 	bool FIocpServer::InitializeWinsock()
 	{
 		WSADATA wsaData{};
-		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+		const int startupResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+		if (startupResult != 0)
 		{
+			std::ostringstream oss;
+			oss << "WSAStartup failed. error=" << startupResult;
+			Log(ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -159,6 +191,9 @@ namespace GameServer::NetworkLib
 		m_listenSocket = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
 		if (m_listenSocket == INVALID_SOCKET)
 		{
+			std::ostringstream oss;
+			oss << "WSASocketW failed. error=" << WSAGetLastError();
+			Log(ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -167,6 +202,9 @@ namespace GameServer::NetworkLib
 		listenAddress.sin_port = htons(m_serverConfig.port);
 		if (InetPtonA(AF_INET, m_serverConfig.bindIp.c_str(), &listenAddress.sin_addr) != 1)
 		{
+			std::ostringstream oss;
+			oss << "InetPtonA failed for bind ip. ip=" << m_serverConfig.bindIp;
+			Log(ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -175,11 +213,17 @@ namespace GameServer::NetworkLib
 
 		if (bind(m_listenSocket, reinterpret_cast<sockaddr*>(&listenAddress), sizeof(listenAddress)) == SOCKET_ERROR)
 		{
+			std::ostringstream oss;
+			oss << "bind failed. error=" << WSAGetLastError();
+			Log(ELogLevel::Error, oss.str());
 			return false;
 		}
 
 		if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR)
 		{
+			std::ostringstream oss;
+			oss << "listen failed. error=" << WSAGetLastError();
+			Log(ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -232,6 +276,9 @@ namespace GameServer::NetworkLib
 			{
 				if (m_isRunning)
 				{
+					std::ostringstream oss;
+					oss << "accept failed. error=" << WSAGetLastError();
+					Log(ELogLevel::Warn, oss.str());
 					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				}
 				continue;
@@ -239,6 +286,7 @@ namespace GameServer::NetworkLib
 
 			if (!AttachAcceptedSocket(clientSocket))
 			{
+				Log(ELogLevel::Warn, "Accepted socket was rejected because no session slot was available.");
 				closesocket(clientSocket);
 			}
 		}
@@ -271,6 +319,12 @@ namespace GameServer::NetworkLib
 
 			if (queuedResult == FALSE || transferredBytes == 0)
 			{
+				if (queuedResult == FALSE)
+				{
+					std::ostringstream oss;
+					oss << "I/O completion failed. sessionId=" << sessionContext->sessionId << " error=" << GetLastError();
+					Log(ELogLevel::Warn, oss.str());
+				}
 				CloseSession(*sessionContext);
 				if (ioContext->ioType == EIoType::Send)
 				{
@@ -285,6 +339,9 @@ namespace GameServer::NetworkLib
 				m_applicationHandler->OnPacketReceived(*this, sessionContext->sessionId, ioContext->buffer.data(), static_cast<std::int32_t>(transferredBytes));
 				if (!PostRecv(*sessionContext))
 				{
+					std::ostringstream oss;
+					oss << "PostRecv failed after packet dispatch. sessionId=" << sessionContext->sessionId;
+					Log(ELogLevel::Warn, oss.str());
 					CloseSession(*sessionContext);
 				}
 			}
@@ -313,6 +370,10 @@ namespace GameServer::NetworkLib
 		const int recvResult = WSARecv(sessionContext.socket, &sessionContext.recvContext.wsabuf, 1, &recvBytes, &recvFlags, &sessionContext.recvContext.overlapped, nullptr);
 		if (recvResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 		{
+			const int errorCode = WSAGetLastError();
+			std::ostringstream oss;
+			oss << "WSARecv failed. sessionId=" << sessionContext.sessionId << " error=" << errorCode;
+			Log(ELogLevel::Warn, oss.str());
 			ReleaseSession(&sessionContext);
 			return false;
 		}
@@ -332,6 +393,11 @@ namespace GameServer::NetworkLib
 		closesocket(sessionContext.socket);
 		sessionContext.socket = INVALID_SOCKET;
 		m_sessionSlots[sessionContext.slotIndex].store(nullptr);
+		{
+			std::ostringstream oss;
+			oss << "Session closed. sessionId=" << sessionContext.sessionId;
+			Log(ELogLevel::Info, oss.str());
+		}
 		m_applicationHandler->OnClientDisconnected(sessionContext.sessionId);
 	}
 
@@ -396,16 +462,25 @@ namespace GameServer::NetworkLib
 
 		if (newSessionContext == nullptr)
 		{
+			Log(ELogLevel::Warn, "All session slots are in use.");
 			return false;
 		}
 
 		if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(clientSocket), m_iocpHandle, 0, 0) == nullptr)
 		{
+			std::ostringstream oss;
+			oss << "CreateIoCompletionPort attach failed. error=" << GetLastError();
+			Log(ELogLevel::Error, oss.str());
 			m_sessionSlots[newSessionContext->slotIndex].store(nullptr);
 			delete newSessionContext;
 			return false;
 		}
 
+		{
+			std::ostringstream oss;
+			oss << "Client connected. sessionId=" << newSessionContext->sessionId;
+			Log(ELogLevel::Info, oss.str());
+		}
 		m_applicationHandler->OnClientConnected(newSessionContext->sessionId);
 		if (!PostRecv(*newSessionContext))
 		{
@@ -420,5 +495,13 @@ namespace GameServer::NetworkLib
 	std::uint64_t FIocpServer::ComposeSessionId(std::uint32_t slotIndex, std::uint32_t generation) const
 	{
 		return (static_cast<std::uint64_t>(generation) << 32ULL) | static_cast<std::uint64_t>(slotIndex);
+	}
+
+	void FIocpServer::Log(ELogLevel logLevel, const std::string& message) const
+	{
+		if (m_logger != nullptr)
+		{
+			m_logger->Log(logLevel, "NetworkLib", message);
+		}
 	}
 }

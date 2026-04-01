@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "NetworkLib/Memory/FLockFreeMemoryPool.h"
+#include "Memory/FLockFreeMemoryPool.h"
 
 #include <new>
 

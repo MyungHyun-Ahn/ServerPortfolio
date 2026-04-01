@@ -1,7 +1,7 @@
 #pragma once
 
-#include "NetworkLib/IApplicationHandler.h"
-#include "NetworkLib/IServer.h"
+#include "Servers/IApplicationHandler.h"
+#include "Servers/IServer.h"
 
 namespace GameServer::NetworkLib
 {

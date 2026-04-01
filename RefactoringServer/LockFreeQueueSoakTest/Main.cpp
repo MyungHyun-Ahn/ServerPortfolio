@@ -1,4 +1,4 @@
-#include "NetworkLib/Containers/FLockFreeQueue.h"
+#include "Containers/FLockFreeQueue.h"
 
 #include <atomic>
 #include <chrono>

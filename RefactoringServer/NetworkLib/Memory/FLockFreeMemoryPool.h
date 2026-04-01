@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "NetworkLib/Containers/LockFreeCommon.h"
+#include "Containers/LockFreeCommon.h"
 
 #include <cstddef>
 #include <new>

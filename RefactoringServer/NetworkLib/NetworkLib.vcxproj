@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -58,7 +58,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(ProjectDir)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -72,28 +72,39 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>$(ProjectDir)Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Source\LockFreeSmoke.cpp" />
-    <ClCompile Include="Source\FIocpServer.cpp" />
-    <ClCompile Include="Source\FStubServer.cpp" />
-    <ClCompile Include="Source\ServerFactory.cpp" />
+    <ClCompile Include="Containers\LockFreeSmoke.cpp" />
+    <ClCompile Include="Logging\FCompositeLogger.cpp" />
+    <ClCompile Include="Logging\FConsoleLogger.cpp" />
+    <ClCompile Include="Logging\FFileLogger.cpp" />
+    <ClCompile Include="Logging\LogFormatting.cpp" />
+    <ClCompile Include="Servers\FServerFactory.cpp" />
+    <ClCompile Include="Servers\FIocpServer.cpp" />
+    <ClCompile Include="Servers\FStubServer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Include\NetworkLib\BackendTypes.h" />
-    <ClInclude Include="Include\NetworkLib\IApplicationHandler.h" />
-    <ClInclude Include="Include\NetworkLib\IServer.h" />
-    <ClInclude Include="Include\NetworkLib\ServerFactory.h" />
-    <ClInclude Include="Include\NetworkLib\Containers\LockFreeCommon.h" />
-    <ClInclude Include="Include\NetworkLib\Containers\FLockFreeQueue.h" />
-    <ClInclude Include="Include\NetworkLib\Containers\FLockFreeStack.h" />
-    <ClInclude Include="Include\NetworkLib\Memory\FLockFreeMemoryPool.h" />
-    <ClInclude Include="Include\NetworkLib\Memory\FTlsMemoryPool.h" />
-    <ClInclude Include="Source\FIocpServer.h" />
-    <ClInclude Include="Source\FStubServer.h" />
+    <ClInclude Include="Containers\LockFreeCommon.h" />
+    <ClInclude Include="Containers\FLockFreeQueue.h" />
+    <ClInclude Include="Containers\FLockFreeStack.h" />
+    <ClInclude Include="Logging\FCompositeLogger.h" />
+    <ClInclude Include="Logging\FConsoleLogger.h" />
+    <ClInclude Include="Logging\FFileLogger.h" />
+    <ClInclude Include="Logging\ILogger.h" />
+    <ClInclude Include="Logging\LogFormatting.h" />
+    <ClInclude Include="Memory\FLockFreeMemoryPool.h" />
+    <ClInclude Include="Memory\FTlsMemoryPool.h" />
+    <ClInclude Include="Servers\BackendTypes.h" />
+    <ClInclude Include="Servers\FServerFactory.h" />
+    <ClInclude Include="Servers\IApplicationHandler.h" />
+    <ClInclude Include="Servers\IServer.h" />
+    <ClInclude Include="Servers\FIocpServer.h" />
+    <ClInclude Include="Servers\FStubServer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>
+
+
