@@ -82,16 +82,16 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="Core\FContentRuntime.cpp" />
-    <ClCompile Include="Core\FContentThread.cpp" />
+    <ClCompile Include="Routing\FContentRuntime.cpp" />
+    <ClCompile Include="Threading\FContentThread.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Pch.h" />
     <ClInclude Include="Bridge\IContentBridge.h" />
-    <ClInclude Include="Core\ContentTypes.h" />
-    <ClInclude Include="Core\FContentRuntime.h" />
-    <ClInclude Include="Core\FContentThread.h" />
+    <ClInclude Include="Core\ContentRuntimeTypes.h" />
     <ClInclude Include="Core\IContent.h" />
+    <ClInclude Include="Routing\FContentRuntime.h" />
+    <ClInclude Include="Threading\FContentThread.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NetworkLib\NetworkLib.vcxproj">

@@ -4,7 +4,7 @@
 - `packet inbox` lock-free 프로토타입을 실험하되, 문제가 생기면 즉시 기존 경로로 되돌릴 수 있게 한다.
 
 ## 2. 현재 토글 위치
-- [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\FContentThread.cpp)
+- [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)
 - 상수:
   - `kUseLockFreePacketInboxPrototype`
 

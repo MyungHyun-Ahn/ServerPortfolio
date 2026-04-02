@@ -223,6 +223,19 @@ namespace NetworkLib::Core
 		return true;
 	}
 
+	bool FIocpServer::Disconnect(std::uint64_t sessionId)
+	{
+		FSession* sessionContext = AcquireSession(sessionId);
+		if (sessionContext == nullptr)
+		{
+			return false;
+		}
+
+		CloseSession(*sessionContext);
+		ReleaseSession(sessionContext);
+		return true;
+	}
+
 	EBackendKind FIocpServer::GetBackendKind() const
 	{
 		return EBackendKind::Iocp;

@@ -25,6 +25,11 @@ namespace NetworkLib::Core
 		return false;
 	}
 
+	bool FStubServer::Disconnect(std::uint64_t)
+	{
+		return false;
+	}
+
 	EBackendKind FStubServer::GetBackendKind() const
 	{
 		return m_backendKind;

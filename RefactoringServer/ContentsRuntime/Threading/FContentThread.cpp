@@ -1,11 +1,11 @@
 #include "Pch.h"
 
-#include "ContentsRuntime/Core/FContentThread.h"
+#include "ContentsRuntime/Threading/FContentThread.h"
 
 #include "ContentsRuntime/Bridge/IContentBridge.h"
 #include "ContentsRuntime/Core/IContent.h"
 
-namespace ContentsRuntime::Core
+namespace ContentsRuntime::Threading
 {
 	namespace
 	{
@@ -27,9 +27,9 @@ namespace ContentsRuntime::Core
 				std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count());
 		}
 
-		void RunRaceInjection(const SContentRuntimeConfig& config, std::atomic<std::uint64_t>& counter) noexcept
+		void RunRaceInjection(const Core::SContentRuntimeConfig& config, std::atomic<std::uint64_t>& counter) noexcept
 		{
-			if (!config.enableRaceInjection || config.raceInjectionPeriod == 0 || config.raceInjectionMode == ERaceInjectionMode::None)
+			if (!config.enableRaceInjection || config.raceInjectionPeriod == 0 || config.raceInjectionMode == Core::ERaceInjectionMode::None)
 			{
 				return;
 			}
@@ -42,13 +42,13 @@ namespace ContentsRuntime::Core
 
 			switch (config.raceInjectionMode)
 			{
-			case ERaceInjectionMode::SwitchToThread:
+			case Core::ERaceInjectionMode::SwitchToThread:
 				::SwitchToThread();
 				break;
-			case ERaceInjectionMode::Sleep0:
+			case Core::ERaceInjectionMode::Sleep0:
 				::Sleep(0);
 				break;
-			case ERaceInjectionMode::Yield:
+			case Core::ERaceInjectionMode::Yield:
 				std::this_thread::yield();
 				break;
 			default:
@@ -58,7 +58,7 @@ namespace ContentsRuntime::Core
 
 		struct SQueuedOwnedPacket
 		{
-			FOwnedPacketEnvelope packet{};
+			Core::FOwnedPacketEnvelope packet{};
 
 			void Reset() noexcept
 			{
@@ -73,15 +73,15 @@ namespace ContentsRuntime::Core
 
 	struct FContentThread::SImpl
 	{
-		IContent* content = nullptr;
+		Core::IContent* content = nullptr;
 		Bridge::IContentBridge* bridge = nullptr;
-		SContentRuntimeConfig config{};
+		Core::SContentRuntimeConfig config{};
 		std::thread workerThread;
 		std::mutex lock;
 		std::condition_variable wakeCondition;
 		std::deque<std::uint64_t> enterQueue;
 		std::deque<std::uint64_t> leaveQueue;
-		std::deque<FOwnedPacketEnvelope> packetQueue;
+		std::deque<Core::FOwnedPacketEnvelope> packetQueue;
 		NetworkLib::Containers::FLockFreeQueue<SQueuedOwnedPacket*> packetQueueLockFree;
 		bool running = false;
 		std::atomic<std::uint64_t> enqueueEnterCallCount = 0;
@@ -108,7 +108,7 @@ namespace ContentsRuntime::Core
 		std::atomic<std::uint64_t> raceInjectionCounter = 0;
 	};
 
-	FContentThread::FContentThread(IContent& content, Bridge::IContentBridge& bridge, const SContentRuntimeConfig& config)
+	FContentThread::FContentThread(Core::IContent& content, Bridge::IContentBridge& bridge, const Core::SContentRuntimeConfig& config)
 		: m_impl(std::make_unique<SImpl>())
 	{
 		m_impl->content = &content;
@@ -140,7 +140,7 @@ namespace ContentsRuntime::Core
 			{
 				std::deque<std::uint64_t> enterQueue;
 				std::deque<std::uint64_t> leaveQueue;
-				std::deque<FOwnedPacketEnvelope> packetQueue;
+				std::deque<Core::FOwnedPacketEnvelope> packetQueue;
 				int delayFrame = 1;
 				bool shouldRunFrame = false;
 
@@ -224,7 +224,7 @@ namespace ContentsRuntime::Core
 					impl.leaveCount.fetch_add(1, std::memory_order_relaxed);
 				}
 
-				for (FOwnedPacketEnvelope& packet : packetQueue)
+				for (Core::FOwnedPacketEnvelope& packet : packetQueue)
 				{
 					impl.content->OnPacket(
 						packet.sessionId,
@@ -264,12 +264,12 @@ namespace ContentsRuntime::Core
 		}
 	}
 
-	SContentThreadStats FContentThread::GetStatsSnapshot()
+	Core::SContentThreadStats FContentThread::GetStatsSnapshot()
 	{
-		SContentThreadStats stats{};
+		Core::SContentThreadStats stats{};
 		{
 			std::lock_guard<std::mutex> lock(m_impl->lock);
-		stats.contentId = m_impl->content != nullptr ? m_impl->content->GetContentId() : kInvalidContentId;
+			stats.contentId = m_impl->content != nullptr ? m_impl->content->GetContentId() : Core::kInvalidContentId;
 			stats.running = m_impl->running;
 		}
 
@@ -331,7 +331,7 @@ namespace ContentsRuntime::Core
 		m_impl->wakeCondition.notify_one();
 	}
 
-	void FContentThread::EnqueuePacket(FOwnedPacketEnvelope&& packet)
+	void FContentThread::EnqueuePacket(Core::FOwnedPacketEnvelope&& packet)
 	{
 		m_impl->enqueuePacketCallCount.fetch_add(1, std::memory_order_relaxed);
 		if constexpr (kUseLockFreePacketInboxPrototype)

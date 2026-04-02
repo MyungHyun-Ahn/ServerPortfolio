@@ -1,14 +1,14 @@
 #include "Pch.h"
 
-#include "ContentsRuntime/Core/FContentRuntime.h"
+#include "ContentsRuntime/Routing/FContentRuntime.h"
 
-#include "ContentsRuntime/Core/FContentThread.h"
 #include "ContentsRuntime/Core/IContent.h"
+#include "ContentsRuntime/Threading/FContentThread.h"
 #include "Servers/IServer.h"
 
 #include <shared_mutex>
 
-namespace ContentsRuntime::Core
+namespace ContentsRuntime::Routing
 {
 	namespace
 	{
@@ -47,9 +47,9 @@ namespace ContentsRuntime::Core
 			std::abort();
 		}
 
-		void RunRaceInjection(const SContentRuntimeConfig& config, std::atomic<std::uint64_t>& counter) noexcept
+		void RunRaceInjection(const Core::SContentRuntimeConfig& config, std::atomic<std::uint64_t>& counter) noexcept
 		{
-			if (!config.enableRaceInjection || config.raceInjectionPeriod == 0 || config.raceInjectionMode == ERaceInjectionMode::None)
+			if (!config.enableRaceInjection || config.raceInjectionPeriod == 0 || config.raceInjectionMode == Core::ERaceInjectionMode::None)
 			{
 				return;
 			}
@@ -62,13 +62,13 @@ namespace ContentsRuntime::Core
 
 			switch (config.raceInjectionMode)
 			{
-			case ERaceInjectionMode::SwitchToThread:
+			case Core::ERaceInjectionMode::SwitchToThread:
 				::SwitchToThread();
 				break;
-			case ERaceInjectionMode::Sleep0:
+			case Core::ERaceInjectionMode::Sleep0:
 				::Sleep(0);
 				break;
-			case ERaceInjectionMode::Yield:
+			case Core::ERaceInjectionMode::Yield:
 				std::this_thread::yield();
 				break;
 			default:
@@ -79,24 +79,24 @@ namespace ContentsRuntime::Core
 
 	struct SContentSlot
 	{
-		std::unique_ptr<IContent> content;
-		std::unique_ptr<FContentThread> thread;
+		std::unique_ptr<Core::IContent> content;
+		std::unique_ptr<Threading::FContentThread> thread;
 	};
 
 	struct SSessionRoute
 	{
 		std::uint64_t sessionId = 0;
-		FContentId contentId = kInvalidContentId;
-		FContentThread* thread = nullptr;
+		Core::FContentId contentId = Core::kInvalidContentId;
+		Threading::FContentThread* thread = nullptr;
 	};
 
 	struct FContentRuntime::SImpl
 	{
 		NetworkLib::IServer* server = nullptr;
 		mutable std::shared_mutex lock;
-		std::unordered_map<FContentId, SContentSlot> contentSlots;
+		std::unordered_map<Core::FContentId, SContentSlot> contentSlots;
 		std::vector<SSessionRoute> sessionRoutes;
-		SContentRuntimeConfig config{};
+		Core::SContentRuntimeConfig config{};
 		std::atomic<std::uint64_t> activeSessionCount = 0;
 		std::atomic<std::uint64_t> enterSessionCallCount = 0;
 		std::atomic<std::uint64_t> leaveSessionCallCount = 0;
@@ -124,7 +124,7 @@ namespace ContentsRuntime::Core
 		Stop();
 	}
 
-	bool FContentRuntime::RegisterContent(std::unique_ptr<IContent> content)
+	bool FContentRuntime::RegisterContent(std::unique_ptr<Core::IContent> content)
 	{
 		if (content == nullptr)
 		{
@@ -137,8 +137,8 @@ namespace ContentsRuntime::Core
 			return false;
 		}
 
-		const FContentId contentId = content->GetContentId();
-		if (contentId == kInvalidContentId || m_impl->contentSlots.contains(contentId))
+		const Core::FContentId contentId = content->GetContentId();
+		if (contentId == Core::kInvalidContentId || m_impl->contentSlots.contains(contentId))
 		{
 			return false;
 		}
@@ -149,7 +149,7 @@ namespace ContentsRuntime::Core
 		return true;
 	}
 
-	void FContentRuntime::SetConfig(const SContentRuntimeConfig& config)
+	void FContentRuntime::SetConfig(const Core::SContentRuntimeConfig& config)
 	{
 		std::unique_lock<std::shared_mutex> lock(m_impl->lock);
 		if (m_impl->server != nullptr)
@@ -177,14 +177,14 @@ namespace ContentsRuntime::Core
 		for (auto& [contentId, slot] : m_impl->contentSlots)
 		{
 			(void)contentId;
-			slot.thread = std::make_unique<FContentThread>(*slot.content, *this, m_impl->config);
+			slot.thread = std::make_unique<Threading::FContentThread>(*slot.content, *this, m_impl->config);
 			slot.thread->Start();
 		}
 	}
 
 	void FContentRuntime::Stop()
 	{
-		std::unordered_map<FContentId, std::unique_ptr<FContentThread>> threadsToStop;
+		std::unordered_map<Core::FContentId, std::unique_ptr<Threading::FContentThread>> threadsToStop;
 		{
 			std::unique_lock<std::shared_mutex> lock(m_impl->lock);
 			for (auto& [contentId, slot] : m_impl->contentSlots)
@@ -210,10 +210,10 @@ namespace ContentsRuntime::Core
 		}
 	}
 
-	SContentRuntimeStats FContentRuntime::GetStatsSnapshot()
+	Core::SContentRuntimeStats FContentRuntime::GetStatsSnapshot()
 	{
-		SContentRuntimeStats stats{};
-		std::unordered_map<FContentId, std::uint64_t> sessionCounts;
+		Core::SContentRuntimeStats stats{};
+		std::unordered_map<Core::FContentId, std::uint64_t> sessionCounts;
 
 		{
 			std::shared_lock<std::shared_mutex> lock(m_impl->lock);
@@ -221,7 +221,7 @@ namespace ContentsRuntime::Core
 			stats.activeSessionCount = m_impl->activeSessionCount.load(std::memory_order_relaxed);
 			for (const SSessionRoute& route : m_impl->sessionRoutes)
 			{
-				if (route.sessionId == 0 || route.contentId == kInvalidContentId)
+				if (route.sessionId == 0 || route.contentId == Core::kInvalidContentId)
 				{
 					continue;
 				}
@@ -232,7 +232,7 @@ namespace ContentsRuntime::Core
 			stats.contents.reserve(m_impl->contentSlots.size());
 			for (auto& [contentId, slot] : m_impl->contentSlots)
 			{
-				SContentRuntimeContentStats contentStats{};
+				Core::SContentRuntimeContentStats contentStats{};
 				contentStats.contentId = contentId;
 				contentStats.activeSessionCount = sessionCounts[contentId];
 				if (slot.thread != nullptr)
@@ -263,10 +263,10 @@ namespace ContentsRuntime::Core
 		return stats;
 	}
 
-	bool FContentRuntime::EnterSession(std::uint64_t sessionId, FContentId initialContentId)
+	bool FContentRuntime::EnterSession(std::uint64_t sessionId, Core::FContentId initialContentId)
 	{
 		m_impl->enterSessionCallCount.fetch_add(1, std::memory_order_relaxed);
-		FContentThread* targetThread = nullptr;
+		Threading::FContentThread* targetThread = nullptr;
 		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		const auto lockWaitStart = std::chrono::steady_clock::now();
@@ -305,7 +305,7 @@ namespace ContentsRuntime::Core
 	void FContentRuntime::LeaveSession(std::uint64_t sessionId)
 	{
 		m_impl->leaveSessionCallCount.fetch_add(1, std::memory_order_relaxed);
-		FContentThread* targetThread = nullptr;
+		Threading::FContentThread* targetThread = nullptr;
 		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		const auto lockWaitStart = std::chrono::steady_clock::now();
@@ -325,7 +325,7 @@ namespace ContentsRuntime::Core
 				return;
 			}
 
-			const FContentId currentContentId = route.contentId;
+			const Core::FContentId currentContentId = route.contentId;
 			targetThread = route.thread;
 			route = {};
 			m_impl->activeSessionCount.fetch_sub(1, std::memory_order_relaxed);
@@ -350,7 +350,7 @@ namespace ContentsRuntime::Core
 	bool FContentRuntime::EnqueuePacket(std::uint64_t sessionId, std::uint16_t opcode, const char* payload, std::int32_t payloadLength)
 	{
 		m_impl->enqueuePacketCallCount.fetch_add(1, std::memory_order_relaxed);
-		FContentThread* targetThread = nullptr;
+		Threading::FContentThread* targetThread = nullptr;
 		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		const auto lockWaitStart = std::chrono::steady_clock::now();
@@ -383,7 +383,7 @@ namespace ContentsRuntime::Core
 			targetThread = route.thread;
 		}
 
-		FOwnedPacketEnvelope packet{};
+		Core::FOwnedPacketEnvelope packet{};
 		packet.sessionId = sessionId;
 		packet.opcode = opcode;
 		if (payload != nullptr && payloadLength > 0)
@@ -407,10 +407,10 @@ namespace ContentsRuntime::Core
 		return server != nullptr && server->Send(sessionId, opcode, buffer, length);
 	}
 
-	bool FContentRuntime::MoveSession(std::uint64_t sessionId, FContentId targetContentId)
+	bool FContentRuntime::MoveSession(std::uint64_t sessionId, Core::FContentId targetContentId)
 	{
-		FContentThread* sourceThread = nullptr;
-		FContentThread* targetThread = nullptr;
+		Threading::FContentThread* sourceThread = nullptr;
+		Threading::FContentThread* targetThread = nullptr;
 		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		const auto lockWaitStart = std::chrono::steady_clock::now();
@@ -477,5 +477,46 @@ namespace ContentsRuntime::Core
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		targetThread->EnqueueEnter(sessionId);
 		return true;
+	}
+
+	bool FContentRuntime::DisconnectSession(std::uint64_t sessionId)
+	{
+		NetworkLib::IServer* server = nullptr;
+		{
+			std::shared_lock<std::shared_mutex> lock(m_impl->lock);
+			server = m_impl->server;
+		}
+
+		return server != nullptr && server->Disconnect(sessionId);
+	}
+
+	bool FContentRuntime::IsSessionAlive(std::uint64_t sessionId) const
+	{
+		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
+		std::shared_lock<std::shared_mutex> lock(m_impl->lock);
+		if (slotIndex >= m_impl->sessionRoutes.size())
+		{
+			return false;
+		}
+
+		return m_impl->sessionRoutes[slotIndex].sessionId == sessionId;
+	}
+
+	std::optional<Core::FContentId> FContentRuntime::GetCurrentContentId(std::uint64_t sessionId) const
+	{
+		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
+		std::shared_lock<std::shared_mutex> lock(m_impl->lock);
+		if (slotIndex >= m_impl->sessionRoutes.size())
+		{
+			return std::nullopt;
+		}
+
+		const SSessionRoute& route = m_impl->sessionRoutes[slotIndex];
+		if (route.sessionId != sessionId || route.contentId == Core::kInvalidContentId)
+		{
+			return std::nullopt;
+		}
+
+		return route.contentId;
 	}
 }

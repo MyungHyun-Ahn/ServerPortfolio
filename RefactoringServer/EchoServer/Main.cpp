@@ -5,7 +5,7 @@
 #include "Foundation/Logging/FConsoleLogger.h"
 #include "Foundation/Logging/FFileLogger.h"
 #include "Foundation/Logging/ILogger.h"
-#include "ContentsRuntime/Core/FContentRuntime.h"
+#include "ContentsRuntime/Routing/FContentRuntime.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "EchoServer/Contents/Auth/FAuthContent.h"
 #include "EchoServer/Contents/ContentTypes.h"
@@ -244,7 +244,7 @@ namespace
 	private:
 		std::shared_ptr<Foundation::ILogger> m_logger;
 		EchoServer::Contents::SRuntimeOptions m_runtimeOptions;
-		ContentsRuntime::Core::FContentRuntime m_contentRuntime;
+		ContentsRuntime::Routing::FContentRuntime m_contentRuntime;
 	};
 }
 

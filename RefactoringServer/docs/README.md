@@ -5,7 +5,7 @@
 - 아키텍처 문서는 [architecture/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\README.md)를 본다.
 - 리뷰 문서는 [reviews/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\README.md)를 본다.
 
-## 2. 현재 읽는 순서 추천
+## 2. 읽는 순서 추천
 1. [001_project-overview.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\001_project\001_project-overview.md)
 2. [001_networklib-overview.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\002_networklib\001_networklib-overview.md)
 3. [001_contents-runtime-overview.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\003_contentsruntime\001_contents-runtime-overview.md)
@@ -21,8 +21,8 @@
 - `docs/reviews`
   - 구현 결과, 검증 결과, 트러블슈팅, 운영 규칙을 정리하는 문서
 
-## 4. 문서 관리 원칙
+## 4. 문서 관리 규칙
 - 새 계획 문서를 추가하면 `docs/plans/README.md`와 [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)를 같이 갱신한다.
 - 새 아키텍처 문서를 추가하면 `docs/architecture/README.md`를 같이 갱신한다.
 - 새 리뷰 문서를 추가하면 `docs/reviews/README.md`를 같이 갱신한다.
-- 가능한 한 현재 기준 문서만 유지하고, 흡수된 초안은 남기지 않는다.
+- 가능한 한 현재 기준 문서를 유지하고, 오래된 중복 초안은 남기지 않는다.

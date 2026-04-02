@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ContentsRuntime/Core/ContentTypes.h"
+#include "ContentsRuntime/Core/ContentRuntimeTypes.h"
 
 namespace ContentsRuntime::Bridge
 {

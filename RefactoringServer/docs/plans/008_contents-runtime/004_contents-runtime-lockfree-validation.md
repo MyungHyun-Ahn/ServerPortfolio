@@ -2,13 +2,13 @@
 
 ## 1. 목적
 - `packet inbox` lock-free 프로토타입이 실제로 안정적인지 단계적으로 검증한다.
-- contention 감소만 보는 것이 아니라, 패킷 유실, 세션 종료 누락, 장시간 soak 안정성까지 함께 본다.
+- contention 감소만 보는 것이 아니라, packet 유실, 세션 종료 누락, 장시간 soak 안정성까지 함께 본다.
 
 ## 2. 검증 대상
 - `FContentThread`의 lock-free packet inbox 경로
-- 토글 위치
-  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\FContentThread.cpp)
-- 현재 토글
+- 적용 위치:
+  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)
+- 현재 토글:
   - `kUseLockFreePacketInboxPrototype`
 
 ## 3. 토글 정책
@@ -38,7 +38,6 @@
 - `FContentThread` consumer drain loop
 
 ## 5. 검증 단계
-
 ### 5.1 기본 기능 검증
 - 목적
   - 최소 경로가 깨지지 않는지 확인
@@ -61,7 +60,7 @@
 
 ### 5.3 다중 세션 검증
 - 목적
-  - 여러 producer가 동시에 enqueue할 때 유실이 없는지 확인
+  - 여러 producer가 동시에 enqueue해도 packet 유실이 없는지 확인
 - 시나리오
   - `sessions=8~100`
   - `packetsPerSend=2~4`

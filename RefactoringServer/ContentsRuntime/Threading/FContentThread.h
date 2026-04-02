@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ContentsRuntime/Core/ContentTypes.h"
+#include "ContentsRuntime/Core/ContentRuntimeTypes.h"
 
 namespace ContentsRuntime::Bridge
 {
@@ -10,20 +10,23 @@ namespace ContentsRuntime::Bridge
 namespace ContentsRuntime::Core
 {
 	class IContent;
+}
 
+namespace ContentsRuntime::Threading
+{
 	class FContentThread
 	{
 	public:
-		FContentThread(IContent& content, Bridge::IContentBridge& bridge, const SContentRuntimeConfig& config);
+		FContentThread(Core::IContent& content, Bridge::IContentBridge& bridge, const Core::SContentRuntimeConfig& config);
 		~FContentThread();
 
 		void Start();
 		void Stop();
-		SContentThreadStats GetStatsSnapshot();
+		Core::SContentThreadStats GetStatsSnapshot();
 
 		void EnqueueEnter(std::uint64_t sessionId);
 		void EnqueueLeave(std::uint64_t sessionId);
-		void EnqueuePacket(FOwnedPacketEnvelope&& packet);
+		void EnqueuePacket(Core::FOwnedPacketEnvelope&& packet);
 
 	private:
 		struct SImpl;

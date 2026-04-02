@@ -10,7 +10,7 @@
 
 ### 2.1 `FContentRuntime::EnqueuePacket` 경량화
 - 파일:
-  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\FContentRuntime.cpp)
+  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
 - 변경 전:
   - `sessionId -> contentId` 조회에 `unordered_map + mutex`
   - packet마다 전역 락을 잡고 세션 맵과 콘텐츠 맵을 순차 조회
@@ -22,7 +22,7 @@
 
 ### 2.2 packet inbox 락프리 프로토타입
 - 파일:
-  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\FContentThread.cpp)
+  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)
 - 변경 전:
   - `packetQueue`가 `std::deque + mutex`
 - 변경 후:
@@ -34,7 +34,7 @@
 ## 3. 되돌리기 방법
 - 이번 락프리 inbox는 프로토타입이라 되돌리기 쉽게 유지했다.
 - 토글 위치:
-  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\FContentThread.cpp)
+  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)
 - 스위치:
   - `kUseLockFreePacketInboxPrototype`
 - 이 값을 `false`로 바꾸면 기존 `std::deque + mutex` packet inbox 경로로 바로 복귀한다.
