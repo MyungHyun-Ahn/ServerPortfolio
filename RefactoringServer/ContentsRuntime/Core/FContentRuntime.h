@@ -23,6 +23,7 @@ namespace ContentsRuntime::Core
 		bool RegisterContent(std::unique_ptr<IContent> content);
 		void Start(NetworkLib::IServer& server);
 		void Stop();
+		SContentRuntimeStats GetStatsSnapshot();
 
 		bool EnterSession(std::uint64_t sessionId, FContentId initialContentId);
 		void LeaveSession(std::uint64_t sessionId);

@@ -19,6 +19,7 @@ namespace ContentsRuntime::Core
 
 		void Start();
 		void Stop();
+		SContentThreadStats GetStatsSnapshot();
 
 		void EnqueueEnter(std::uint64_t sessionId);
 		void EnqueueLeave(std::uint64_t sessionId);

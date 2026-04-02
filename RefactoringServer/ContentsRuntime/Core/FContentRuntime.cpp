@@ -20,6 +20,8 @@ namespace ContentsRuntime::Core
 		std::mutex lock;
 		std::unordered_map<FContentId, SContentSlot> contentSlots;
 		std::unordered_map<std::uint64_t, FContentId> sessionContentMap;
+		std::atomic<std::uint64_t> moveSessionCount = 0;
+		std::atomic<std::uint64_t> enqueueFailureCount = 0;
 	};
 
 	FContentRuntime::FContentRuntime()
@@ -98,6 +100,44 @@ namespace ContentsRuntime::Core
 		}
 	}
 
+	SContentRuntimeStats FContentRuntime::GetStatsSnapshot()
+	{
+		SContentRuntimeStats stats{};
+		std::unordered_map<FContentId, std::uint64_t> sessionCounts;
+
+		{
+			std::lock_guard<std::mutex> lock(m_impl->lock);
+			stats.registeredContentCount = static_cast<std::uint64_t>(m_impl->contentSlots.size());
+			stats.activeSessionCount = static_cast<std::uint64_t>(m_impl->sessionContentMap.size());
+			for (const auto& [sessionId, contentId] : m_impl->sessionContentMap)
+			{
+				(void)sessionId;
+				++sessionCounts[contentId];
+			}
+
+			stats.contents.reserve(m_impl->contentSlots.size());
+			for (auto& [contentId, slot] : m_impl->contentSlots)
+			{
+				SContentRuntimeContentStats contentStats{};
+				contentStats.contentId = contentId;
+				contentStats.activeSessionCount = sessionCounts[contentId];
+				if (slot.thread != nullptr)
+				{
+					contentStats.threadStats = slot.thread->GetStatsSnapshot();
+				}
+				else
+				{
+					contentStats.threadStats.contentId = contentId;
+				}
+				stats.contents.push_back(std::move(contentStats));
+			}
+		}
+
+		stats.moveSessionCount = m_impl->moveSessionCount.load(std::memory_order_relaxed);
+		stats.enqueueFailureCount = m_impl->enqueueFailureCount.load(std::memory_order_relaxed);
+		return stats;
+	}
+
 	bool FContentRuntime::EnterSession(std::uint64_t sessionId, FContentId initialContentId)
 	{
 		FContentThread* targetThread = nullptr;
@@ -152,12 +192,14 @@ namespace ContentsRuntime::Core
 			auto sessionIt = m_impl->sessionContentMap.find(sessionId);
 			if (sessionIt == m_impl->sessionContentMap.end())
 			{
+				m_impl->enqueueFailureCount.fetch_add(1, std::memory_order_relaxed);
 				return false;
 			}
 
 			auto contentIt = m_impl->contentSlots.find(sessionIt->second);
 			if (contentIt == m_impl->contentSlots.end() || contentIt->second.thread == nullptr)
 			{
+				m_impl->enqueueFailureCount.fetch_add(1, std::memory_order_relaxed);
 				return false;
 			}
 
@@ -213,6 +255,8 @@ namespace ContentsRuntime::Core
 
 			m_impl->sessionContentMap[sessionId] = targetContentId;
 		}
+
+		m_impl->moveSessionCount.fetch_add(1, std::memory_order_relaxed);
 
 		if (sourceThread != nullptr)
 		{

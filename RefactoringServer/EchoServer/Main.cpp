@@ -106,6 +106,36 @@ namespace
 		return static_cast<double>(bytes) / (1024.0 * 1024.0);
 	}
 
+	const ContentsRuntime::Core::SContentRuntimeContentStats* FindContentStats(
+		const ContentsRuntime::Core::SContentRuntimeStats& stats,
+		const ContentsRuntime::Core::FContentId contentId) noexcept
+	{
+		for (const auto& contentStats : stats.contents)
+		{
+			if (contentStats.contentId == contentId)
+			{
+				return &contentStats;
+			}
+		}
+
+		return nullptr;
+	}
+
+	std::uint64_t DeltaThreadCount(
+		const ContentsRuntime::Core::SContentRuntimeContentStats* currentStats,
+		const ContentsRuntime::Core::SContentRuntimeContentStats* previousStats,
+		std::uint64_t ContentsRuntime::Core::SContentThreadStats::* member) noexcept
+	{
+		if (currentStats == nullptr)
+		{
+			return 0;
+		}
+
+		const std::uint64_t currentValue = currentStats->threadStats.*member;
+		const std::uint64_t previousValue = previousStats != nullptr ? previousStats->threadStats.*member : 0;
+		return currentValue >= previousValue ? (currentValue - previousValue) : 0;
+	}
+
 	std::filesystem::path GetExecutableDirectory()
 	{
 		std::array<char, MAX_PATH> modulePath = {};
@@ -175,6 +205,11 @@ namespace
 		{
 			m_contentRuntime.Stop();
 			Log(Foundation::ELogLevel::Info, "EchoServer stopped.");
+		}
+
+		ContentsRuntime::Core::SContentRuntimeStats GetContentStatsSnapshot()
+		{
+			return m_contentRuntime.GetStatsSnapshot();
 		}
 
 	private:
@@ -300,11 +335,13 @@ int main(int argc, char* argv[])
 	{
 		compositeLogger->Log(Foundation::ELogLevel::Info, "EchoServer", "Headless mode enabled.");
 		NetworkLib::Core::SServerStats previousStats = server->GetStatsSnapshot();
+		ContentsRuntime::Core::SContentRuntimeStats previousContentStats = echoApplication.GetContentStatsSnapshot();
 		SProcessMetricsSnapshot previousProcessMetrics = CaptureProcessMetricsSnapshot();
 		while (true)
 		{
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 			const NetworkLib::Core::SServerStats currentStats = server->GetStatsSnapshot();
+			const ContentsRuntime::Core::SContentRuntimeStats currentContentStats = echoApplication.GetContentStatsSnapshot();
 			const SProcessMetricsSnapshot currentProcessMetrics = CaptureProcessMetricsSnapshot();
 			const std::uint64_t acceptTps = currentStats.acceptedSessionCount - previousStats.acceptedSessionCount;
 			const std::uint64_t recvTps = currentStats.receivedPacketCount - previousStats.receivedPacketCount;
@@ -316,6 +353,18 @@ int main(int argc, char* argv[])
 			const double cpuUsagePercent = CalculateCpuUsagePercent(previousProcessMetrics, currentProcessMetrics);
 			const double workingSetMb = currentProcessMetrics.valid ? BytesToMegabytes(currentProcessMetrics.workingSetBytes) : 0.0;
 			const double peakWorkingSetMb = currentProcessMetrics.valid ? BytesToMegabytes(currentProcessMetrics.peakWorkingSetBytes) : 0.0;
+			const std::uint64_t moveTps =
+				currentContentStats.moveSessionCount >= previousContentStats.moveSessionCount
+					? currentContentStats.moveSessionCount - previousContentStats.moveSessionCount
+					: 0;
+			const std::uint64_t enqueueFailTps =
+				currentContentStats.enqueueFailureCount >= previousContentStats.enqueueFailureCount
+					? currentContentStats.enqueueFailureCount - previousContentStats.enqueueFailureCount
+					: 0;
+			const auto* currentAuthStats = FindContentStats(currentContentStats, EchoServer::Contents::kAuthContentId);
+			const auto* previousAuthStats = FindContentStats(previousContentStats, EchoServer::Contents::kAuthContentId);
+			const auto* currentEchoStats = FindContentStats(currentContentStats, EchoServer::Contents::kEchoContentId);
+			const auto* previousEchoStats = FindContentStats(previousContentStats, EchoServer::Contents::kEchoContentId);
 			std::cout
 				<< "[EchoStats] sessions=" << currentStats.activeSessionCount
 				<< " acceptTPS=" << acceptTps
@@ -336,7 +385,29 @@ int main(int argc, char* argv[])
 				<< " totalWSASendCalls=" << currentStats.wsaSendCallCount
 				<< " totalWSARecvCalls=" << currentStats.wsaRecvCallCount
 				<< std::endl;
+			std::cout
+				<< "[ContentStats] contents=" << currentContentStats.registeredContentCount
+				<< " sessions=" << currentContentStats.activeSessionCount
+				<< " moveTPS=" << moveTps
+				<< " enqueueFailTPS=" << enqueueFailTps
+				<< " authSessions=" << (currentAuthStats != nullptr ? currentAuthStats->activeSessionCount : 0)
+				<< " authEnterTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::enterCount)
+				<< " authLeaveTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::leaveCount)
+				<< " authPacketTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::packetCount)
+				<< " authQueue=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.packetQueueDepth : 0)
+				<< " authMaxQueue=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.maxPacketQueueDepth : 0)
+				<< " echoSessions=" << (currentEchoStats != nullptr ? currentEchoStats->activeSessionCount : 0)
+				<< " echoEnterTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::enterCount)
+				<< " echoLeaveTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::leaveCount)
+				<< " echoPacketTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::packetCount)
+				<< " echoFrameTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::frameCount)
+				<< " echoQueue=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.packetQueueDepth : 0)
+				<< " echoMaxQueue=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.maxPacketQueueDepth : 0)
+				<< " echoLastDelayFrame=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.lastDelayFrame : 0)
+				<< " echoMaxDelayFrame=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.maxDelayFrame : 0)
+				<< std::endl;
 			previousStats = currentStats;
+			previousContentStats = currentContentStats;
 			previousProcessMetrics = currentProcessMetrics;
 		}
 	}
