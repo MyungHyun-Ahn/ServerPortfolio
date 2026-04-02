@@ -54,6 +54,22 @@ namespace GameServer::NetworkLib::Packet
 		}
 
 	public:
+		void Reserve(std::size_t size)
+		{
+			m_buffer->GetBuffer().reserve(size);
+		}
+
+		void ReserveAdditional(std::size_t size)
+		{
+			if (size == 0)
+			{
+				return;
+			}
+
+			std::vector<char>& buffer = m_buffer->GetBuffer();
+			buffer.reserve(buffer.size() + size);
+		}
+
 		void WriteBytes(const void* data, std::size_t size)
 		{
 			if (data == nullptr || size == 0)
@@ -85,6 +101,13 @@ namespace GameServer::NetworkLib::Packet
 		{
 			const std::uint32_t count = static_cast<std::uint32_t>(values.size());
 			Write(count);
+
+			if constexpr (CPacketWritableScalar<TValue>)
+			{
+				WriteBytes(values.data(), sizeof(TValue) * values.size());
+				return;
+			}
+
 			for (const TValue& value : values)
 			{
 				Write(value);
@@ -94,6 +117,12 @@ namespace GameServer::NetworkLib::Packet
 		template <typename TValue, std::size_t N>
 		void Write(const std::array<TValue, N>& values)
 		{
+			if constexpr (CPacketWritableScalar<TValue>)
+			{
+				WriteBytes(values.data(), sizeof(TValue) * values.size());
+				return;
+			}
+
 			for (const TValue& value : values)
 			{
 				Write(value);

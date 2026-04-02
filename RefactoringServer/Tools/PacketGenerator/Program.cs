@@ -459,6 +459,7 @@ internal static class CppPacketGenerator
         builder.AppendLine("#include \"Packet/FPacketSerialization.h\"");
         builder.AppendLine("#include \"Packet/IContentPacket.h\"");
         builder.AppendLine();
+        builder.AppendLine("#include <cstddef>");
         builder.AppendLine("#include <cstdint>");
         builder.AppendLine("#include <string>");
         builder.AppendLine("#include <vector>");
@@ -646,6 +647,31 @@ internal static class CppPacketGenerator
         builder.AppendLine("\t\tstd::uint16_t GetOpcode() const noexcept override");
         builder.AppendLine("\t\t{");
         builder.AppendLine("\t\t\treturn kOpcode;");
+        builder.AppendLine("\t\t}");
+        builder.AppendLine();
+        builder.AppendLine("\t\tstd::size_t GetEstimatedBodySize() const noexcept override");
+        builder.AppendLine("\t\t{");
+        if (endpoint.Fields.Count == 0)
+        {
+            builder.AppendLine("\t\t\treturn 0;");
+        }
+        else
+        {
+            builder.Append("\t\t\treturn ");
+            for (int index = 0; index < endpoint.Fields.Count; ++index)
+            {
+                PacketSchemaField field = endpoint.Fields[index];
+                if (index > 0)
+                {
+                    builder.AppendLine();
+                    builder.Append("\t\t\t\t+ ");
+                }
+
+                builder.Append($"GameServer::NetworkLib::Packet::GetSerializedSize({field.Name})");
+            }
+
+            builder.AppendLine(";");
+        }
         builder.AppendLine("\t\t}");
         builder.AppendLine();
         builder.AppendLine("\t\tvoid Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override");

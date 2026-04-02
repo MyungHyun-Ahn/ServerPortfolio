@@ -74,6 +74,12 @@ namespace GameServer::NetworkLib::Packet
 
 			outValues.clear();
 			outValues.reserve(count);
+			if constexpr (CPacketReadableScalar<TValue>)
+			{
+				outValues.resize(count);
+				return ReadBytes(outValues.data(), sizeof(TValue) * outValues.size());
+			}
+
 			for (std::uint32_t index = 0; index < count; ++index)
 			{
 				TValue value{};
@@ -91,6 +97,11 @@ namespace GameServer::NetworkLib::Packet
 		template <typename TValue, std::size_t N>
 		bool Read(std::array<TValue, N>& outValues) noexcept
 		{
+			if constexpr (CPacketReadableScalar<TValue>)
+			{
+				return ReadBytes(outValues.data(), sizeof(TValue) * outValues.size());
+			}
+
 			for (TValue& value : outValues)
 			{
 				if (!Read(value))

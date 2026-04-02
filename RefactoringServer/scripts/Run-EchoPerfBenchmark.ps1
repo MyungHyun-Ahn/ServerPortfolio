@@ -93,3 +93,55 @@ Write-Host "Benchmark completed."
 Write-Host "server log: $serverConsoleLog"
 Write-Host "client stdout: $clientStdout"
 Write-Host "client stderr: $clientStderr"
+
+$statLines = Get-Content $serverConsoleLog | Where-Object { $_ -like "[EchoStats]*" }
+if ($statLines.Count -gt 0)
+{
+    $patterns = @{
+        AvgAcceptTPS = 'acceptTPS=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgRecvTPS = 'recvTPS=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgSendTPS = 'sendTPS=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgRecvBps = 'recvBps=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgSendBps = 'sendBps=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgWsaSendTPS = 'wsaSendTPS=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgWsaRecvTPS = 'wsaRecvTPS=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgCpuPercent = 'cpuPercent=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        AvgWorkingSetMB = 'workingSetMB=(?<value>[0-9]+(?:\.[0-9]+)?)'
+        PeakWorkingSetMB = 'peakWorkingSetMB=(?<value>[0-9]+(?:\.[0-9]+)?)'
+    }
+
+    $summary = [ordered]@{}
+    foreach ($entry in $patterns.GetEnumerator())
+    {
+        $values = New-Object System.Collections.Generic.List[double]
+        foreach ($line in $statLines)
+        {
+            $match = [regex]::Match($line, $entry.Value)
+            if ($match.Success)
+            {
+                $values.Add([double]$match.Groups['value'].Value)
+            }
+        }
+
+        if ($values.Count -eq 0)
+        {
+            continue
+        }
+
+        if ($entry.Key -eq 'PeakWorkingSetMB')
+        {
+            $summary[$entry.Key] = ($values | Measure-Object -Maximum).Maximum
+        }
+        else
+        {
+            $summary[$entry.Key] = ($values | Measure-Object -Average).Average
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Benchmark summary:"
+    foreach ($entry in $summary.GetEnumerator())
+    {
+        Write-Host ("{0}={1:N2}" -f $entry.Key, [double]$entry.Value)
+    }
+}

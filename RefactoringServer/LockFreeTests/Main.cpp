@@ -672,6 +672,73 @@ namespace
 		return { true, "Generated chat container packet round trip", "passed" };
 	}
 
+	STestResult RunPacketScalarContainerBulkRoundTripTest()
+	{
+		using namespace GameServer::NetworkLib::Packet;
+
+		FPacketWriter writer;
+		std::vector<std::uint32_t> originalVector = { 10, 20, 30, 40, 50, 60, 70, 80 };
+		std::array<std::uint16_t, 4> originalArray = { 3, 6, 9, 12 };
+
+		writer.Write(originalVector);
+		writer.Write(originalArray);
+
+		FPacketReader reader(writer.GetBuffer().data(), writer.GetBuffer().size());
+		std::vector<std::uint32_t> decodedVector;
+		std::array<std::uint16_t, 4> decodedArray{};
+		if (!reader.Read(decodedVector) || !reader.Read(decodedArray) || !reader.IsAtEnd())
+		{
+			return { false, "Packet scalar container bulk round trip", "read failed" };
+		}
+
+		if (decodedVector != originalVector)
+		{
+			return { false, "Packet scalar container bulk round trip", "vector mismatch" };
+		}
+
+		if (decodedArray != originalArray)
+		{
+			return { false, "Packet scalar container bulk round trip", "array mismatch" };
+		}
+
+		return { true, "Packet scalar container bulk round trip", "passed" };
+	}
+
+	STestResult RunGeneratedPacketEstimatedSizeTest()
+	{
+		using namespace GameServer::Generated;
+		using namespace GameServer::NetworkLib::Packet;
+
+		Echo::FEchoRq echoPacket;
+		echoPacket.message = "estimate-check";
+		const std::vector<char> echoPayload = SerializeContentBody(echoPacket);
+		if (echoPacket.GetEstimatedBodySize() != echoPayload.size())
+		{
+			return { false, "Generated packet estimated size", "echo packet estimated size mismatch" };
+		}
+
+		Chat::FRoomSnapshotRp chatPacket;
+		chatPacket.roomId = 77;
+		chatPacket.participants = { "alpha", "bravo", "charlie" };
+		chatPacket.unreadCounts = {
+			{ "alpha", 1 },
+			{ "bravo", 3 },
+			{ "charlie", 5 }
+		};
+		chatPacket.metadata = {
+			{ "topic", "general" },
+			{ "owner", "alpha" }
+		};
+
+		const std::vector<char> chatPayload = SerializeContentBody(chatPacket);
+		if (chatPacket.GetEstimatedBodySize() != chatPayload.size())
+		{
+			return { false, "Generated packet estimated size", "chat packet estimated size mismatch" };
+		}
+
+		return { true, "Generated packet estimated size", "passed" };
+	}
+
 	template <>
 	STestResult RunParallelSumTest<TQueue>(const char* testName)
 	{
@@ -773,6 +840,8 @@ int main()
 	results.push_back(RunPacketFramerPacketViewTest());
 	results.push_back(RunGeneratedEchoPacketRoundTripTest());
 	results.push_back(RunGeneratedChatContainerPacketRoundTripTest());
+	results.push_back(RunPacketScalarContainerBulkRoundTripTest());
+	results.push_back(RunGeneratedPacketEstimatedSizeTest());
 
 	bool allPassed = true;
 	for (const STestResult& result : results)

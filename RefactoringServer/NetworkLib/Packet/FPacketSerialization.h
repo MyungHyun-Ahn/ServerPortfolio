@@ -10,10 +10,83 @@
 
 namespace GameServer::NetworkLib::Packet
 {
+	template <typename TValue>
+	inline std::size_t GetSerializedSize(const TValue&) noexcept
+		requires CPacketWritableScalar<TValue>
+	{
+		return sizeof(TValue);
+	}
+
+	inline std::size_t GetSerializedSize(const std::string& value) noexcept
+	{
+		return sizeof(std::uint32_t) + value.size();
+	}
+
+	template <typename TValue>
+	inline std::size_t GetSerializedSize(const std::vector<TValue>& values) noexcept
+	{
+		std::size_t totalSize = sizeof(std::uint32_t);
+		if constexpr (CPacketWritableScalar<TValue>)
+		{
+			return totalSize + sizeof(TValue) * values.size();
+		}
+
+		for (const TValue& value : values)
+		{
+			totalSize += GetSerializedSize(value);
+		}
+
+		return totalSize;
+	}
+
+	template <typename TValue, std::size_t N>
+	inline std::size_t GetSerializedSize(const std::array<TValue, N>& values) noexcept
+	{
+		if constexpr (CPacketWritableScalar<TValue>)
+		{
+			return sizeof(TValue) * values.size();
+		}
+
+		std::size_t totalSize = 0;
+		for (const TValue& value : values)
+		{
+			totalSize += GetSerializedSize(value);
+		}
+
+		return totalSize;
+	}
+
+	template <typename TKey, typename TValue, typename TCompare, typename TAllocator>
+	inline std::size_t GetSerializedSize(const std::map<TKey, TValue, TCompare, TAllocator>& values) noexcept
+	{
+		std::size_t totalSize = sizeof(std::uint32_t);
+		for (const auto& [key, value] : values)
+		{
+			totalSize += GetSerializedSize(key);
+			totalSize += GetSerializedSize(value);
+		}
+
+		return totalSize;
+	}
+
+	template <typename TKey, typename TValue, typename THash, typename TKeyEqual, typename TAllocator>
+	inline std::size_t GetSerializedSize(const std::unordered_map<TKey, TValue, THash, TKeyEqual, TAllocator>& values) noexcept
+	{
+		std::size_t totalSize = sizeof(std::uint32_t);
+		for (const auto& [key, value] : values)
+		{
+			totalSize += GetSerializedSize(key);
+			totalSize += GetSerializedSize(value);
+		}
+
+		return totalSize;
+	}
+
 	template <typename TPacket>
 	inline std::vector<char> SerializeContentBody(const TPacket& packet)
 	{
 		FPacketWriter writer;
+		writer.ReserveAdditional(packet.GetEstimatedBodySize());
 		packet.Serialize(writer);
 		return writer.MoveBuffer();
 	}
@@ -80,6 +153,7 @@ namespace GameServer::NetworkLib::Packet
 	inline bool SendContentPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
 	{
 		FPacketWriter writer;
+		writer.ReserveAdditional(packet.GetEstimatedBodySize());
 		packet.Serialize(writer);
 		const std::vector<char>& payload = writer.GetBuffer();
 		return server.Send(

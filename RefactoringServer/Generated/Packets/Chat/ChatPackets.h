@@ -3,6 +3,7 @@
 #include "Packet/FPacketSerialization.h"
 #include "Packet/IContentPacket.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -23,6 +24,11 @@ namespace GameServer::Generated::Chat
 		std::uint16_t GetOpcode() const noexcept override
 		{
 			return kOpcode;
+		}
+
+		std::size_t GetEstimatedBodySize() const noexcept override
+		{
+			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId);
 		}
 
 		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
@@ -50,6 +56,14 @@ namespace GameServer::Generated::Chat
 		std::uint16_t GetOpcode() const noexcept override
 		{
 			return kOpcode;
+		}
+
+		std::size_t GetEstimatedBodySize() const noexcept override
+		{
+			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId)
+				+ GameServer::NetworkLib::Packet::GetSerializedSize(participants)
+				+ GameServer::NetworkLib::Packet::GetSerializedSize(unreadCounts)
+				+ GameServer::NetworkLib::Packet::GetSerializedSize(metadata);
 		}
 
 		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override

@@ -3,6 +3,7 @@
 #include "Packet/FPacketReader.h"
 #include "Packet/FPacketWriter.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace GameServer::NetworkLib::Packet
@@ -13,6 +14,11 @@ namespace GameServer::NetworkLib::Packet
 		virtual ~IContentPacket() = default;
 
 		virtual std::uint16_t GetOpcode() const noexcept = 0;
+		virtual std::size_t GetEstimatedBodySize() const noexcept
+		{
+			return 0;
+		}
+
 		virtual void Serialize(FPacketWriter& writer) const = 0;
 		virtual bool Deserialize(FPacketReader& reader) = 0;
 	};
