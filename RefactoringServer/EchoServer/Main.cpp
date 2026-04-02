@@ -5,11 +5,11 @@
 #include "Foundation/Logging/FConsoleLogger.h"
 #include "Foundation/Logging/FFileLogger.h"
 #include "Foundation/Logging/ILogger.h"
-#include "Generated/Packets/Chat/ChatPacketHandler.h"
-#include "Generated/Packets/Echo/EchoPacketHandler.h"
-#include "Generated/Packets/Login/LoginPacketHandler.h"
-#include "Generated/Packets/PacketRouter.h"
+#include "ContentsRuntime/Core/FContentRuntime.h"
 #include "Crypto/FDefaultPacketCipher.h"
+#include "EchoServer/Contents/Auth/FAuthContent.h"
+#include "EchoServer/Contents/ContentTypes.h"
+#include "EchoServer/Contents/Echo/FEchoContent.h"
 #include "Packet/Framing/FDefaultPacketFramer.h"
 #include "Servers/Core/BackendTypes.h"
 #include "Servers/Core/FServerFactory.h"
@@ -26,15 +26,6 @@
 
 namespace
 {
-	struct SServerRuntimeOptions
-	{
-		int sendThreadCount = 1;
-		int responsesPerThread = 1;
-		bool logPackets = false;
-		bool enablePagePool = true;
-		std::uint32_t pageSize = 4096;
-	};
-
 	struct SProcessMetricsSnapshot
 	{
 		ULONGLONG tickCountMs = 0;
@@ -127,29 +118,24 @@ namespace
 		return std::filesystem::path(modulePath.data()).parent_path();
 	}
 
-	class FEchoApplication final
-		: public NetworkLib::IApplicationHandler
-		, public Generated::Chat::FChatPacketHandlerBase
-		, public Generated::Echo::FEchoPacketHandlerBase
-		, public Generated::Login::FLoginPacketHandlerBase
+	class FEchoApplication final : public NetworkLib::IApplicationHandler
 	{
 	public:
 		FEchoApplication(
 			std::shared_ptr<Foundation::ILogger> logger,
-			std::uint32_t maxSessionCount,
-			SServerRuntimeOptions runtimeOptions)
+			EchoServer::Contents::SRuntimeOptions runtimeOptions)
 			: m_logger(std::move(logger))
 			, m_runtimeOptions(runtimeOptions)
-			, m_loggedInUsers(static_cast<std::size_t>(maxSessionCount))
 		{
-			m_packetRouter.SetChatHandler(this);
-			m_packetRouter.SetEchoHandler(this);
-			m_packetRouter.SetLoginHandler(this);
+			m_contentRuntime.RegisterContent(std::make_unique<EchoServer::Contents::FAuthContent>(m_logger));
+			m_contentRuntime.RegisterContent(std::make_unique<EchoServer::Contents::FEchoContent>(m_logger, m_runtimeOptions));
 		}
 
 	public:
 		void OnServerStarted(NetworkLib::IServer& server) override
 		{
+			m_contentRuntime.Start(server);
+
 			std::ostringstream oss;
 			oss << "EchoServer started. backend=" << static_cast<int>(server.GetBackendKind());
 			Log(Foundation::ELogLevel::Info, oss.str());
@@ -157,6 +143,8 @@ namespace
 
 		void OnClientConnected(std::uint64_t sessionId) override
 		{
+			m_contentRuntime.EnterSession(sessionId, EchoServer::Contents::kAuthContentId);
+
 			std::ostringstream oss;
 			oss << "client connected. sessionId=" << sessionId;
 			Log(Foundation::ELogLevel::Info, oss.str());
@@ -164,7 +152,9 @@ namespace
 
 		void OnPacketReceived(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) override
 		{
-			if (!m_packetRouter.DispatchPacket(server, sessionId, packetView) && m_runtimeOptions.logPackets)
+			(void)server;
+
+			if (!m_contentRuntime.EnqueuePacket(sessionId, packetView.opcode, packetView.payload, packetView.payloadLength) && m_runtimeOptions.logPackets)
 			{
 				std::ostringstream oss;
 				oss << "Unhandled packet. sessionId=" << sessionId << " opcode=" << packetView.opcode;
@@ -174,7 +164,7 @@ namespace
 
 		void OnClientDisconnected(std::uint64_t sessionId) override
 		{
-			ResetLoggedInUser(sessionId);
+			m_contentRuntime.LeaveSession(sessionId);
 
 			std::ostringstream oss;
 			oss << "client disconnected. sessionId=" << sessionId;
@@ -183,152 +173,11 @@ namespace
 
 		void OnServerStopped() override
 		{
+			m_contentRuntime.Stop();
 			Log(Foundation::ELogLevel::Info, "EchoServer stopped.");
 		}
 
-		bool HandleEchoRq(NetworkLib::IServer& server, std::uint64_t sessionId, const Generated::Echo::FEchoRq& packet) override
-		{
-			if (!IsLoggedIn(sessionId))
-			{
-				Log(Foundation::ELogLevel::Warn, "echo request rejected before login.");
-				return false;
-			}
-
-			if (m_runtimeOptions.logPackets)
-			{
-				std::ostringstream oss;
-				oss << "received. sessionId=" << sessionId << " opcode=" << packet.GetOpcode() << " message=" << packet.GetMessageValue();
-				Log(Foundation::ELogLevel::Info, oss.str());
-			}
-
-			if (m_runtimeOptions.sendThreadCount == 1 && m_runtimeOptions.responsesPerThread == 1)
-			{
-				Generated::Echo::FEchoRp responsePacket;
-				responsePacket.SetMessageValue(packet.GetMessageValue());
-				return Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
-			}
-
-			std::vector<std::thread> sendThreads;
-			sendThreads.reserve(static_cast<std::size_t>(m_runtimeOptions.sendThreadCount));
-			for (int threadIndex = 0; threadIndex < m_runtimeOptions.sendThreadCount; ++threadIndex)
-			{
-				sendThreads.emplace_back([&, threadIndex, sessionId, message = std::string(packet.GetMessageValue())]()
-				{
-					for (int responseIndex = 0; responseIndex < m_runtimeOptions.responsesPerThread; ++responseIndex)
-					{
-						std::ostringstream responseBuilder;
-						responseBuilder << message
-							<< "|t=" << threadIndex
-							<< "|r=" << responseIndex;
-
-						const std::string responseMessage = responseBuilder.str();
-						Generated::Echo::FEchoRp responsePacket;
-						responsePacket.SetMessageValue(responseMessage);
-						Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
-					}
-				});
-			}
-
-			for (std::thread& sendThread : sendThreads)
-			{
-				sendThread.join();
-			}
-
-			return true;
-		}
-
-		bool HandleRoomSnapshotRq(NetworkLib::IServer& server, std::uint64_t sessionId, const Generated::Chat::FRoomSnapshotRq& packet) override
-		{
-			if (!IsLoggedIn(sessionId))
-			{
-				Log(Foundation::ELogLevel::Warn, "chat snapshot request rejected before login.");
-				return false;
-			}
-
-			Generated::Chat::FRoomSnapshotRp snapshotPacket;
-			snapshotPacket.roomId = packet.roomId;
-			snapshotPacket.participants = { "alpha", "bravo", "charlie" };
-			snapshotPacket.unreadCounts = {
-				{ "alpha", 1u },
-				{ "bravo", 3u },
-				{ "charlie", 5u }
-			};
-			snapshotPacket.metadata = {
-				{ "topic", "general" },
-				{ "owner", "alpha" }
-			};
-
-			const bool snapshotSent = Generated::Chat::SendGeneratedPacket(server, sessionId, snapshotPacket);
-
-			const std::array<std::uint8_t, 8> binaryPayload = {
-				static_cast<std::uint8_t>(packet.roomId & 0xFF),
-				static_cast<std::uint8_t>((packet.roomId >> 8) & 0xFF),
-				0x10, 0x20, 0x30, 0x40, 0x50, 0x60
-			};
-
-			Generated::Chat::FRoomBinarySnapshotNoti binarySnapshotPacket;
-			binarySnapshotPacket.roomId = packet.roomId;
-			binarySnapshotPacket.SetPayloadValue(std::span<const std::uint8_t>(binaryPayload.data(), binaryPayload.size()));
-			const bool binarySnapshotSent = Generated::Chat::SendGeneratedPacket(server, sessionId, binarySnapshotPacket);
-
-			if (m_runtimeOptions.logPackets)
-			{
-				std::ostringstream oss;
-				oss << "chat snapshot served. sessionId=" << sessionId
-					<< " roomId=" << packet.roomId
-					<< " binaryBytes=" << binaryPayload.size();
-				Log(Foundation::ELogLevel::Info, oss.str());
-			}
-
-			return snapshotSent && binarySnapshotSent;
-		}
-
-		bool HandleLoginRq(NetworkLib::IServer& server, std::uint64_t sessionId, const Generated::Login::FLoginRq& packet) override
-		{
-			const bool success = packet.userId != 0;
-			SetLoggedInUser(sessionId, success ? packet.userId : 0);
-
-			{
-				std::ostringstream oss;
-				oss << "login " << (success ? "succeeded" : "failed")
-					<< ". sessionId=" << sessionId
-					<< " userId=" << packet.userId;
-				Log(success ? Foundation::ELogLevel::Info : Foundation::ELogLevel::Warn, oss.str());
-			}
-
-			Generated::Login::FLoginRp responsePacket;
-			responsePacket.userId = packet.userId;
-			responsePacket.success = success;
-			return Generated::Login::SendGeneratedPacket(server, sessionId, responsePacket);
-		}
-
 	private:
-		std::uint32_t GetSessionSlotIndex(std::uint64_t sessionId) const noexcept
-		{
-			return static_cast<std::uint32_t>(sessionId & 0xFFFFFFFFULL);
-		}
-
-		bool IsLoggedIn(std::uint64_t sessionId)
-		{
-			const std::uint32_t slotIndex = GetSessionSlotIndex(sessionId);
-			return slotIndex < m_loggedInUsers.size() &&
-				m_loggedInUsers[slotIndex].load(std::memory_order_relaxed) != 0;
-		}
-
-		void SetLoggedInUser(std::uint64_t sessionId, std::uint32_t userId) noexcept
-		{
-			const std::uint32_t slotIndex = GetSessionSlotIndex(sessionId);
-			if (slotIndex < m_loggedInUsers.size())
-			{
-				m_loggedInUsers[slotIndex].store(userId, std::memory_order_relaxed);
-			}
-		}
-
-		void ResetLoggedInUser(std::uint64_t sessionId) noexcept
-		{
-			SetLoggedInUser(sessionId, 0);
-		}
-
 		void Log(Foundation::ELogLevel logLevel, const std::string& message) const
 		{
 			if (m_logger != nullptr)
@@ -339,9 +188,8 @@ namespace
 
 	private:
 		std::shared_ptr<Foundation::ILogger> m_logger;
-		SServerRuntimeOptions m_runtimeOptions;
-		Generated::FPacketRouter m_packetRouter;
-		std::vector<std::atomic<std::uint32_t>> m_loggedInUsers;
+		EchoServer::Contents::SRuntimeOptions m_runtimeOptions;
+		ContentsRuntime::Core::FContentRuntime m_contentRuntime;
 	};
 }
 
@@ -350,7 +198,7 @@ int main(int argc, char* argv[])
 	NetworkLib::Core::SServerConfig serverConfig{};
 	bool requestManualDump = false;
 	bool runHeadless = false;
-	SServerRuntimeOptions runtimeOptions{};
+	EchoServer::Contents::SRuntimeOptions runtimeOptions{};
 	const std::filesystem::path executableDirectory = GetExecutableDirectory();
 	serverConfig.backendKind = NetworkLib::Core::EBackendKind::Iocp;
 	serverConfig.bindIp = "127.0.0.1";
@@ -432,7 +280,7 @@ int main(int argc, char* argv[])
 		return dumpWritten ? 0 : 1;
 	}
 
-	FEchoApplication echoApplication(compositeLogger, serverConfig.maxSessionCount, runtimeOptions);
+	FEchoApplication echoApplication(compositeLogger, runtimeOptions);
 	std::unique_ptr<NetworkLib::IServer> server = NetworkLib::Core::FServerFactory::Create(serverConfig.backendKind);
 	if (server == nullptr)
 	{

@@ -3,6 +3,8 @@
 ## 1. 현재 기준 문서
 - 컨테이너 관련 리뷰는 [lock-free-containers-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\containers\lock-free-containers-review.md)를 본다.
 - 컨테이너 테스트 이력은 [testing-history.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\containers\testing-history.md)를 본다.
+- 콘텐츠 런타임 리뷰는 [contents-runtime-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\contentsruntime\contents-runtime-review.md)를 본다.
+- 콘텐츠 런타임 트러블슈팅은 [contents-runtime-troubleshooting.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\contentsruntime\contents-runtime-troubleshooting.md)를 본다.
 - 진단 모듈 리뷰는 [crash-dump-module-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\diagnostics\crash-dump-module-review.md)를 본다.
 - 로깅 관련 리뷰는 [logger-module-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\logging\logger-module-review.md)를 본다.
 - 메모리 풀 관련 리뷰는 [memory-pool-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\memory\memory-pool-review.md)를 본다.

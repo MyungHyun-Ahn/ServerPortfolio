@@ -354,6 +354,7 @@ namespace
 		int requestSequence = 0;
 		std::mt19937 randomEngine(static_cast<std::uint32_t>(GetTickCount64()) ^ static_cast<std::uint32_t>(sessionIndex * 2654435761u));
 		SOCKET clientSocket = INVALID_SOCKET;
+		bool requiresBootstrapAfterConnect = true;
 
 		while (true)
 		{
@@ -363,6 +364,8 @@ namespace
 				{
 					return sessionResult;
 				}
+
+				requiresBootstrapAfterConnect = true;
 			}
 
 			std::vector<char> inboundBuffer;
@@ -415,6 +418,7 @@ namespace
 					}
 				};
 
+			if (requiresBootstrapAfterConnect)
 			{
 				Generated::Login::FLoginRq loginRequest;
 				loginRequest.userId = options.loginUserIdBase + static_cast<std::uint32_t>(sessionIndex);
@@ -484,9 +488,7 @@ namespace
 					clientSocket = INVALID_SOCKET;
 					return sessionResult;
 				}
-			}
 
-			{
 				const std::uint32_t roomId = 77u + static_cast<std::uint32_t>(sessionIndex);
 				Generated::Chat::FRoomSnapshotRq snapshotRequest;
 				snapshotRequest.roomId = roomId;
@@ -613,6 +615,8 @@ namespace
 					clientSocket = INVALID_SOCKET;
 					return sessionResult;
 				}
+
+				requiresBootstrapAfterConnect = false;
 			}
 
 			for (int requestIndex = 0; requestIndex < options.requestCount; ++requestIndex)
@@ -758,6 +762,7 @@ namespace
 				shutdown(clientSocket, SD_BOTH);
 				closesocket(clientSocket);
 				clientSocket = INVALID_SOCKET;
+				requiresBootstrapAfterConnect = true;
 				if (options.reconnectDelayMs > 0)
 				{
 					std::this_thread::sleep_for(std::chrono::milliseconds(options.reconnectDelayMs));
