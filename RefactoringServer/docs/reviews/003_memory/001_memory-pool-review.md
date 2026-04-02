@@ -2,7 +2,7 @@
 
 ## 0. 문서 역할
 - 이 문서는 `FLockFreeMemoryPool`, `FTlsMemoryPoolManager`, 메모리 풀 테스트와 soak 결과에 대한 현재 기준 문서다.
-- 상세 테스트 실행 이력은 [testing-history.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\memory\testing-history.md)에 분리해 둔다.
+- 상세 테스트 실행 이력은 [testing-history.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\003_memory\002_testing-history.md)에 분리해 둔다.
 - 아래 문서들의 공통 주제를 이 문서로 통합했다.
   - `networklib-lockfree-containers-bootstrap.md` 중 memory pool 관련 부분
   - `networklib-tls-memory-pool-refactoring.md`
@@ -92,3 +92,4 @@
 - `BucketSize`, `BucketCount`에 따른 성능 비교 측정
 - hot path 타입별로 별도 pool 정책이 필요한지 검토
 - 정상 종료 시 outstanding allocation이 남아 있으면 경고를 남기는 shutdown 검증 경로 추가
+

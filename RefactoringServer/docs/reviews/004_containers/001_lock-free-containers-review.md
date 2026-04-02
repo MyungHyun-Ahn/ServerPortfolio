@@ -2,7 +2,7 @@
 
 ## 0. 문서 역할
 - 이 문서는 `lock-free queue`, `lock-free stack`, 컨테이너 공통 테스트에 대한 현재 기준 문서다.
-- 상세 테스트 실행 이력은 [testing-history.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\containers\testing-history.md)에 분리해 둔다.
+- 상세 테스트 실행 이력은 [testing-history.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\004_containers\002_testing-history.md)에 분리해 둔다.
 - 아래 문서들의 공통 주제를 이 문서로 통합했다.
   - `networklib-lockfree-containers-bootstrap.md`
   - `networklib-lockfree-structure-simplification.md`
@@ -94,3 +94,4 @@
 - 실제 송신 큐 또는 세션 이벤트 큐에 `FLockFreeQueue` 적용 검토
 - queue/stack 벤치마크 추가
 - `approx size`가 필요한지 여부는 컨테이너가 아니라 관측 계층 기준으로 재검토
+

@@ -1,69 +1,83 @@
 # ContentsRuntime 계측 계획
 
 ## 1. 목적
-- `ContentsRuntime` 내부 상태를 수치로 볼 수 있게 해서 구조 안정성과 병목을 판단하기 쉽게 만든다.
-- 이후 큐 최적화나 콘텐츠 확장 작업 전에 기준 지표를 확보한다.
+- `ContentsRuntime` 내부 상태를 수치로 보이게 해서 구조 안정성과 병목 위치를 빠르게 판단한다.
+- 이후 queue 경량화나 lock-free inbox 실험의 기준선을 만든다.
 
-## 2. 계측 대상
+## 2. 수집 대상
 
-### 2.1 FContentThread
-- `enterTPS`
-- `leaveTPS`
-- `packetTPS`
-- `frameTPS`
-- 현재 queue 길이
+### 2.1 `FContentThread`
+- `enterCount`
+- `leaveCount`
+- `packetCount`
+- `frameCount`
+- 현재 queue depth
   - `enterQueueDepth`
   - `leaveQueueDepth`
   - `packetQueueDepth`
-- 최대 queue 길이
+- 최대 queue depth
   - `maxEnterQueueDepth`
   - `maxLeaveQueueDepth`
   - `maxPacketQueueDepth`
+- enqueue lock wait
+  - `enqueueEnterLockWaitNs`
+  - `enqueueLeaveLockWaitNs`
+  - `enqueuePacketLockWaitNs`
+- 최대 lock wait
+  - `maxEnqueueEnterLockWaitNs`
+  - `maxEnqueueLeaveLockWaitNs`
+  - `maxEnqueuePacketLockWaitNs`
 - 프레임 지연
   - `lastDelayFrame`
   - `maxDelayFrame`
 
-### 2.2 FContentRuntime
-- 현재 등록 콘텐츠 수
-- 현재 활성 세션 수
-- 콘텐츠별 세션 수
-- `MoveSession` 호출 수
-- enqueue 실패 수
+### 2.2 `FContentRuntime`
+- `registeredContentCount`
+- `activeSessionCount`
+- `enterSessionCallCount`
+- `leaveSessionCallCount`
+- `enqueuePacketCallCount`
+- `moveSessionCount`
+- `enqueueFailureCount`
+- runtime lock wait
+  - `enterSessionLockWaitNs`
+  - `leaveSessionLockWaitNs`
+  - `enqueuePacketLockWaitNs`
+  - `moveSessionLockWaitNs`
+- 최대 runtime lock wait
+  - `maxEnterSessionLockWaitNs`
+  - `maxLeaveSessionLockWaitNs`
+  - `maxEnqueuePacketLockWaitNs`
+  - `maxMoveSessionLockWaitNs`
 
 ## 3. 노출 방식
 
-### 3.1 서버 콘솔
-- 기존 `EchoStats` 출력에 `ContentsRuntime` 통계를 함께 출력
+### 3.1 서버 headless 콘솔
+- 기존 `EchoStats`와 함께 `[ContentStats]` 줄을 출력한다.
 - 예시
 ```text
-[ContentStats] contents=2 sessions=1 authSessions=0 echoSessions=1 packetTPS=6 moveTPS=1 echoPacketQueue=0 echoMaxPacketQueue=2 echoMaxDelayFrame=1
+[ContentStats] contents=2 sessions=1 moveTPS=1 enqueueFailTPS=0 authSessions=0 echoSessions=1 echoPacketTPS=3 echoQueue=0 echoMaxQueue=1 echoLastDelayFrame=1 echoMaxDelayFrame=1
 ```
 
-### 3.2 코드 구조
-- `ContentsRuntime::Core::SContentThreadStats`
-- `ContentsRuntime::Core::SContentRuntimeStats`
-- `FContentThread::GetStatsSnapshot()`
-- `FContentRuntime::GetStatsSnapshot()`
+### 3.2 스냅샷 구조
+- `SContentThreadStats`
+- `SContentRuntimeStats`
+- `GetStatsSnapshot()`
 
-## 4. 구현 원칙
-- 계측은 구조 이해와 운영성 목적이다.
-- hot path를 과하게 느리게 만들지 않도록 원자 카운터와 스냅샷 방식으로 간다.
-- 디버그/릴리즈 공통 사용 가능하도록 하되, 문자열 조합은 출력 지점에서만 한다.
+## 4. 해석 기준
+- `enqueueFailTPS > 0`
+  - 세션 라우트 오류나 shutdown 경합 가능성
+- `packetQueueDepth` 지속 증가
+  - 콘텐츠 소비 속도가 packet ingress보다 느리다는 뜻
+- `maxDelayFrame` 지속 증가
+  - 콘텐츠 프레임이 밀리고 있다는 뜻
+- `enqueuePacketLockWaitNs`가 다른 항목보다 크게 누적
+  - packet ingress가 hot path일 가능성 높음
 
-## 5. 1차 구현 범위
-- `enter/leave/packet/frame` 처리량
-- queue 길이와 최대 길이
-- 콘텐츠별 세션 수
-- `MoveSession` 수
-- `maxDelayFrame`
+## 5. 참조 문서
+- 지표 해석 기준은 [007_contents-runtime-observability-metrics.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\007_contents-runtime-observability-metrics.md)에 정리한다.
 
-## 6. 검증 기준
-- `Login -> Echo` 단발 경로에서 콘텐츠별 세션 수가 맞게 나온다.
-- `holdSeconds=1` 반복 경로에서 `packetTPS`가 증가한다.
-- 큐가 비정상적으로 계속 쌓이는 경우 콘솔에서 바로 보인다.
-
-## 7. 후속 확장
-- 콘텐츠별 처리 시간 평균/최대
-- 프레임 처리 시간
-- 장시간 soak 테스트용 CSV 출력
-- 운영용 관리자 명령 또는 외부 모니터링 연결
+## 6. 후속 작업
+- CSV 출력
+- 장시간 soak 결과 자동 축적
+- 콘텐츠 처리 시간 계측

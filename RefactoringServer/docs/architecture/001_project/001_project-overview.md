@@ -10,8 +10,10 @@
   - 공용 로깅, 진단, 설정 등 여러 모듈이 함께 쓰는 기반 계층 예정
 - `NetworkLib`
   - 새 네트워크 코어 라이브러리
+- `ContentsRuntime`
+  - 콘텐츠 스레드, 세션 라우팅, 콘텐츠 전이 담당 프로젝트
 - `Contents`
-  - 콘텐츠 카테고리별 런타임 처리 모듈 루트
+  - 서버 프로젝트가 실제 콘텐츠 구현을 두는 루트
 - `Packet`
   - 콘텐츠 카테고리별 패킷 스키마 루트
 - `EchoServer`
@@ -29,7 +31,7 @@
 - 네트워크 코어는 `Interlocked` 중심의 lock-free 자료구조와 비동기 I/O를 우선한다.
 - 게임 로직 계층은 이후 `single-writer + message passing` 구조로 분리한다.
 - 즉, 전체 시스템을 억지로 순수 lock-free로 만드는 대신, `네트워크 코어 무락 + 로직 소유권 분리`를 기본 원칙으로 둔다.
-- 헤더/PCH 규칙은 [cpp-header-pch-convention.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\project\cpp-header-pch-convention.md)를 기준으로 맞춘다.
+- 헤더/PCH 규칙은 [cpp-header-pch-convention.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\001_project\003_cpp-header-pch-convention.md)를 기준으로 맞춘다.
 
 ## 4. 현재 범위와 제외 범위
 ### 4-1. 현재 범위
@@ -44,17 +46,14 @@
 - DB 서비스, 타이머 서비스, 운영 툴 연동
 - `RIO`, `boost.asio` 실제 구현
 
-## 5. 다음 큰 단계
-- `Foundation` 공용 모듈 루트 정착
-- `Logging`을 `Foundation/Logging`으로 이동
-- `CrashDump`를 `Foundation/Diagnostics`로 도입
-- `NetworkLib` 송신 큐와 세션 핸들 모델 고정
-- 패킷 프레이밍 계층 추가
-- `EchoServer` 다음 단계 샘플 서버 정의
-- 콘텐츠 단위 디렉터리와 패킷 스키마 정착
-- `NetworkLib` 성능 고도화
-  - 버퍼 재사용
-  - page pool
-  - 계측
-  - 세션 경량화
-- 이후 `Gateway` 또는 `WorldServer` 역할 분리
+## 5. 현재 큰 축
+- `NetworkLib` 코어 안정화
+  - 세션, 송수신, 패킷, 성능 최적화
+- `ContentsRuntime` 구조 정착
+  - 콘텐츠 스레드
+  - 콘텐츠 전이 규칙
+  - 계측과 안정성 검증
+- 콘텐츠 서버 확장
+  - `AuthContent`, `EchoContent` 이후 `Lobby`, `Room` 같은 실제 흐름 추가
+- 이후 `Gateway` 또는 `WorldServer` 같은 역할 분리 검토
+
