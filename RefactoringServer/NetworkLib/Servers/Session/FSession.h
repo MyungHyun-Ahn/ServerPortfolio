@@ -1,17 +1,6 @@
 #pragma once
 
-#include "Containers/FLockFreeQueue.h"
-#include "Memory/FTlsMemoryPool.h"
-#include "Packet/FRecvBuffer.h"
-#include "Servers/FSendBuffer.h"
-
-#include <WinSock2.h>
-
-#include <atomic>
-#include <cstdint>
-#include <vector>
-
-namespace GameServer::NetworkLib
+namespace NetworkLib::Session
 {
 	class FSession
 	{
@@ -59,13 +48,13 @@ namespace GameServer::NetworkLib
 
 		void BuildRecvWsabufs(WSABUF (&outBuffers)[2], DWORD& outBufferCount) noexcept;
 		bool CommitRecvBytes(std::size_t length) noexcept;
-		Packet::FRecvBuffer& GetRecvBuffer() noexcept;
-		const Packet::FRecvBuffer& GetRecvBuffer() const noexcept;
+		NetworkLib::Packet::Buffer::FRecvBuffer& GetRecvBuffer() noexcept;
+		const NetworkLib::Packet::Buffer::FRecvBuffer& GetRecvBuffer() const noexcept;
 
 		SIoContext& GetRecvContext() noexcept;
 		SIoContext& GetSendContext() noexcept;
 
-		void EnqueueSendBuffer(FSendBuffer* sendBuffer) noexcept;
+		void EnqueueSendBuffer(NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer) noexcept;
 		bool TryBeginSend() noexcept;
 		void EndSend() noexcept;
 		int BeginSendIo() noexcept;
@@ -90,9 +79,9 @@ namespace GameServer::NetworkLib
 		std::atomic<bool> m_closing = false;
 		SIoContext m_recvContext{};
 		SIoContext m_sendContext{};
-		Packet::FRecvBuffer m_recvBuffer;
-		Containers::FLockFreeQueue<FSendBuffer*> m_sendQueue;
-		std::vector<FSendBuffer*> m_activeSendBuffers;
+		NetworkLib::Packet::Buffer::FRecvBuffer m_recvBuffer;
+		NetworkLib::Containers::FLockFreeQueue<NetworkLib::Packet::Buffer::FSendBuffer*> m_sendQueue;
+		std::vector<NetworkLib::Packet::Buffer::FSendBuffer*> m_activeSendBuffers;
 		std::vector<WSABUF> m_sendWsabufs;
 		std::atomic<bool> m_sendInFlight = false;
 		std::atomic<int> m_liveSendIoCount = 0;
@@ -101,6 +90,6 @@ namespace GameServer::NetworkLib
 		std::atomic<std::uint32_t> m_maxObservedQueuedSendBufferCount = 0;
 
 	private:
-		inline static Memory::FTlsMemoryPoolManager<FSession, 128, 2> s_sessionPool{};
+		inline static NetworkLib::Memory::FTlsMemoryPoolManager<FSession, 128, 2> s_sessionPool{};
 	};
 }

@@ -17,7 +17,7 @@ namespace
 	}
 }
 
-namespace GameServer::NetworkLib::Crypto
+namespace NetworkLib::Crypto
 {
 	FDefaultPacketCipher::FDefaultPacketCipher(const SDefaultPacketCipherConfig& config)
 		: m_config(config)

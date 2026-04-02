@@ -1,12 +1,6 @@
-﻿#pragma once
+#pragma once
 
-#include <Windows.h>
-
-#include <concepts>
-#include <cstdint>
-#include <type_traits>
-
-namespace GameServer::NetworkLib::Containers
+namespace NetworkLib::Containers
 {
 	template <typename T>
 	concept FundamentalOrPointer = std::is_fundamental_v<T> || std::is_pointer_v<T>;

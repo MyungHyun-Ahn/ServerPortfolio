@@ -1,10 +1,6 @@
 #pragma once
 
-#include <atomic>
-#include <cassert>
-#include <memory>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::View
 {
 	class FBorrowedViewScopeState
 	{

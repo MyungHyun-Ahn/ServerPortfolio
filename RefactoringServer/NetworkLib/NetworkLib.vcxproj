@@ -85,13 +85,14 @@
     <ClCompile Include="Containers\LockFreeSmoke.cpp" />
     <ClCompile Include="Crypto\FDefaultPacketCipher.cpp" />
     <ClCompile Include="Crypto\FNullPacketCipher.cpp" />
-    <ClCompile Include="Packet\FDefaultPacketFramer.cpp" />
-    <ClCompile Include="Servers\FServerFactory.cpp" />
-    <ClCompile Include="Servers\FSession.cpp" />
-    <ClCompile Include="Servers\FIocpServer.cpp" />
-    <ClCompile Include="Servers\FStubServer.cpp" />
+    <ClCompile Include="Packet\Framing\FDefaultPacketFramer.cpp" />
+    <ClCompile Include="Servers\Core\FServerFactory.cpp" />
+    <ClCompile Include="Servers\Session\FSession.cpp" />
+    <ClCompile Include="Servers\Core\FIocpServer.cpp" />
+    <ClCompile Include="Servers\Core\FStubServer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="NetLibPch.h" />
     <ClInclude Include="Pch.h" />
     <ClInclude Include="Containers\LockFreeCommon.h" />
     <ClInclude Include="Containers\FLockFreeQueue.h" />
@@ -100,26 +101,28 @@
     <ClInclude Include="Crypto\FNullPacketCipher.h" />
     <ClInclude Include="Crypto\IPacketCipher.h" />
     <ClInclude Include="Crypto\PacketCipherTypes.h" />
-    <ClInclude Include="Packet\FDefaultPacketFramer.h" />
-    <ClInclude Include="Packet\ContentHeader.h" />
-    <ClInclude Include="Packet\FPacketReader.h" />
-    <ClInclude Include="Packet\FPacketSerialization.h" />
-    <ClInclude Include="Packet\FPacketView.h" />
-    <ClInclude Include="Packet\FPacketWriter.h" />
-    <ClInclude Include="Packet\FRecvBuffer.h" />
-    <ClInclude Include="Packet\IContentPacket.h" />
-    <ClInclude Include="Packet\IPacketFramer.h" />
-    <ClInclude Include="Packet\PacketTypes.h" />
+    <ClInclude Include="Packet\Buffer\FPacketBuffer.h" />
+    <ClInclude Include="Packet\Buffer\FRecvBuffer.h" />
+    <ClInclude Include="Packet\Buffer\FSendBuffer.h" />
+    <ClInclude Include="Packet\Framing\ContentHeader.h" />
+    <ClInclude Include="Packet\Framing\FDefaultPacketFramer.h" />
+    <ClInclude Include="Packet\Framing\IPacketFramer.h" />
+    <ClInclude Include="Packet\Framing\PacketTypes.h" />
+    <ClInclude Include="Packet\Serialization\FPacketReader.h" />
+    <ClInclude Include="Packet\Serialization\FPacketSerialization.h" />
+    <ClInclude Include="Packet\Serialization\FPacketWriter.h" />
+    <ClInclude Include="Packet\Serialization\IContentPacket.h" />
+    <ClInclude Include="Packet\View\FBorrowedViewGuard.h" />
+    <ClInclude Include="Packet\View\FPacketView.h" />
     <ClInclude Include="Memory\FLockFreeMemoryPool.h" />
     <ClInclude Include="Memory\FTlsMemoryPool.h" />
-    <ClInclude Include="Servers\BackendTypes.h" />
-    <ClInclude Include="Servers\FServerFactory.h" />
-    <ClInclude Include="Servers\FSendBuffer.h" />
-    <ClInclude Include="Servers\FSession.h" />
+    <ClInclude Include="Servers\Core\BackendTypes.h" />
+    <ClInclude Include="Servers\Core\FServerFactory.h" />
+    <ClInclude Include="Servers\Session\FSession.h" />
     <ClInclude Include="Servers\IApplicationHandler.h" />
     <ClInclude Include="Servers\IServer.h" />
-    <ClInclude Include="Servers\FIocpServer.h" />
-    <ClInclude Include="Servers\FStubServer.h" />
+    <ClInclude Include="Servers\Core\FIocpServer.h" />
+    <ClInclude Include="Servers\Core\FStubServer.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Foundation\Foundation.vcxproj">

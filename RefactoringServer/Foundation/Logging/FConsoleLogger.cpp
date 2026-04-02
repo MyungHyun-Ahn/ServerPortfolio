@@ -9,7 +9,7 @@ namespace
 	std::mutex g_consoleMutex;
 }
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	FConsoleLogger::FConsoleLogger(const SLogConfig& logConfig)
 		: m_logConfig(logConfig)

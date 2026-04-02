@@ -1,17 +1,29 @@
 #include "Pch.h"
 
 #include "Crypto/IPacketCipher.h"
-#include "Packet/FPacketBuffer.h"
-#include "Packet/FPacketSerialization.h"
-#include "Packet/IPacketFramer.h"
-#include "Servers/FIocpServer.h"
+#include "Packet/Buffer/FPacketBuffer.h"
+#include "Packet/Serialization/FPacketSerialization.h"
+#include "Packet/Framing/IPacketFramer.h"
+#include "Servers/Core/FIocpServer.h"
 #include "Servers/IApplicationHandler.h"
+#include "Servers/Session/FSession.h"
 #include "Foundation/Logging/ILogger.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
-namespace GameServer::NetworkLib
+namespace NetworkLib::Core
 {
+	using NetworkLib::Packet::Buffer::FPacketBuffer;
+	using NetworkLib::Packet::Buffer::FSendBuffer;
+	using NetworkLib::Packet::Framing::CalculatePacketChecksum;
+	using NetworkLib::Packet::Framing::SContentHeader;
+	using NetworkLib::Packet::Framing::SFramedPacketBufferParts;
+	using NetworkLib::Packet::Framing::SOutgoingPacket;
+	using NetworkLib::Packet::Framing::SPacketHeader;
+	using NetworkLib::Packet::Serialization::TryParseContentPacketView;
+	using NetworkLib::Packet::View::FPacketView;
+	using NetworkLib::Session::FSession;
+
 	FIocpServer::FIocpServer() = default;
 
 	FIocpServer::~FIocpServer()
@@ -23,7 +35,7 @@ namespace GameServer::NetworkLib
 	{
 		if (m_isRunning.exchange(true))
 		{
-			Log(GameServer::Foundation::ELogLevel::Warn, "Start requested while server is already running.");
+			Log(Foundation::ELogLevel::Warn, "Start requested while server is already running.");
 			return false;
 		}
 
@@ -33,12 +45,12 @@ namespace GameServer::NetworkLib
 		m_packetCipher = m_serverConfig.packetCipher;
 		m_packetFramer = m_serverConfig.packetFramer;
 		FSendBuffer::ConfigurePageReuse(m_serverConfig.enablePageBufferReuse, m_serverConfig.pageBufferSize);
-		GameServer::NetworkLib::Packet::FPacketBuffer::ConfigurePageReuse(
+		FPacketBuffer::ConfigurePageReuse(
 			m_serverConfig.enablePageBufferReuse,
 			m_serverConfig.pageBufferSize);
 		if (m_packetCipher != nullptr && m_packetFramer == nullptr)
 		{
-			Log(GameServer::Foundation::ELogLevel::Error, "Packet cipher requires packet framer.");
+			Log(Foundation::ELogLevel::Error, "Packet cipher requires packet framer.");
 			m_isRunning = false;
 			return false;
 		}
@@ -53,7 +65,7 @@ namespace GameServer::NetworkLib
 
 		if (!InitializeWinsock())
 		{
-			Log(GameServer::Foundation::ELogLevel::Error, "Winsock initialization failed.");
+			Log(Foundation::ELogLevel::Error, "Winsock initialization failed.");
 			Stop();
 			return false;
 		}
@@ -63,14 +75,14 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "CreateIoCompletionPort failed. error=" << GetLastError();
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			Stop();
 			return false;
 		}
 
 		if (!OpenListenSocket())
 		{
-			Log(GameServer::Foundation::ELogLevel::Error, "Listen socket open failed.");
+			Log(Foundation::ELogLevel::Error, "Listen socket open failed.");
 			Stop();
 			return false;
 		}
@@ -83,7 +95,7 @@ namespace GameServer::NetworkLib
 				<< " port=" << m_serverConfig.port
 				<< " workers=" << m_serverConfig.workerThreadCount
 				<< " maxSessions=" << m_serverConfig.maxSessionCount;
-			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnServerStarted(*this);
 		return true;
@@ -96,7 +108,7 @@ namespace GameServer::NetworkLib
 			return;
 		}
 
-		Log(GameServer::Foundation::ELogLevel::Info, "Server stop requested.");
+		Log(Foundation::ELogLevel::Info, "Server stop requested.");
 
 		CloseListenSocket();
 
@@ -134,7 +146,7 @@ namespace GameServer::NetworkLib
 			m_applicationHandler = nullptr;
 		}
 
-		Log(GameServer::Foundation::ELogLevel::Info, "Server stopped.");
+		Log(Foundation::ELogLevel::Info, "Server stopped.");
 		m_packetCipher.reset();
 		m_packetFramer.reset();
 		m_logger.reset();
@@ -144,7 +156,7 @@ namespace GameServer::NetworkLib
 	{
 		if ((buffer == nullptr && length > 0) || length < 0)
 		{
-			Log(GameServer::Foundation::ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
+			Log(Foundation::ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
 			return false;
 		}
 
@@ -153,7 +165,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "Send rejected because session was not found. sessionId=" << sessionId;
-			Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+			Log(Foundation::ELogLevel::Warn, oss.str());
 			return false;
 		}
 
@@ -161,14 +173,14 @@ namespace GameServer::NetworkLib
 		if (m_packetFramer != nullptr)
 		{
 			std::vector<char> payloadBuffer;
-			payloadBuffer.resize(sizeof(GameServer::NetworkLib::Packet::SContentHeader) + static_cast<std::size_t>(length));
-			GameServer::NetworkLib::Packet::SContentHeader contentHeader{};
+			payloadBuffer.resize(sizeof(SContentHeader) + static_cast<std::size_t>(length));
+			SContentHeader contentHeader{};
 			contentHeader.opcode = opcode;
 			std::memcpy(payloadBuffer.data(), &contentHeader, sizeof(contentHeader));
 			if (length > 0)
 			{
 				std::memcpy(
-					payloadBuffer.data() + sizeof(GameServer::NetworkLib::Packet::SContentHeader),
+					payloadBuffer.data() + sizeof(SContentHeader),
 					buffer,
 					static_cast<std::size_t>(length));
 			}
@@ -179,19 +191,19 @@ namespace GameServer::NetworkLib
 				m_packetCipher->Encode(payloadBuffer.data(), static_cast<int>(payloadBuffer.size()), randomKey);
 			}
 
-			GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
+			SOutgoingPacket outgoingPacket{};
 			outgoingPacket.randomKey = randomKey;
 			outgoingPacket.checkSum =
-				GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+				CalculatePacketChecksum(
 					payloadBuffer.data(),
 					static_cast<std::int32_t>(payloadBuffer.size()));
 			outgoingPacket.payload = payloadBuffer.data();
 			outgoingPacket.payloadLength = static_cast<std::int32_t>(payloadBuffer.size());
 
-			GameServer::NetworkLib::Packet::SFramedPacketBufferParts packetParts{};
+			SFramedPacketBufferParts packetParts{};
 			if (!m_packetFramer->BuildPacketParts(outgoingPacket, packetParts))
 			{
-				Log(GameServer::Foundation::ELogLevel::Error, "BuildPacketParts failed during send path.");
+				Log(Foundation::ELogLevel::Error, "BuildPacketParts failed during send path.");
 				ReleaseSession(sessionContext);
 				return false;
 			}
@@ -231,8 +243,8 @@ namespace GameServer::NetworkLib
 		stats.sessionPoolUsage = static_cast<std::uint32_t>(FSession::GetPoolUsage());
 		stats.sendBufferPoolCapacity = static_cast<std::uint32_t>(FSendBuffer::GetPoolCapacity());
 		stats.sendBufferPoolUsage = static_cast<std::uint32_t>(FSendBuffer::GetPoolUsage());
-		stats.packetBufferPoolCapacity = static_cast<std::uint32_t>(GameServer::NetworkLib::Packet::FPacketBuffer::GetPoolCapacity());
-		stats.packetBufferPoolUsage = static_cast<std::uint32_t>(GameServer::NetworkLib::Packet::FPacketBuffer::GetPoolUsage());
+		stats.packetBufferPoolCapacity = static_cast<std::uint32_t>(FPacketBuffer::GetPoolCapacity());
+		stats.packetBufferPoolUsage = static_cast<std::uint32_t>(FPacketBuffer::GetPoolUsage());
 
 		std::uint64_t queuedSendBufferCount = 0;
 		std::uint64_t maxObservedQueuedSendBufferCount = 0;
@@ -262,7 +274,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "WSAStartup failed. error=" << startupResult;
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -277,7 +289,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "WSASocketW failed. error=" << WSAGetLastError();
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -288,7 +300,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "InetPtonA failed for bind ip. ip=" << m_serverConfig.bindIp;
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -299,7 +311,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "bind failed. error=" << WSAGetLastError();
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -307,7 +319,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "listen failed. error=" << WSAGetLastError();
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			return false;
 		}
 
@@ -362,7 +374,7 @@ namespace GameServer::NetworkLib
 				{
 					std::ostringstream oss;
 					oss << "accept failed. error=" << WSAGetLastError();
-					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+					Log(Foundation::ELogLevel::Warn, oss.str());
 					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				}
 				continue;
@@ -370,7 +382,7 @@ namespace GameServer::NetworkLib
 
 			if (!AttachAcceptedSocket(clientSocket))
 			{
-				Log(GameServer::Foundation::ELogLevel::Warn, "Accepted socket was rejected because no session slot was available.");
+				Log(Foundation::ELogLevel::Warn, "Accepted socket was rejected because no session slot was available.");
 				closesocket(clientSocket);
 			}
 		}
@@ -403,7 +415,7 @@ namespace GameServer::NetworkLib
 				{
 					std::ostringstream oss;
 					oss << "I/O completion failed. sessionId=" << sessionContext->GetSessionId() << " error=" << GetLastError();
-					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+					Log(Foundation::ELogLevel::Warn, oss.str());
 				}
 				if (ioContext->ioType == FSession::EIoType::Send)
 				{
@@ -421,7 +433,7 @@ namespace GameServer::NetworkLib
 				m_receivedByteCount.fetch_add(transferredBytes, std::memory_order_relaxed);
 				if (!sessionContext->CommitRecvBytes(transferredBytes))
 				{
-					Log(GameServer::Foundation::ELogLevel::Warn, "Recv buffer overflow detected.");
+					Log(Foundation::ELogLevel::Warn, "Recv buffer overflow detected.");
 					CloseSession(*sessionContext);
 					ReleaseSession(sessionContext);
 					continue;
@@ -431,14 +443,14 @@ namespace GameServer::NetworkLib
 				{
 					while (true)
 					{
-						GameServer::NetworkLib::Packet::FPacketView packetView;
+						FPacketView packetView;
 						if (!m_packetFramer->TryExtractPacketView(sessionContext->GetRecvBuffer(), packetView))
 						{
 							break;
 						}
 
 						const std::uint8_t actualChecksum =
-							GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+							CalculatePacketChecksum(
 								packetView.payload,
 								packetView.payloadLength);
 						if (actualChecksum != packetView.checkSum)
@@ -448,7 +460,7 @@ namespace GameServer::NetworkLib
 								<< " opcode=" << packetView.opcode
 								<< " expected=" << static_cast<int>(packetView.checkSum)
 								<< " actual=" << static_cast<int>(actualChecksum);
-							Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+							Log(Foundation::ELogLevel::Warn, oss.str());
 							CloseSession(*sessionContext);
 							break;
 						}
@@ -458,12 +470,12 @@ namespace GameServer::NetworkLib
 						m_packetCipher->Decode(const_cast<char*>(packetView.payload), packetView.payloadLength, packetView.randomKey);
 					}
 
-						GameServer::NetworkLib::Packet::FPacketView contentPacketView;
-						if (!GameServer::NetworkLib::Packet::TryParseContentPacketView(packetView, contentPacketView))
+						FPacketView contentPacketView;
+						if (!TryParseContentPacketView(packetView, contentPacketView))
 						{
 							std::ostringstream oss;
 							oss << "Content header parse failed. sessionId=" << sessionContext->GetSessionId();
-							Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+							Log(Foundation::ELogLevel::Warn, oss.str());
 							CloseSession(*sessionContext);
 							break;
 						}
@@ -475,13 +487,13 @@ namespace GameServer::NetworkLib
 						m_receivedPacketCount.fetch_add(1, std::memory_order_relaxed);
 
 						const std::size_t consumedPacketSize =
-							sizeof(GameServer::NetworkLib::Packet::SPacketHeader) + static_cast<std::size_t>(packetView.payloadLength);
+							sizeof(SPacketHeader) + static_cast<std::size_t>(packetView.payloadLength);
 						sessionContext->GetRecvBuffer().Discard(consumedPacketSize);
 					}
 				}
 				else
 				{
-					Log(GameServer::Foundation::ELogLevel::Warn, "Recv path without framer is not supported by ring buffer mode.");
+					Log(Foundation::ELogLevel::Warn, "Recv path without framer is not supported by ring buffer mode.");
 					CloseSession(*sessionContext);
 				}
 
@@ -489,7 +501,7 @@ namespace GameServer::NetworkLib
 				{
 					std::ostringstream oss;
 					oss << "PostRecv failed after packet dispatch. sessionId=" << sessionContext->GetSessionId();
-					Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+					Log(Foundation::ELogLevel::Warn, oss.str());
 					CloseSession(*sessionContext);
 				}
 			}
@@ -520,7 +532,7 @@ namespace GameServer::NetworkLib
 		sessionContext.BuildRecvWsabufs(recvBuffers, recvBufferCount);
 		if (recvBufferCount == 0)
 		{
-			Log(GameServer::Foundation::ELogLevel::Warn, "PostRecv failed because recv buffer has no writable space.");
+			Log(Foundation::ELogLevel::Warn, "PostRecv failed because recv buffer has no writable space.");
 			return false;
 		}
 		sessionContext.AcquireRef();
@@ -532,7 +544,7 @@ namespace GameServer::NetworkLib
 			const int errorCode = WSAGetLastError();
 			std::ostringstream oss;
 			oss << "WSARecv failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
-			Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+			Log(Foundation::ELogLevel::Warn, oss.str());
 			ReleaseSession(&sessionContext);
 			return false;
 		}
@@ -569,7 +581,7 @@ namespace GameServer::NetworkLib
 			std::ostringstream oss;
 			oss << "Concurrent WSASend detected. sessionId=" << sessionContext.GetSessionId()
 				<< " concurrentSendIoCount=" << concurrentSendIoCount;
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			sessionContext.FinishSendIo();
 			sessionContext.ReleaseActiveSendBuffers();
 			sessionContext.EndSend();
@@ -596,7 +608,7 @@ namespace GameServer::NetworkLib
 			const int errorCode = WSAGetLastError();
 			std::ostringstream oss;
 			oss << "WSASend failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			sessionContext.FinishSendIo();
 			sessionContext.ReleaseActiveSendBuffers();
 			sessionContext.EndSend();
@@ -624,7 +636,7 @@ namespace GameServer::NetworkLib
 			std::ostringstream oss;
 			oss << "Session closed. sessionId=" << sessionContext.GetSessionId();
 			oss << " maxConcurrentSendIo=" << sessionContext.GetMaxObservedConcurrentSendIoCount();
-			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnClientDisconnected(sessionContext.GetSessionId());
 	}
@@ -691,7 +703,7 @@ namespace GameServer::NetworkLib
 
 		if (newSessionContext == nullptr)
 		{
-			Log(GameServer::Foundation::ELogLevel::Warn, "All session slots are in use.");
+			Log(Foundation::ELogLevel::Warn, "All session slots are in use.");
 			return false;
 		}
 
@@ -699,7 +711,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "CreateIoCompletionPort attach failed. error=" << GetLastError();
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 			m_sessionSlots[newSessionContext->GetSlotIndex()].store(nullptr);
 			FSession::Destroy(newSessionContext);
 			return false;
@@ -708,7 +720,7 @@ namespace GameServer::NetworkLib
 		{
 			std::ostringstream oss;
 			oss << "Client connected. sessionId=" << newSessionContext->GetSessionId();
-			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 		m_activeSessionCount.fetch_add(1, std::memory_order_relaxed);
 		m_acceptedSessionCount.fetch_add(1, std::memory_order_relaxed);
@@ -733,7 +745,7 @@ namespace GameServer::NetworkLib
 		return static_cast<std::uint8_t>(m_packetRandomKeySeed.fetch_add(1, std::memory_order_relaxed) & 0xFF);
 	}
 
-	void FIocpServer::Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const
+	void FIocpServer::Log(Foundation::ELogLevel logLevel, const std::string& message) const
 	{
 		if (m_logger != nullptr)
 		{

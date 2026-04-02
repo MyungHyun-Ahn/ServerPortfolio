@@ -1,8 +1,4 @@
-﻿#pragma once
-
-#include "Memory/FLockFreeMemoryPool.h"
-
-#include <new>
+#pragma once
 
 #define DECLARE_ALLOC_FREE(Type, PoolName) \
 public: \
@@ -39,14 +35,14 @@ private:
 #define USE_TLS_POOL(Type, PoolName) \
 	DECLARE_ALLOC_FREE(Type, PoolName) \
 	DECLARE_GET_POOL_INFO(Type, PoolName) \
-	inline static GameServer::NetworkLib::Memory::FTlsMemoryPoolManager<Type> PoolName;
+	inline static NetworkLib::Memory::FTlsMemoryPoolManager<Type> PoolName;
 
 #define USE_TLS_POOL_WITH_INIT(Type, PoolName, InitFunc) \
 	DECLARE_ALLOC_FREE_WITH_INIT(Type, PoolName, InitFunc) \
 	DECLARE_GET_POOL_INFO(Type, PoolName) \
-	inline static GameServer::NetworkLib::Memory::FTlsMemoryPoolManager<Type> PoolName;
+	inline static NetworkLib::Memory::FTlsMemoryPoolManager<Type> PoolName;
 
-namespace GameServer::NetworkLib::Memory
+namespace NetworkLib::Memory
 {
 	template <typename T, int BucketSize = 64, int BucketCount = 2, bool UseQueue = true>
 	class FTlsMemoryPoolManager

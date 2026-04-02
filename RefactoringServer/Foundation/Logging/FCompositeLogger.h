@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	class FCompositeLogger final : public ILogger
 	{

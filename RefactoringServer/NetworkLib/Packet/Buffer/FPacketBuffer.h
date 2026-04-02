@@ -1,11 +1,6 @@
 #pragma once
 
-#include "Memory/FTlsMemoryPool.h"
-
-#include <atomic>
-#include <vector>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Buffer
 {
 	class FPacketBuffer
 	{
@@ -89,6 +84,6 @@ namespace GameServer::NetworkLib::Packet
 		std::vector<char> m_buffer;
 		inline static std::atomic<bool> s_pageReuseEnabled{ true };
 		inline static std::atomic<std::size_t> s_pageSize{ kDefaultPageSize };
-		inline static Memory::FTlsMemoryPoolManager<FPacketBuffer, 256, 2> s_packetBufferPool{};
+		inline static NetworkLib::Memory::FTlsMemoryPoolManager<FPacketBuffer, 256, 2> s_packetBufferPool{};
 	};
 }

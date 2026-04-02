@@ -15,7 +15,7 @@ namespace
 
 	struct SCrashDumpState
 	{
-		GameServer::Foundation::SCrashDumpConfig config{};
+		Foundation::SCrashDumpConfig config{};
 		SRWLOCK lock{};
 		LONG initialized = 0;
 		LONG dumpWritten = 0;
@@ -41,7 +41,7 @@ namespace
 		return oss.str();
 	}
 
-	void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message)
+	void Log(Foundation::ELogLevel logLevel, const std::string& message)
 	{
 		if (g_state.config.logger != nullptr)
 		{
@@ -52,13 +52,13 @@ namespace
 		OutputDebugStringA((message + "\n").c_str());
 	}
 
-	MINIDUMP_TYPE ToMiniDumpType(GameServer::Foundation::ECrashDumpType dumpType)
+	MINIDUMP_TYPE ToMiniDumpType(Foundation::ECrashDumpType dumpType)
 	{
 		switch (dumpType)
 		{
-		case GameServer::Foundation::ECrashDumpType::WithFullMemory:
+		case Foundation::ECrashDumpType::WithFullMemory:
 			return MiniDumpWithFullMemory;
-		case GameServer::Foundation::ECrashDumpType::Normal:
+		case Foundation::ECrashDumpType::Normal:
 		default:
 			return MiniDumpNormal;
 		}
@@ -97,13 +97,13 @@ namespace
 	{
 		if (!g_state.config.enabled)
 		{
-			Log(GameServer::Foundation::ELogLevel::Warn, "Crash dump request ignored because module is disabled.");
+			Log(Foundation::ELogLevel::Warn, "Crash dump request ignored because module is disabled.");
 			return false;
 		}
 
 		if (ShouldSkipDump())
 		{
-			Log(GameServer::Foundation::ELogLevel::Warn, "Crash dump request ignored because a dump was already written.");
+			Log(Foundation::ELogLevel::Warn, "Crash dump request ignored because a dump was already written.");
 			return false;
 		}
 
@@ -121,7 +121,7 @@ namespace
 		{
 			std::ostringstream oss;
 			oss << "CreateFileW failed while creating dump. error=" << GetLastError();
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 
 			if (g_state.config.allowOnlySingleDump)
 			{
@@ -156,7 +156,7 @@ namespace
 		{
 			std::ostringstream oss;
 			oss << "MiniDumpWriteDump failed. error=" << GetLastError();
-			Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+			Log(Foundation::ELogLevel::Error, oss.str());
 
 			if (g_state.config.allowOnlySingleDump)
 			{
@@ -168,7 +168,7 @@ namespace
 
 		std::ostringstream oss;
 		oss << "Crash dump written: " << std::filesystem::path(dumpPath).string();
-		Log(GameServer::Foundation::ELogLevel::Error, oss.str());
+		Log(Foundation::ELogLevel::Error, oss.str());
 		return true;
 	}
 
@@ -197,7 +197,7 @@ namespace
 	}
 }
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	bool FCrashDump::Initialize(const SCrashDumpConfig& config)
 	{

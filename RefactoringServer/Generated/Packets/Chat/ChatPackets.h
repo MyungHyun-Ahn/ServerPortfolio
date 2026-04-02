@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Packet/FPacketSerialization.h"
-#include "Packet/IContentPacket.h"
+#include "Packet/Serialization/FPacketSerialization.h"
+#include "Packet/Serialization/IContentPacket.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,9 +13,9 @@
 #include <unordered_map>
 #include <array>
 
-namespace GameServer::Generated::Chat
+namespace Generated::Chat
 {
-	class FRoomSnapshotRq final : public GameServer::NetworkLib::Packet::IContentPacket
+	class FRoomSnapshotRq final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
 		static constexpr std::uint16_t kOpcode = 3000;
@@ -35,21 +35,21 @@ namespace GameServer::Generated::Chat
 
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId);
+			return NetworkLib::Packet::Serialization::GetSerializedSize(roomId);
 		}
 
-		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
 		{
 			writer.Write(roomId);
 		}
 
-		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
 		{
 			return reader.Read(roomId);
 		}
 	};
 
-	class FRoomSnapshotRp final : public GameServer::NetworkLib::Packet::IContentPacket
+	class FRoomSnapshotRp final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
 		static constexpr std::uint16_t kOpcode = 3001;
@@ -72,13 +72,13 @@ namespace GameServer::Generated::Chat
 
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId)
-				+ GameServer::NetworkLib::Packet::GetSerializedSize(participants)
-				+ GameServer::NetworkLib::Packet::GetSerializedSize(unreadCounts)
-				+ GameServer::NetworkLib::Packet::GetSerializedSize(metadata);
+			return NetworkLib::Packet::Serialization::GetSerializedSize(roomId)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(participants)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(unreadCounts)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(metadata);
 		}
 
-		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
 		{
 			writer.Write(roomId);
 			writer.Write(participants);
@@ -86,7 +86,7 @@ namespace GameServer::Generated::Chat
 			writer.Write(metadata);
 		}
 
-		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
 		{
 			return reader.Read(roomId)
 				&& reader.Read(participants)
@@ -95,7 +95,7 @@ namespace GameServer::Generated::Chat
 		}
 	};
 
-	class FRoomBinarySnapshotNoti final : public GameServer::NetworkLib::Packet::IContentPacket
+	class FRoomBinarySnapshotNoti final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
 		static constexpr std::uint16_t kOpcode = 3002;
@@ -108,12 +108,12 @@ namespace GameServer::Generated::Chat
 
 		std::span<const std::uint8_t> GetPayloadValue() const noexcept
 		{
-			GameServer::NetworkLib::Packet::ValidateBorrowedViewAccess(m_borrowedViewScope);
+			NetworkLib::Packet::View::ValidateBorrowedViewAccess(m_borrowedViewScope);
 			return m_payload;
 		}
 
 
-		void BindBorrowedViewScope(const std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState>& scope) noexcept override
+		void BindBorrowedViewScope(const std::shared_ptr<NetworkLib::Packet::View::FBorrowedViewScopeState>& scope) noexcept override
 		{
 			m_borrowedViewScope = scope;
 		}
@@ -131,24 +131,24 @@ namespace GameServer::Generated::Chat
 
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId)
-				+ GameServer::NetworkLib::Packet::GetSerializedSize(m_payload);
+			return NetworkLib::Packet::Serialization::GetSerializedSize(roomId)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(m_payload);
 		}
 
-		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
 		{
 			writer.Write(roomId);
 			writer.Write(m_payload);
 		}
 
-		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
 		{
 			return reader.Read(roomId)
 				&& reader.Read(m_payload);
 		}
 
 	private:
-		std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState> m_borrowedViewScope;
+		std::shared_ptr<NetworkLib::Packet::View::FBorrowedViewScopeState> m_borrowedViewScope;
 		std::span<const std::uint8_t> m_payload;
 	};
 

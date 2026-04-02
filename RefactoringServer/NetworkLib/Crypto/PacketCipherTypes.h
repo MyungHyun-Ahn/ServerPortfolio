@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cstdint>
-
-namespace GameServer::NetworkLib::Crypto
+namespace NetworkLib::Crypto
 {
 	struct SPacketCipherConfig
 	{

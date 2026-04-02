@@ -3,12 +3,12 @@
 #include "Generated/Packets/Chat/ChatPacketHandler.h"
 #include "Generated/Packets/Echo/EchoPacketHandler.h"
 #include "Generated/Packets/Login/LoginPacketHandler.h"
-#include "Packet/FPacketView.h"
+#include "Packet/View/FPacketView.h"
 #include "Servers/IServer.h"
 
 #include <cstdint>
 
-namespace GameServer::Generated
+namespace Generated
 {
 	class FPacketRouter
 	{
@@ -28,7 +28,7 @@ namespace GameServer::Generated
 			m_loginHandler = handler;
 		}
 
-		bool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView)
+		bool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView)
 		{
 			switch (packetView.opcode)
 			{

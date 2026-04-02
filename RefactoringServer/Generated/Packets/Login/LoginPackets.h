@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Packet/FPacketSerialization.h"
-#include "Packet/IContentPacket.h"
+#include "Packet/Serialization/FPacketSerialization.h"
+#include "Packet/Serialization/IContentPacket.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,9 +13,9 @@
 #include <unordered_map>
 #include <array>
 
-namespace GameServer::Generated::Login
+namespace Generated::Login
 {
-	class FLoginRq final : public GameServer::NetworkLib::Packet::IContentPacket
+	class FLoginRq final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
 		static constexpr std::uint16_t kOpcode = 2000;
@@ -35,21 +35,21 @@ namespace GameServer::Generated::Login
 
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(userId);
+			return NetworkLib::Packet::Serialization::GetSerializedSize(userId);
 		}
 
-		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
 		{
 			writer.Write(userId);
 		}
 
-		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
 		{
 			return reader.Read(userId);
 		}
 	};
 
-	class FLoginRp final : public GameServer::NetworkLib::Packet::IContentPacket
+	class FLoginRp final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
 		static constexpr std::uint16_t kOpcode = 2001;
@@ -70,17 +70,17 @@ namespace GameServer::Generated::Login
 
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(userId)
-				+ GameServer::NetworkLib::Packet::GetSerializedSize(success);
+			return NetworkLib::Packet::Serialization::GetSerializedSize(userId)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(success);
 		}
 
-		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
 		{
 			writer.Write(userId);
 			writer.Write(success);
 		}
 
-		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
 		{
 			return reader.Read(userId)
 				&& reader.Read(success);

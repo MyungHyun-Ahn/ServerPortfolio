@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	enum class ELogLevel : std::uint32_t
 	{

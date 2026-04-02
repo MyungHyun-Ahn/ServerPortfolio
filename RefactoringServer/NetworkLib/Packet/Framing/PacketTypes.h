@@ -1,10 +1,6 @@
 #pragma once
 
-#include <array>
-#include <cstdint>
-#include <vector>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Framing
 {
 #pragma pack(push, 1)
 	struct SPacketHeader

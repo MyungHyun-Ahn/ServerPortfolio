@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cstdint>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::View
 {
 	struct FPacketView
 	{

@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Servers/IServer.h"
-
-namespace GameServer::NetworkLib
+namespace NetworkLib::Core
 {
 	class FStubServer final : public IServer
 	{

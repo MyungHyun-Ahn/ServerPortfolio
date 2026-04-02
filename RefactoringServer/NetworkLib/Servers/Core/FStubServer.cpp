@@ -1,8 +1,9 @@
 #include "Pch.h"
 
-#include "Servers/FStubServer.h"
+#include "Servers/Core/BackendTypes.h"
+#include "Servers/Core/FStubServer.h"
 
-namespace GameServer::NetworkLib
+namespace NetworkLib::Core
 {
 	FStubServer::FStubServer(EBackendKind backendKind)
 		: m_backendKind(backendKind)

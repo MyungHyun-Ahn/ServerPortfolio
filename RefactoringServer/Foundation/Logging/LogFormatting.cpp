@@ -17,9 +17,9 @@ namespace
 		return oss.str();
 	}
 
-	const char* ToString(GameServer::Foundation::ELogLevel logLevel)
+	const char* ToString(Foundation::ELogLevel logLevel)
 	{
-		using GameServer::Foundation::ELogLevel;
+		using Foundation::ELogLevel;
 
 		switch (logLevel)
 		{
@@ -36,7 +36,7 @@ namespace
 		}
 	}
 
-	std::string BuildThreadPrefix(const GameServer::Foundation::SLogConfig& logConfig)
+	std::string BuildThreadPrefix(const Foundation::SLogConfig& logConfig)
 	{
 		if (!logConfig.includeThreadId)
 		{
@@ -49,7 +49,7 @@ namespace
 	}
 }
 
-namespace GameServer::Foundation::Logging
+namespace Foundation::Logging
 {
 	std::string BuildDateStamp()
 	{

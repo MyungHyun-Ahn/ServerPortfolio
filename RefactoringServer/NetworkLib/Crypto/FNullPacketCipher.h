@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Crypto/IPacketCipher.h"
-
-namespace GameServer::NetworkLib::Crypto
+namespace NetworkLib::Crypto
 {
 	class FNullPacketCipher final : public IPacketCipher
 	{

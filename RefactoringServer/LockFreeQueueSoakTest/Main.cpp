@@ -1,3 +1,4 @@
+#include "NetLibPch.h"
 #include "Containers/FLockFreeQueue.h"
 
 #include <atomic>
@@ -119,7 +120,7 @@ namespace
 
 int main(int argc, char* argv[])
 {
-	using TQueue = GameServer::NetworkLib::Containers::FLockFreeQueue<std::uint64_t>;
+	using TQueue = NetworkLib::Containers::FLockFreeQueue<std::uint64_t>;
 
 	SQueueSoakConfig config = ParseConfig(argc, argv);
 	if (config.logPath.empty())

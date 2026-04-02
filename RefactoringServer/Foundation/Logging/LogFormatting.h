@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-namespace GameServer::Foundation::Logging
+namespace Foundation::Logging
 {
 	std::string BuildDateStamp();
 	std::string BuildLine(const SLogConfig& logConfig, ELogLevel logLevel, std::string_view category, std::string_view message);

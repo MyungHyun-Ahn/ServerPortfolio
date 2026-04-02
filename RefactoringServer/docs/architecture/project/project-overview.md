@@ -29,6 +29,7 @@
 - 네트워크 코어는 `Interlocked` 중심의 lock-free 자료구조와 비동기 I/O를 우선한다.
 - 게임 로직 계층은 이후 `single-writer + message passing` 구조로 분리한다.
 - 즉, 전체 시스템을 억지로 순수 lock-free로 만드는 대신, `네트워크 코어 무락 + 로직 소유권 분리`를 기본 원칙으로 둔다.
+- 헤더/PCH 규칙은 [cpp-header-pch-convention.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\project\cpp-header-pch-convention.md)를 기준으로 맞춘다.
 
 ## 4. 현재 범위와 제외 범위
 ### 4-1. 현재 범위

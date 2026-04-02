@@ -460,8 +460,8 @@ internal static class CppPacketGenerator
         var builder = new StringBuilder();
         builder.AppendLine("#pragma once");
         builder.AppendLine();
-        builder.AppendLine("#include \"Packet/FPacketSerialization.h\"");
-        builder.AppendLine("#include \"Packet/IContentPacket.h\"");
+        builder.AppendLine("#include \"Packet/Serialization/FPacketSerialization.h\"");
+        builder.AppendLine("#include \"Packet/Serialization/IContentPacket.h\"");
         builder.AppendLine();
         builder.AppendLine("#include <cstddef>");
         builder.AppendLine("#include <cstdint>");
@@ -473,7 +473,7 @@ internal static class CppPacketGenerator
         builder.AppendLine("#include <unordered_map>");
         builder.AppendLine("#include <array>");
         builder.AppendLine();
-        builder.AppendLine($"namespace GameServer::Generated::{document.Content}");
+        builder.AppendLine($"namespace Generated::{document.Content}");
         builder.AppendLine("{");
 
         foreach (PacketSchemaMessage message in document.Messages)
@@ -493,13 +493,13 @@ internal static class CppPacketGenerator
         builder.AppendLine("#pragma once");
         builder.AppendLine();
         builder.AppendLine($"#include \"Generated/Packets/{document.Content}/{document.Content}Packets.h\"");
-        builder.AppendLine("#include \"Packet/FPacketSerialization.h\"");
-        builder.AppendLine("#include \"Packet/FPacketView.h\"");
+        builder.AppendLine("#include \"Packet/Serialization/FPacketSerialization.h\"");
+        builder.AppendLine("#include \"Packet/View/FPacketView.h\"");
         builder.AppendLine("#include \"Servers/IServer.h\"");
         builder.AppendLine();
         builder.AppendLine("#include <cstdint>");
         builder.AppendLine();
-        builder.AppendLine($"namespace GameServer::Generated::{document.Content}");
+        builder.AppendLine($"namespace Generated::{document.Content}");
         builder.AppendLine("{");
         builder.AppendLine($"\tclass I{document.Content}PacketHandler");
         builder.AppendLine("\t{");
@@ -520,13 +520,13 @@ internal static class CppPacketGenerator
         builder.AppendLine("\t{");
         builder.AppendLine("\tpublic:");
         builder.AppendLine($"\t\tvirtual ~I{document.Content}PacketDispatcher() = default;");
-        builder.AppendLine("\t\tvirtual bool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) = 0;");
+        builder.AppendLine("\t\tvirtual bool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) = 0;");
         builder.AppendLine("\t};");
         builder.AppendLine();
         builder.AppendLine($"\tclass F{document.Content}PacketHandlerBase : public I{document.Content}PacketHandler, public I{document.Content}PacketDispatcher");
         builder.AppendLine("\t{");
         builder.AppendLine("\tpublic:");
-        builder.AppendLine("\t\tbool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) override");
+        builder.AppendLine("\t\tbool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) override");
         builder.AppendLine("\t\t{");
         builder.AppendLine("\t\t\tswitch (packetView.opcode)");
         builder.AppendLine("\t\t\t{");
@@ -552,16 +552,16 @@ internal static class CppPacketGenerator
         }
 
         builder.AppendLine("\tprotected:");
-        builder.AppendLine("\t\tvirtual bool OnUnhandledPacket(GameServer::NetworkLib::IServer&, std::uint64_t, const GameServer::NetworkLib::Packet::FPacketView&)");
+        builder.AppendLine("\t\tvirtual bool OnUnhandledPacket(NetworkLib::IServer&, std::uint64_t, const NetworkLib::Packet::View::FPacketView&)");
         builder.AppendLine("\t\t{");
         builder.AppendLine("\t\t\treturn false;");
         builder.AppendLine("\t\t}");
         builder.AppendLine("\t};");
         builder.AppendLine();
         builder.AppendLine("\ttemplate <typename TPacket>");
-        builder.AppendLine("\tinline bool SendGeneratedPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)");
+        builder.AppendLine("\tinline bool SendGeneratedPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)");
         builder.AppendLine("\t{");
-        builder.AppendLine("\t\treturn GameServer::NetworkLib::Packet::SendContentPacket(server, sessionId, packet);");
+        builder.AppendLine("\t\treturn NetworkLib::Packet::Serialization::SendContentPacket(server, sessionId, packet);");
         builder.AppendLine("\t}");
         builder.AppendLine("}");
         return builder.ToString();
@@ -578,12 +578,12 @@ internal static class CppPacketGenerator
             builder.AppendLine($"#include \"Generated/Packets/{document.Content}/{document.Content}PacketHandler.h\"");
         }
 
-        builder.AppendLine("#include \"Packet/FPacketView.h\"");
+        builder.AppendLine("#include \"Packet/View/FPacketView.h\"");
         builder.AppendLine("#include \"Servers/IServer.h\"");
         builder.AppendLine();
         builder.AppendLine("#include <cstdint>");
         builder.AppendLine();
-        builder.AppendLine("namespace GameServer::Generated");
+        builder.AppendLine("namespace Generated");
         builder.AppendLine("{");
         builder.AppendLine("\tclass FPacketRouter");
         builder.AppendLine("\t{");
@@ -598,7 +598,7 @@ internal static class CppPacketGenerator
             builder.AppendLine();
         }
 
-        builder.AppendLine("\t\tbool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView)");
+        builder.AppendLine("\t\tbool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView)");
         builder.AppendLine("\t\t{");
         builder.AppendLine("\t\t\tswitch (packetView.opcode)");
         builder.AppendLine("\t\t\t{");
@@ -634,7 +634,7 @@ internal static class CppPacketGenerator
 
         string className = $"F{messageName}{kindSuffix}";
         bool containsBorrowedViews = EndpointContainsBorrowedViews(endpoint);
-        builder.AppendLine($"\tclass {className} final : public GameServer::NetworkLib::Packet::IContentPacket");
+        builder.AppendLine($"\tclass {className} final : public NetworkLib::Packet::Serialization::IContentPacket");
         builder.AppendLine("\t{");
         builder.AppendLine("\tpublic:");
         builder.AppendLine($"\t\tstatic constexpr std::uint16_t kOpcode = {endpoint.Opcode};");
@@ -651,7 +651,7 @@ internal static class CppPacketGenerator
                 builder.AppendLine();
                 builder.AppendLine($"\t\t{PacketTypeMapping.RenderCppType(field.Type)} Get{ToAccessorSuffix(field.Name)}Value() const noexcept");
                 builder.AppendLine("\t\t{");
-                builder.AppendLine("\t\t\tGameServer::NetworkLib::Packet::ValidateBorrowedViewAccess(m_borrowedViewScope);");
+                builder.AppendLine("\t\t\tNetworkLib::Packet::View::ValidateBorrowedViewAccess(m_borrowedViewScope);");
                 builder.AppendLine($"\t\t\treturn m_{field.Name};");
                 builder.AppendLine("\t\t}");
                 builder.AppendLine();
@@ -669,7 +669,7 @@ internal static class CppPacketGenerator
 
         if (containsBorrowedViews)
         {
-            builder.AppendLine("\t\tvoid BindBorrowedViewScope(const std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState>& scope) noexcept override");
+            builder.AppendLine("\t\tvoid BindBorrowedViewScope(const std::shared_ptr<NetworkLib::Packet::View::FBorrowedViewScopeState>& scope) noexcept override");
             builder.AppendLine("\t\t{");
             builder.AppendLine("\t\t\tm_borrowedViewScope = scope;");
             builder.AppendLine("\t\t}");
@@ -705,14 +705,14 @@ internal static class CppPacketGenerator
                     builder.Append("\t\t\t\t+ ");
                 }
 
-                builder.Append($"GameServer::NetworkLib::Packet::GetSerializedSize({RenderFieldAccess(field)})");
+                builder.Append($"NetworkLib::Packet::Serialization::GetSerializedSize({RenderFieldAccess(field)})");
             }
 
             builder.AppendLine(";");
         }
         builder.AppendLine("\t\t}");
         builder.AppendLine();
-        builder.AppendLine("\t\tvoid Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override");
+        builder.AppendLine("\t\tvoid Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override");
         builder.AppendLine("\t\t{");
         foreach (PacketSchemaField field in endpoint.Fields)
         {
@@ -720,7 +720,7 @@ internal static class CppPacketGenerator
         }
         builder.AppendLine("\t\t}");
         builder.AppendLine();
-        builder.AppendLine("\t\tbool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override");
+        builder.AppendLine("\t\tbool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override");
         builder.AppendLine("\t\t{");
         if (endpoint.Fields.Count == 0)
         {
@@ -748,7 +748,7 @@ internal static class CppPacketGenerator
         {
             builder.AppendLine();
             builder.AppendLine("\tprivate:");
-            builder.AppendLine("\t\tstd::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState> m_borrowedViewScope;");
+            builder.AppendLine("\t\tstd::shared_ptr<NetworkLib::Packet::View::FBorrowedViewScopeState> m_borrowedViewScope;");
             foreach (PacketSchemaField field in endpoint.Fields)
             {
                 if (FieldContainsBorrowedView(field))
@@ -769,7 +769,7 @@ internal static class CppPacketGenerator
         }
 
         string className = $"F{messageName}{kindSuffix}";
-        builder.AppendLine($"\t\tvirtual bool Handle{messageName}{kindSuffix}(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const {className}& packet) = 0;");
+        builder.AppendLine($"\t\tvirtual bool Handle{messageName}{kindSuffix}(NetworkLib::IServer& server, std::uint64_t sessionId, const {className}& packet) = 0;");
     }
 
     private static void AppendNoOpHandler(StringBuilder builder, string messageName, string kindSuffix, PacketSchemaEndpoint? endpoint)
@@ -780,7 +780,7 @@ internal static class CppPacketGenerator
         }
 
         string className = $"F{messageName}{kindSuffix}";
-        builder.AppendLine($"\t\tbool Handle{messageName}{kindSuffix}(GameServer::NetworkLib::IServer&, std::uint64_t, const {className}&) override");
+        builder.AppendLine($"\t\tbool Handle{messageName}{kindSuffix}(NetworkLib::IServer&, std::uint64_t, const {className}&) override");
         builder.AppendLine("\t\t{");
         builder.AppendLine("\t\t\treturn false;");
         builder.AppendLine("\t\t}");
@@ -800,10 +800,10 @@ internal static class CppPacketGenerator
         builder.AppendLine($"\t\t\t\t\t{className} packet;");
         if (EndpointContainsBorrowedViews(endpoint))
         {
-            builder.AppendLine("\t\t\t\t\tGameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;");
+            builder.AppendLine("\t\t\t\t\tNetworkLib::Packet::View::FBorrowedViewScope borrowedViewScope;");
             builder.AppendLine("\t\t\t\t\tpacket.BindBorrowedViewScope(borrowedViewScope.GetState());");
         }
-        builder.AppendLine("\t\t\t\t\tif (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))");
+        builder.AppendLine("\t\t\t\t\tif (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))");
         builder.AppendLine("\t\t\t\t\t{");
         builder.AppendLine("\t\t\t\t\t\treturn false;");
         builder.AppendLine("\t\t\t\t\t}");

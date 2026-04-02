@@ -2,7 +2,7 @@
 
 #include "CrashDumpTypes.h"
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	class FCrashDump final
 	{

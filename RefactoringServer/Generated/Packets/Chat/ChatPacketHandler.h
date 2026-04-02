@@ -1,42 +1,42 @@
 #pragma once
 
 #include "Generated/Packets/Chat/ChatPackets.h"
-#include "Packet/FPacketSerialization.h"
-#include "Packet/FPacketView.h"
+#include "Packet/Serialization/FPacketSerialization.h"
+#include "Packet/View/FPacketView.h"
 #include "Servers/IServer.h"
 
 #include <cstdint>
 
-namespace GameServer::Generated::Chat
+namespace Generated::Chat
 {
 	class IChatPacketHandler
 	{
 	public:
 		virtual ~IChatPacketHandler() = default;
 
-		virtual bool HandleRoomSnapshotRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRq& packet) = 0;
-		virtual bool HandleRoomSnapshotRp(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRp& packet) = 0;
-		virtual bool HandleRoomBinarySnapshotNoti(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomBinarySnapshotNoti& packet) = 0;
+		virtual bool HandleRoomSnapshotRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRq& packet) = 0;
+		virtual bool HandleRoomSnapshotRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRp& packet) = 0;
+		virtual bool HandleRoomBinarySnapshotNoti(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomBinarySnapshotNoti& packet) = 0;
 	};
 
 	class IChatPacketDispatcher
 	{
 	public:
 		virtual ~IChatPacketDispatcher() = default;
-		virtual bool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) = 0;
+		virtual bool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) = 0;
 	};
 
 	class FChatPacketHandlerBase : public IChatPacketHandler, public IChatPacketDispatcher
 	{
 	public:
-		bool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) override
+		bool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) override
 		{
 			switch (packetView.opcode)
 			{
 			case FRoomSnapshotRq::kOpcode:
 				{
 					FRoomSnapshotRq packet;
-					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
@@ -46,7 +46,7 @@ namespace GameServer::Generated::Chat
 			case FRoomSnapshotRp::kOpcode:
 				{
 					FRoomSnapshotRp packet;
-					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
@@ -56,9 +56,9 @@ namespace GameServer::Generated::Chat
 			case FRoomBinarySnapshotNoti::kOpcode:
 				{
 					FRoomBinarySnapshotNoti packet;
-					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					NetworkLib::Packet::View::FBorrowedViewScope borrowedViewScope;
 					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
-					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
@@ -70,31 +70,31 @@ namespace GameServer::Generated::Chat
 			}
 		}
 
-		bool HandleRoomSnapshotRq(GameServer::NetworkLib::IServer&, std::uint64_t, const FRoomSnapshotRq&) override
+		bool HandleRoomSnapshotRq(NetworkLib::IServer&, std::uint64_t, const FRoomSnapshotRq&) override
 		{
 			return false;
 		}
 
-		bool HandleRoomSnapshotRp(GameServer::NetworkLib::IServer&, std::uint64_t, const FRoomSnapshotRp&) override
+		bool HandleRoomSnapshotRp(NetworkLib::IServer&, std::uint64_t, const FRoomSnapshotRp&) override
 		{
 			return false;
 		}
 
-		bool HandleRoomBinarySnapshotNoti(GameServer::NetworkLib::IServer&, std::uint64_t, const FRoomBinarySnapshotNoti&) override
+		bool HandleRoomBinarySnapshotNoti(NetworkLib::IServer&, std::uint64_t, const FRoomBinarySnapshotNoti&) override
 		{
 			return false;
 		}
 
 	protected:
-		virtual bool OnUnhandledPacket(GameServer::NetworkLib::IServer&, std::uint64_t, const GameServer::NetworkLib::Packet::FPacketView&)
+		virtual bool OnUnhandledPacket(NetworkLib::IServer&, std::uint64_t, const NetworkLib::Packet::View::FPacketView&)
 		{
 			return false;
 		}
 	};
 
 	template <typename TPacket>
-	inline bool SendGeneratedPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
+	inline bool SendGeneratedPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
 	{
-		return GameServer::NetworkLib::Packet::SendContentPacket(server, sessionId, packet);
+		return NetworkLib::Packet::Serialization::SendContentPacket(server, sessionId, packet);
 	}
 }

@@ -4,7 +4,7 @@
 
 #include <string_view>
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	class ILogger
 	{

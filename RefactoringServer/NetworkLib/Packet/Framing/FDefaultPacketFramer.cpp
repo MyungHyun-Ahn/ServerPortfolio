@@ -1,8 +1,8 @@
 #include "Pch.h"
 
-#include "Packet/FDefaultPacketFramer.h"
+#include "Packet/Framing/FDefaultPacketFramer.h"
 
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Framing
 {
 	bool FDefaultPacketFramer::BuildPacket(const SOutgoingPacket& packet, std::vector<char>& outPacket) const
 	{
@@ -71,7 +71,7 @@ namespace GameServer::NetworkLib::Packet
 		return true;
 	}
 
-	bool FDefaultPacketFramer::TryExtractPacket(FRecvBuffer& ioBuffer, SFramedPacket& outPacket) const
+	bool FDefaultPacketFramer::TryExtractPacket(NetworkLib::Packet::Buffer::FRecvBuffer& ioBuffer, SFramedPacket& outPacket) const
 	{
 		if (ioBuffer.GetUsedSize() < sizeof(SPacketHeader))
 		{
@@ -105,7 +105,7 @@ namespace GameServer::NetworkLib::Packet
 		return ioBuffer.Discard(packetSize);
 	}
 
-	bool FDefaultPacketFramer::TryExtractPacketView(FRecvBuffer& ioBuffer, FPacketView& outPacketView) const
+	bool FDefaultPacketFramer::TryExtractPacketView(NetworkLib::Packet::Buffer::FRecvBuffer& ioBuffer, NetworkLib::Packet::View::FPacketView& outPacketView) const
 	{
 		if (ioBuffer.GetUsedSize() < sizeof(SPacketHeader))
 		{

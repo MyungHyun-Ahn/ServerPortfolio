@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	enum class ECrashDumpType
 	{

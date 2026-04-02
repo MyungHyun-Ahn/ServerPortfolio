@@ -2,31 +2,23 @@
 
 #include "Foundation/Logging/LoggingTypes.h"
 
-#include <cstdint>
-#include <memory>
-#include <string>
-
-namespace GameServer::NetworkLib
-{
-}
-
-namespace GameServer::Foundation
+namespace Foundation
 {
 	class ILogger;
 }
 
-namespace GameServer::NetworkLib
+namespace NetworkLib::Crypto
 {
-	namespace Crypto
-	{
-		class IPacketCipher;
-	}
+	class IPacketCipher;
+}
 
-	namespace Packet
-	{
-		class IPacketFramer;
-	}
+namespace NetworkLib::Packet::Framing
+{
+	class IPacketFramer;
+}
 
+namespace NetworkLib::Core
+{
 	enum class EBackendKind : std::uint32_t
 	{
 		Iocp = 0,
@@ -44,10 +36,10 @@ namespace GameServer::NetworkLib
 		std::uint32_t recvBufferSize = 1024;
 		bool enablePageBufferReuse = true;
 		std::uint32_t pageBufferSize = 4096;
-		GameServer::Foundation::SLogConfig logConfig{};
-		std::shared_ptr<GameServer::Foundation::ILogger> logger;
-		std::shared_ptr<GameServer::NetworkLib::Crypto::IPacketCipher> packetCipher;
-		std::shared_ptr<GameServer::NetworkLib::Packet::IPacketFramer> packetFramer;
+		Foundation::SLogConfig logConfig{};
+		std::shared_ptr<Foundation::ILogger> logger;
+		std::shared_ptr<NetworkLib::Crypto::IPacketCipher> packetCipher;
+		std::shared_ptr<NetworkLib::Packet::Framing::IPacketFramer> packetFramer;
 	};
 
 	struct SServerStats

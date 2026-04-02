@@ -1,16 +1,6 @@
 #pragma once
 
-#include "Packet/ContentHeader.h"
-#include "Packet/FPacketReader.h"
-#include "Packet/FPacketView.h"
-#include "Packet/FPacketWriter.h"
-#include "Servers/IServer.h"
-
-#include <span>
-#include <string_view>
-#include <vector>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Serialization
 {
 	template <typename TValue>
 	inline std::size_t GetSerializedSize(const TValue&) noexcept
@@ -111,7 +101,7 @@ namespace GameServer::NetworkLib::Packet
 	}
 
 	template <typename TPacket>
-	inline bool DeserializeContentPacket(const FPacketView& packetView, TPacket& outPacket)
+	inline bool DeserializeContentPacket(const NetworkLib::Packet::View::FPacketView& packetView, TPacket& outPacket)
 	{
 		if (packetView.opcode != TPacket::kOpcode)
 		{
@@ -123,15 +113,15 @@ namespace GameServer::NetworkLib::Packet
 
 	inline std::vector<char> BuildContentPayload(std::uint16_t opcode, std::vector<char>&& bodyBuffer)
 	{
-		SContentHeader contentHeader{};
+		NetworkLib::Packet::Framing::SContentHeader contentHeader{};
 		contentHeader.opcode = opcode;
 
 		std::vector<char> payloadBuffer;
-		payloadBuffer.resize(sizeof(SContentHeader) + bodyBuffer.size());
-		std::memcpy(payloadBuffer.data(), &contentHeader, sizeof(SContentHeader));
+		payloadBuffer.resize(sizeof(NetworkLib::Packet::Framing::SContentHeader) + bodyBuffer.size());
+		std::memcpy(payloadBuffer.data(), &contentHeader, sizeof(NetworkLib::Packet::Framing::SContentHeader));
 		if (!bodyBuffer.empty())
 		{
-			std::memcpy(payloadBuffer.data() + sizeof(SContentHeader), bodyBuffer.data(), bodyBuffer.size());
+			std::memcpy(payloadBuffer.data() + sizeof(NetworkLib::Packet::Framing::SContentHeader), bodyBuffer.data(), bodyBuffer.size());
 		}
 
 		return payloadBuffer;
@@ -143,26 +133,26 @@ namespace GameServer::NetworkLib::Packet
 		return BuildContentPayload(packet.GetOpcode(), SerializeContentBody(packet));
 	}
 
-	inline bool TryParseContentPacketView(const FPacketView& transportPacketView, FPacketView& outPacketView)
+	inline bool TryParseContentPacketView(const NetworkLib::Packet::View::FPacketView& transportPacketView, NetworkLib::Packet::View::FPacketView& outPacketView)
 	{
 		if (transportPacketView.payload == nullptr ||
-			transportPacketView.payloadLength < static_cast<std::int32_t>(sizeof(SContentHeader)))
+			transportPacketView.payloadLength < static_cast<std::int32_t>(sizeof(NetworkLib::Packet::Framing::SContentHeader)))
 		{
 			return false;
 		}
 
-		SContentHeader contentHeader{};
-		std::memcpy(&contentHeader, transportPacketView.payload, sizeof(SContentHeader));
+		NetworkLib::Packet::Framing::SContentHeader contentHeader{};
+		std::memcpy(&contentHeader, transportPacketView.payload, sizeof(NetworkLib::Packet::Framing::SContentHeader));
 
 		outPacketView = transportPacketView;
 		outPacketView.opcode = contentHeader.opcode;
-		outPacketView.payload = transportPacketView.payload + sizeof(SContentHeader);
-		outPacketView.payloadLength = transportPacketView.payloadLength - static_cast<std::int32_t>(sizeof(SContentHeader));
+		outPacketView.payload = transportPacketView.payload + sizeof(NetworkLib::Packet::Framing::SContentHeader);
+		outPacketView.payloadLength = transportPacketView.payloadLength - static_cast<std::int32_t>(sizeof(NetworkLib::Packet::Framing::SContentHeader));
 		return true;
 	}
 
 	template <typename TPacket>
-	inline bool SendContentPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
+	inline bool SendContentPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
 	{
 		FPacketWriter writer;
 		writer.ReserveAdditional(packet.GetEstimatedBodySize());

@@ -1,51 +1,50 @@
 # NetworkLib Session Recv Buffer Review
 
-## 1. 범위
+## 1. 踰붿쐞
 - [`FRecvBuffer.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FRecvBuffer.h)
 - [`FPacketView.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FPacketView.h)
 - [`IPacketFramer.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\IPacketFramer.h)
 - [`FDefaultPacketFramer.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FDefaultPacketFramer.cpp)
-- [`FSession.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)
-- [`FSession.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)
-- [`FIocpServer.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)
+- [`FSession.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.h)
+- [`FSession.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
+- [`FIocpServer.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
 - [`IApplicationHandler.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IApplicationHandler.h)
 
-## 2. 변경 목적
-- 이전 recv 경로는 `WSARecv -> 임시 vector -> 세션 누적 vector` 순서로 한 번 더 복사했다.
-- 레거시 프로젝트의 강점은 세션이 recv ring buffer를 직접 소유하고, `WSARecv`가 그 free 영역으로 바로 들어간다는 점이었다.
-- 이번 변경은 그 의도를 현재 `PacketFramer` 구조에 맞게 옮기고, 가능하면 payload를 별도 버퍼로 복사하지 않고 view로 넘기는 것이 목적이다.
+## 2. 蹂寃?紐⑹쟻
+- ?댁쟾 recv 寃쎈줈??`WSARecv -> ?꾩떆 vector -> ?몄뀡 ?꾩쟻 vector` ?쒖꽌濡???踰???蹂듭궗?덈떎.
+- ?덇굅???꾨줈?앺듃??媛뺤젏? ?몄뀡??recv ring buffer瑜?吏곸젒 ?뚯쑀?섍퀬, `WSARecv`媛 洹?free ?곸뿭?쇰줈 諛붾줈 ?ㅼ뼱媛꾨떎???먯씠?덈떎.
+- ?대쾲 蹂寃쎌? 洹??섎룄瑜??꾩옱 `PacketFramer` 援ъ“??留욊쾶 ??린怨? 媛?ν븯硫?payload瑜?蹂꾨룄 踰꾪띁濡?蹂듭궗?섏? ?딄퀬 view濡??섍린??寃껋씠 紐⑹쟻?대떎.
 
-## 3. 설계 요약
-### 3-1. 세션 소유 recv ring buffer
-- [`FSession`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.h)은 [`FRecvBuffer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FRecvBuffer.h)를 소유한다.
-- `FRecvBuffer`는 `readOffset`, `writeOffset`, `usedSize` 기반의 고정 용량 ring buffer다.
-- `BuildRecvWsabufs()`는 free 영역을 최대 2개 `WSABUF`로 나눠 `WSARecv`에 넘긴다.
+## 3. ?ㅺ퀎 ?붿빟
+### 3-1. ?몄뀡 ?뚯쑀 recv ring buffer
+- [`FSession`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.h)? [`FRecvBuffer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FRecvBuffer.h)瑜??뚯쑀?쒕떎.
+- `FRecvBuffer`??`readOffset`, `writeOffset`, `usedSize` 湲곕컲??怨좎젙 ?⑸웾 ring buffer??
+- `BuildRecvWsabufs()`??free ?곸뿭??理쒕? 2媛?`WSABUF`濡??섎닠 `WSARecv`???섍릿??
 
 ### 3-2. direct recv
-- [`FIocpServer::PostRecv()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)은 더 이상 임시 recv vector를 만들지 않는다.
-- 세션 recv ring buffer free 영역을 바로 `WSARecv` 대상 버퍼로 사용한다.
-- 완료 후 [`FSession::CommitRecvBytes()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FSession.cpp)로 실제 수신 길이만 반영한다.
+- [`FIocpServer::PostRecv()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)? ???댁긽 ?꾩떆 recv vector瑜?留뚮뱾吏 ?딅뒗??
+- ?몄뀡 recv ring buffer free ?곸뿭??諛붾줈 `WSARecv` ???踰꾪띁濡??ъ슜?쒕떎.
+- ?꾨즺 ??[`FSession::CommitRecvBytes()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)濡??ㅼ젣 ?섏떊 湲몄씠留?諛섏쁺?쒕떎.
 
-### 3-3. framer의 recv buffer 지원
-- [`IPacketFramer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\IPacketFramer.h)는 `std::vector<char>`뿐 아니라 [`FRecvBuffer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FRecvBuffer.h)에서도 패킷을 추출할 수 있게 됐다.
-- [`FDefaultPacketFramer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FDefaultPacketFramer.cpp)는 recv buffer에서 헤더를 `Peek`하고, 필요하면 `EnsureContiguous()`로 현재 패킷 구간만 선형화한다.
+### 3-3. framer??recv buffer 吏??- [`IPacketFramer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\IPacketFramer.h)??`std::vector<char>`肉??꾨땲??[`FRecvBuffer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FRecvBuffer.h)?먯꽌???⑦궥??異붿텧?????덇쾶 ?먮떎.
+- [`FDefaultPacketFramer`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FDefaultPacketFramer.cpp)??recv buffer?먯꽌 ?ㅻ뜑瑜?`Peek`?섍퀬, ?꾩슂?섎㈃ `EnsureContiguous()`濡??꾩옱 ?⑦궥 援ш컙留??좏삎?뷀븳??
 
-### 3-4. packet view 기반 dispatch
-- [`FPacketView`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FPacketView.h)는 `opcode`, `randomKey`, `checkSum`, `payload pointer`, `payloadLength`를 담는 얇은 view 타입이다.
-- [`FDefaultPacketFramer::TryExtractPacketView()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FDefaultPacketFramer.cpp)는 payload를 별도 `std::vector<char>`로 복사하지 않고 recv buffer 내부 포인터를 view로 만든다.
-- [`IApplicationHandler`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IApplicationHandler.h)는 이제 `const Packet::FPacketView&`를 받아, 현재 콜백 범위 안에서만 유효한 payload view를 사용한다.
-- 콜백이 끝난 뒤에는 [`FIocpServer.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)가 `Discard()`로 해당 패킷 길이만큼 recv buffer를 전진시킨다.
+### 3-4. packet view 湲곕컲 dispatch
+- [`FPacketView`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FPacketView.h)??`opcode`, `randomKey`, `checkSum`, `payload pointer`, `payloadLength`瑜??대뒗 ?뉗? view ??낆씠??
+- [`FDefaultPacketFramer::TryExtractPacketView()`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\FDefaultPacketFramer.cpp)??payload瑜?蹂꾨룄 `std::vector<char>`濡?蹂듭궗?섏? ?딄퀬 recv buffer ?대? ?ъ씤?곕? view濡?留뚮뱺??
+- [`IApplicationHandler`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IApplicationHandler.h)???댁젣 `const Packet::FPacketView&`瑜?諛쏆븘, ?꾩옱 肄쒕갚 踰붿쐞 ?덉뿉?쒕쭔 ?좏슚??payload view瑜??ъ슜?쒕떎.
+- 肄쒕갚???앸궃 ?ㅼ뿉??[`FIocpServer.cpp`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)媛 `Discard()`濡??대떦 ?⑦궥 湲몄씠留뚰겮 recv buffer瑜??꾩쭊?쒗궓??
 
-## 4. 판단 근거
-- 레거시 [`CNetSession::PostRecv()`](D:\Project\ServerPortfolio\NetworkLib\CNetServer.cpp), [`CNetSession::RecvCompleted()`](D:\Project\ServerPortfolio\NetworkLib\CNetServer.cpp)는 ring buffer direct recv와 view 지향 설계라는 점에서 여전히 참고 가치가 있었다.
-- 다만 레거시처럼 세션이 체크섬, 암복호화, 콘텐츠 큐까지 전부 끌어안으면 현재 계층 분리 방향과 충돌한다.
-- 그래서 이번에는 "recv ring buffer와 payload view"까지만 세션/패킷 계층에 가져오고, 해석과 dispatch 경계는 framer와 application handler에 남겨뒀다.
+## 4. ?먮떒 洹쇨굅
+- ?덇굅??[`CNetSession::PostRecv()`](D:\Project\ServerPortfolio\NetworkLib\CNetServer.cpp), [`CNetSession::RecvCompleted()`](D:\Project\ServerPortfolio\NetworkLib\CNetServer.cpp)??ring buffer direct recv? view 吏???ㅺ퀎?쇰뒗 ?먯뿉???ъ쟾??李멸퀬 媛移섍? ?덉뿀??
+- ?ㅻ쭔 ?덇굅?쒖쿂???몄뀡??泥댄겕?? ?붾났?명솕, 肄섑뀗痢??먭퉴吏 ?꾨? ?뚯뼱?덉쑝硫??꾩옱 怨꾩링 遺꾨━ 諛⑺뼢怨?異⑸룎?쒕떎.
+- 洹몃옒???대쾲?먮뒗 "recv ring buffer? payload view"源뚯?留??몄뀡/?⑦궥 怨꾩링??媛?몄삤怨? ?댁꽍怨?dispatch 寃쎄퀎??framer? application handler???④꺼???
 
-## 5. 확인된 사실
-- [`LockFreeTests.exe`](D:\Project\ServerPortfolio\RefactoringServer\Out\LockFreeTests.exe)에서 아래 항목 PASS
+## 5. ?뺤씤???ъ떎
+- [`LockFreeTests.exe`](D:\Project\ServerPortfolio\RefactoringServer\Out\LockFreeTests.exe)?먯꽌 ?꾨옒 ??ぉ PASS
   - `Packet framer recv buffer`
   - `Packet framer packet view`
-- 기존 테스트도 전부 PASS
+- 湲곗〈 ?뚯뒪?몃룄 ?꾨? PASS
   - `Queue linear FIFO`
   - `Queue parallel sum`
   - `Stack parallel sum`
@@ -60,15 +59,13 @@
   - `--send-chunk-size 5`
   - `--send-chunk-delay-ms 1`
   - `--recv-buffer-size 11`
-  - 위 조건에서 `echo validation succeeded.` 확인
+  - ??議곌굔?먯꽌 `echo validation succeeded.` ?뺤씤
 
-## 6. 현재 한계
-- recv ring buffer 용량은 현재 `max(recvBufferSize * 8, 65536)` 기준이다. 임시 기준이므로 운영 기준 용량은 이후 조정이 필요하다.
-- `PacketFramer`가 없는 경로는 현재 ring buffer recv에서 지원하지 않는다. 지금 구조는 framer 기반 서버를 전제로 한다.
-- payload가 wrap된 경우 `EnsureContiguous()`가 현재 사용 중 데이터 일부를 버퍼 내부에서 선형화한다. 즉 별도 payload 버퍼 복사는 없어졌지만, wrap 상황의 내부 정렬 복사는 여전히 존재할 수 있다.
-- `FPacketView`는 콜백 범위 안에서만 유효하다. 콘텐츠 계층이 오래 보관하려면 직접 복사해야 한다.
+## 6. ?꾩옱 ?쒓퀎
+- recv ring buffer ?⑸웾? ?꾩옱 `max(recvBufferSize * 8, 65536)` 湲곗??대떎. ?꾩떆 湲곗??대?濡??댁쁺 湲곗? ?⑸웾? ?댄썑 議곗젙???꾩슂?섎떎.
+- `PacketFramer`媛 ?녿뒗 寃쎈줈???꾩옱 ring buffer recv?먯꽌 吏?먰븯吏 ?딅뒗?? 吏湲?援ъ“??framer 湲곕컲 ?쒕쾭瑜??꾩젣濡??쒕떎.
+- payload媛 wrap??寃쎌슦 `EnsureContiguous()`媛 ?꾩옱 ?ъ슜 以??곗씠???쇰?瑜?踰꾪띁 ?대??먯꽌 ?좏삎?뷀븳?? 利?蹂꾨룄 payload 踰꾪띁 蹂듭궗???놁뼱議뚯?留? wrap ?곹솴???대? ?뺣젹 蹂듭궗???ъ쟾??議댁옱?????덈떎.
+- `FPacketView`??肄쒕갚 踰붿쐞 ?덉뿉?쒕쭔 ?좏슚?섎떎. 肄섑뀗痢?怨꾩링???ㅻ옒 蹂닿??섎젮硫?吏곸젒 蹂듭궗?댁빞 ?쒕떎.
 
-## 7. 다음 확인 항목
-- packet dispatcher 계층이 들어왔을 때 `FPacketView`를 그대로 넘길지, 별도 content header view를 둘지 검토
-- 세션 종료 직전 recv overflow, malformed packet 상황 추가 테스트
-- 장시간 soak 조건에서 recv ring buffer 경로 검증
+## 7. ?ㅼ쓬 ?뺤씤 ??ぉ
+- packet dispatcher 怨꾩링???ㅼ뼱?붿쓣 ??`FPacketView`瑜?洹몃?濡??섍만吏, 蹂꾨룄 content header view瑜??섏? 寃??- ?몄뀡 醫낅즺 吏곸쟾 recv overflow, malformed packet ?곹솴 異붽? ?뚯뒪??- ?μ떆媛?soak 議곌굔?먯꽌 recv ring buffer 寃쎈줈 寃利?

@@ -1,14 +1,6 @@
 #pragma once
 
-#include <WinSock2.h>
-
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <vector>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Buffer
 {
 	class FRecvBuffer
 	{

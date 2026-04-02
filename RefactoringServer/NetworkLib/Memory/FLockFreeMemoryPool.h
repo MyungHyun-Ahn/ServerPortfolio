@@ -1,11 +1,6 @@
-﻿#pragma once
+#pragma once
 
-#include "Containers/LockFreeCommon.h"
-
-#include <cstddef>
-#include <new>
-
-namespace GameServer::NetworkLib::Memory
+namespace NetworkLib::Memory
 {
 	template <typename T>
 	class FLockFreeMemoryPool

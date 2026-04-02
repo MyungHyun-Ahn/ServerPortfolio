@@ -1,3 +1,5 @@
+#include "NetLibPch.h"
+
 #include "Containers/FLockFreeQueue.h"
 #include "Containers/FLockFreeStack.h"
 #include "Crypto/FDefaultPacketCipher.h"
@@ -6,10 +8,10 @@
 #include "Generated/Packets/Echo/EchoPackets.h"
 #include "Crypto/IPacketCipher.h"
 #include "Memory/FTlsMemoryPool.h"
-#include "Packet/FDefaultPacketFramer.h"
-#include "Packet/FPacketSerialization.h"
-#include "Packet/FPacketView.h"
-#include "Packet/FRecvBuffer.h"
+#include "Packet/Buffer/FRecvBuffer.h"
+#include "Packet/Framing/FDefaultPacketFramer.h"
+#include "Packet/Serialization/FPacketSerialization.h"
+#include "Packet/View/FPacketView.h"
 
 #include <atomic>
 #include <array>
@@ -31,8 +33,8 @@ namespace
 		std::string detail;
 	};
 
-	using TQueue = GameServer::NetworkLib::Containers::FLockFreeQueue<int>;
-	using TStack = GameServer::NetworkLib::Containers::FLockFreeStack<int>;
+	using TQueue = NetworkLib::Containers::FLockFreeQueue<int>;
+	using TStack = NetworkLib::Containers::FLockFreeStack<int>;
 	static_assert(sizeof(TQueue) == sizeof(std::int64_t) * 2, "FLockFreeQueue instance should only keep head and tail pointers.");
 	static_assert(sizeof(TStack) == sizeof(std::int64_t), "FLockFreeStack instance should only keep top pointer.");
 
@@ -168,7 +170,7 @@ namespace
 		constexpr int kBatchSize = 64;
 		constexpr int kIterationCount = 10000;
 
-		GameServer::NetworkLib::Memory::FTlsMemoryPoolManager<STlsPoolPayload, kBatchSize, 2> memoryPool;
+		NetworkLib::Memory::FTlsMemoryPoolManager<STlsPoolPayload, kBatchSize, 2> memoryPool;
 		std::atomic<bool> encounteredError = false;
 		std::vector<std::thread> workerThreads;
 		workerThreads.reserve(kThreadCount);
@@ -239,7 +241,7 @@ namespace
 
 	STestResult RunPacketCipherRoundTripTest()
 	{
-		using namespace GameServer::NetworkLib::Crypto;
+		using namespace NetworkLib::Crypto;
 
 		SDefaultPacketCipherConfig config{};
 		config.enabled = true;
@@ -279,7 +281,7 @@ namespace
 
 	STestResult RunNullPacketCipherTest()
 	{
-		using namespace GameServer::NetworkLib::Crypto;
+		using namespace NetworkLib::Crypto;
 
 		SPacketCipherConfig config{};
 		config.enabled = false;
@@ -312,7 +314,10 @@ namespace
 
 	STestResult RunPacketFramerRoundTripTest()
 	{
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace NetworkLib::Packet::Buffer;
+		using namespace NetworkLib::Packet::Framing;
+		using namespace NetworkLib::Packet::Serialization;
+		using namespace NetworkLib::Packet::View;
 
 		FDefaultPacketFramer framer;
 		std::vector<char> packetBuffer;
@@ -383,7 +388,10 @@ namespace
 
 	STestResult RunPacketFramerPartialReceiveTest()
 	{
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace NetworkLib::Packet::Buffer;
+		using namespace NetworkLib::Packet::Framing;
+		using namespace NetworkLib::Packet::Serialization;
+		using namespace NetworkLib::Packet::View;
 
 		FDefaultPacketFramer framer;
 		std::vector<char> packetBuffer;
@@ -451,7 +459,10 @@ namespace
 
 	STestResult RunPacketFramerRecvBufferTest()
 	{
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace NetworkLib::Packet::Buffer;
+		using namespace NetworkLib::Packet::Framing;
+		using namespace NetworkLib::Packet::Serialization;
+		using namespace NetworkLib::Packet::View;
 
 		FDefaultPacketFramer framer;
 		FRecvBuffer recvBuffer(64);
@@ -534,7 +545,10 @@ namespace
 
 	STestResult RunPacketFramerPacketViewTest()
 	{
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace NetworkLib::Packet::Buffer;
+		using namespace NetworkLib::Packet::Framing;
+		using namespace NetworkLib::Packet::Serialization;
+		using namespace NetworkLib::Packet::View;
 
 		FDefaultPacketFramer framer;
 		FRecvBuffer recvBuffer(64);
@@ -605,12 +619,12 @@ namespace
 
 	STestResult RunGeneratedEchoPacketRoundTripTest()
 	{
-		GameServer::Generated::Echo::FEchoRq requestPacket;
+		Generated::Echo::FEchoRq requestPacket;
 		requestPacket.SetMessageValue("generated-echo-message");
 
-		std::vector<char> payload = GameServer::NetworkLib::Packet::SerializeContentBody(requestPacket);
-		GameServer::Generated::Echo::FEchoRq decodedPacket;
-		if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
+		std::vector<char> payload = NetworkLib::Packet::Serialization::SerializeContentBody(requestPacket);
+		Generated::Echo::FEchoRq decodedPacket;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
 		{
 			return { false, "Generated echo packet round trip", "DeserializeContentPacket failed" };
 		}
@@ -635,7 +649,7 @@ namespace
 
 	STestResult RunGeneratedChatContainerPacketRoundTripTest()
 	{
-		GameServer::Generated::Chat::FRoomSnapshotRp responsePacket;
+		Generated::Chat::FRoomSnapshotRp responsePacket;
 		responsePacket.roomId = 77;
 		responsePacket.participants = { "alpha", "bravo", "charlie" };
 		responsePacket.unreadCounts = {
@@ -648,9 +662,9 @@ namespace
 			{ "owner", "alpha" }
 		};
 
-		std::vector<char> payload = GameServer::NetworkLib::Packet::SerializeContentBody(responsePacket);
-		GameServer::Generated::Chat::FRoomSnapshotRp decodedPacket;
-		if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
+		std::vector<char> payload = NetworkLib::Packet::Serialization::SerializeContentBody(responsePacket);
+		Generated::Chat::FRoomSnapshotRp decodedPacket;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
 		{
 			return { false, "Generated chat container packet round trip", "DeserializeContentPacket failed" };
 		}
@@ -680,7 +694,8 @@ namespace
 
 	STestResult RunPacketScalarContainerBulkRoundTripTest()
 	{
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace NetworkLib::Packet::Buffer;
+		using namespace NetworkLib::Packet::Serialization;
 
 		FPacketWriter writer;
 		std::vector<std::uint32_t> originalVector = { 10, 20, 30, 40, 50, 60, 70, 80 };
@@ -712,8 +727,9 @@ namespace
 
 	STestResult RunGeneratedPacketEstimatedSizeTest()
 	{
-		using namespace GameServer::Generated;
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace Generated;
+		using namespace NetworkLib::Packet::Buffer;
+		using namespace NetworkLib::Packet::Serialization;
 
 		Echo::FEchoRq echoPacket;
 		echoPacket.SetMessageValue("estimate-check");
@@ -747,7 +763,7 @@ namespace
 
 	STestResult RunPacketBytesViewRoundTripTest()
 	{
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace NetworkLib::Packet::Serialization;
 
 		const std::array<std::uint8_t, 6> originalBytes = { 1, 3, 5, 7, 9, 11 };
 		FPacketWriter writer;
@@ -778,8 +794,8 @@ namespace
 
 	STestResult RunGeneratedChatBytesViewPacketRoundTripTest()
 	{
-		using namespace GameServer::Generated::Chat;
-		using namespace GameServer::NetworkLib::Packet;
+		using namespace Generated::Chat;
+		using namespace NetworkLib::Packet::Serialization;
 
 		const std::vector<std::uint8_t> originalPayload = { 10, 20, 30, 40, 50, 60 };
 		FRoomBinarySnapshotNoti packet;

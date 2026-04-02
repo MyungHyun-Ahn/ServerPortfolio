@@ -1,13 +1,13 @@
 #include "Pch.h"
 
-#include "Servers/FServerFactory.h"
+#include "Servers/Core/FServerFactory.h"
 
-#include "Servers/FIocpServer.h"
-#include "Servers/FStubServer.h"
+#include "Servers/Core/FIocpServer.h"
+#include "Servers/Core/FStubServer.h"
 
-namespace GameServer::NetworkLib
+namespace NetworkLib::Core
 {
-	std::unique_ptr<IServer> FServerFactory::Create(EBackendKind backendKind)
+	std::unique_ptr<NetworkLib::IServer> FServerFactory::Create(EBackendKind backendKind)
 	{
 		switch (backendKind)
 		{

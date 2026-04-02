@@ -2,7 +2,7 @@
 
 #include "Crypto/FNullPacketCipher.h"
 
-namespace GameServer::NetworkLib::Crypto
+namespace NetworkLib::Crypto
 {
 	FNullPacketCipher::FNullPacketCipher(const SPacketCipherConfig& config)
 		: m_config(config)

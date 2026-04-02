@@ -1,14 +1,6 @@
 #pragma once
 
-#include "Packet/FBorrowedViewGuard.h"
-#include "Packet/FPacketReader.h"
-#include "Packet/FPacketWriter.h"
-
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Serialization
 {
 	class IContentPacket
 	{
@@ -21,7 +13,7 @@ namespace GameServer::NetworkLib::Packet
 			return false;
 		}
 
-		virtual void BindBorrowedViewScope(const std::shared_ptr<FBorrowedViewScopeState>&) noexcept
+		virtual void BindBorrowedViewScope(const std::shared_ptr<NetworkLib::Packet::View::FBorrowedViewScopeState>&) noexcept
 		{
 		}
 

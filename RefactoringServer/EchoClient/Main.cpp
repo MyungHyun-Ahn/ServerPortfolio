@@ -4,8 +4,11 @@
 #include "Generated/Packets/Chat/ChatPackets.h"
 #include "Generated/Packets/Echo/EchoPackets.h"
 #include "Generated/Packets/Login/LoginPackets.h"
-#include "Packet/FDefaultPacketFramer.h"
-#include "Packet/FPacketSerialization.h"
+#include "Packet/Buffer/FPacketBuffer.h"
+#include "Packet/Framing/FDefaultPacketFramer.h"
+#include "Packet/Framing/PacketTypes.h"
+#include "Packet/Serialization/FPacketSerialization.h"
+#include "Packet/View/FPacketView.h"
 
 #include <algorithm>
 #include <atomic>
@@ -341,10 +344,10 @@ namespace
 	SSessionResult RunSingleSession(int sessionIndex, const SClientOptions& options)
 	{
 		SSessionResult sessionResult{};
-		GameServer::NetworkLib::Crypto::SDefaultPacketCipherConfig cipherConfig{};
+		NetworkLib::Crypto::SDefaultPacketCipherConfig cipherConfig{};
 		cipherConfig.packetKey = kPacketKey;
-		GameServer::NetworkLib::Crypto::FDefaultPacketCipher packetCipher(cipherConfig);
-		GameServer::NetworkLib::Packet::FDefaultPacketFramer packetFramer;
+		NetworkLib::Crypto::FDefaultPacketCipher packetCipher(cipherConfig);
+		NetworkLib::Packet::Framing::FDefaultPacketFramer packetFramer;
 		const auto startTime = std::chrono::steady_clock::now();
 		const auto deadline =
 			startTime + std::chrono::seconds(options.holdSeconds > 0 ? options.holdSeconds : 0);
@@ -368,14 +371,14 @@ namespace
 			std::unordered_map<std::string, int> expectedResponseCounts;
 			std::vector<char> sendBatchBuffer;
 			auto tryReceiveNextContentPacket =
-				[&](GameServer::NetworkLib::Packet::SFramedPacket& outFramedPacket, GameServer::NetworkLib::Packet::FPacketView& outContentPacketView) -> bool
+				[&](NetworkLib::Packet::Framing::SFramedPacket& outFramedPacket, NetworkLib::Packet::View::FPacketView& outContentPacketView) -> bool
 				{
 					while (true)
 					{
 						if (packetFramer.TryExtractPacket(inboundBuffer, outFramedPacket))
 						{
 							const std::uint8_t responseChecksum =
-								GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+								NetworkLib::Packet::Framing::CalculatePacketChecksum(
 									outFramedPacket.payload.data(),
 									static_cast<std::int32_t>(outFramedPacket.payload.size()));
 							if (responseChecksum != outFramedPacket.checkSum)
@@ -386,13 +389,13 @@ namespace
 
 							packetCipher.Decode(outFramedPacket.payload.data(), static_cast<int>(outFramedPacket.payload.size()), outFramedPacket.randomKey);
 
-							GameServer::NetworkLib::Packet::FPacketView transportPacketView{};
+							NetworkLib::Packet::View::FPacketView transportPacketView{};
 							transportPacketView.randomKey = outFramedPacket.randomKey;
 							transportPacketView.checkSum = outFramedPacket.checkSum;
 							transportPacketView.payload = outFramedPacket.payload.data();
 							transportPacketView.payloadLength = static_cast<std::int32_t>(outFramedPacket.payload.size());
 
-							if (!GameServer::NetworkLib::Packet::TryParseContentPacketView(transportPacketView, outContentPacketView))
+							if (!NetworkLib::Packet::Serialization::TryParseContentPacketView(transportPacketView, outContentPacketView))
 							{
 								sessionResult.errorMessage = "response content header parse failed.";
 								return false;
@@ -413,17 +416,17 @@ namespace
 				};
 
 			{
-				GameServer::Generated::Login::FLoginRq loginRequest;
+				Generated::Login::FLoginRq loginRequest;
 				loginRequest.userId = options.loginUserIdBase + static_cast<std::uint32_t>(sessionIndex);
 
-				std::vector<char> loginPayload = GameServer::NetworkLib::Packet::SerializeContentPacket(loginRequest);
+				std::vector<char> loginPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(loginRequest);
 				const std::uint8_t loginRandomKey = static_cast<std::uint8_t>((0x21 + sessionIndex) & 0xFF);
 				packetCipher.Encode(loginPayload.data(), static_cast<int>(loginPayload.size()), loginRandomKey);
 
-				GameServer::NetworkLib::Packet::SOutgoingPacket loginOutgoingPacket{};
+				NetworkLib::Packet::Framing::SOutgoingPacket loginOutgoingPacket{};
 				loginOutgoingPacket.randomKey = loginRandomKey;
 				loginOutgoingPacket.checkSum =
-					GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+					NetworkLib::Packet::Framing::CalculatePacketChecksum(
 						loginPayload.data(),
 						static_cast<std::int32_t>(loginPayload.size()));
 				loginOutgoingPacket.payload = loginPayload.data();
@@ -446,8 +449,8 @@ namespace
 					return sessionResult;
 				}
 
-				GameServer::NetworkLib::Packet::SFramedPacket loginResponseFramedPacket{};
-				GameServer::NetworkLib::Packet::FPacketView loginResponsePacketView{};
+				NetworkLib::Packet::Framing::SFramedPacket loginResponseFramedPacket{};
+				NetworkLib::Packet::View::FPacketView loginResponsePacketView{};
 				if (!tryReceiveNextContentPacket(loginResponseFramedPacket, loginResponsePacketView))
 				{
 					closesocket(clientSocket);
@@ -455,7 +458,7 @@ namespace
 					return sessionResult;
 				}
 
-				if (loginResponsePacketView.opcode != GameServer::Generated::Login::FLoginRp::kOpcode)
+				if (loginResponsePacketView.opcode != Generated::Login::FLoginRp::kOpcode)
 				{
 					std::ostringstream oss;
 					oss << "unexpected login response opcode: " << loginResponsePacketView.opcode;
@@ -465,8 +468,8 @@ namespace
 					return sessionResult;
 				}
 
-				GameServer::Generated::Login::FLoginRp loginResponse;
-				if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(loginResponsePacketView, loginResponse))
+				Generated::Login::FLoginRp loginResponse;
+				if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(loginResponsePacketView, loginResponse))
 				{
 					sessionResult.errorMessage = "login response deserialize failed.";
 					closesocket(clientSocket);
@@ -485,17 +488,17 @@ namespace
 
 			{
 				const std::uint32_t roomId = 77u + static_cast<std::uint32_t>(sessionIndex);
-				GameServer::Generated::Chat::FRoomSnapshotRq snapshotRequest;
+				Generated::Chat::FRoomSnapshotRq snapshotRequest;
 				snapshotRequest.roomId = roomId;
 
-				std::vector<char> serializedPayload = GameServer::NetworkLib::Packet::SerializeContentPacket(snapshotRequest);
+				std::vector<char> serializedPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(snapshotRequest);
 				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x61 + sessionIndex) & 0xFF);
 				packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), requestRandomKey);
 
-				GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
+				NetworkLib::Packet::Framing::SOutgoingPacket outgoingPacket{};
 				outgoingPacket.randomKey = requestRandomKey;
 				outgoingPacket.checkSum =
-					GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+					NetworkLib::Packet::Framing::CalculatePacketChecksum(
 						serializedPayload.data(),
 						static_cast<std::int32_t>(serializedPayload.size()));
 				outgoingPacket.payload = serializedPayload.data();
@@ -522,8 +525,8 @@ namespace
 				bool receivedBinarySnapshot = false;
 				while (!receivedSnapshotResponse || !receivedBinarySnapshot)
 				{
-					GameServer::NetworkLib::Packet::SFramedPacket framedPacket{};
-					GameServer::NetworkLib::Packet::FPacketView contentPacketView{};
+					NetworkLib::Packet::Framing::SFramedPacket framedPacket{};
+					NetworkLib::Packet::View::FPacketView contentPacketView{};
 					if (!tryReceiveNextContentPacket(framedPacket, contentPacketView))
 					{
 						closesocket(clientSocket);
@@ -531,10 +534,10 @@ namespace
 						return sessionResult;
 					}
 
-					if (contentPacketView.opcode == GameServer::Generated::Chat::FRoomSnapshotRp::kOpcode)
+					if (contentPacketView.opcode == Generated::Chat::FRoomSnapshotRp::kOpcode)
 					{
-						GameServer::Generated::Chat::FRoomSnapshotRp snapshotResponse;
-						if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, snapshotResponse))
+						Generated::Chat::FRoomSnapshotRp snapshotResponse;
+						if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(contentPacketView, snapshotResponse))
 						{
 							sessionResult.errorMessage = "chat snapshot response deserialize failed.";
 							closesocket(clientSocket);
@@ -554,10 +557,10 @@ namespace
 						continue;
 					}
 
-					if (contentPacketView.opcode == GameServer::Generated::Chat::FRoomBinarySnapshotNoti::kOpcode)
+					if (contentPacketView.opcode == Generated::Chat::FRoomBinarySnapshotNoti::kOpcode)
 					{
-						GameServer::Generated::Chat::FRoomBinarySnapshotNoti binarySnapshot;
-						if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, binarySnapshot))
+						Generated::Chat::FRoomBinarySnapshotNoti binarySnapshot;
+						if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(contentPacketView, binarySnapshot))
 						{
 							sessionResult.errorMessage = "chat binary snapshot deserialize failed.";
 							closesocket(clientSocket);
@@ -620,16 +623,16 @@ namespace
 					++expectedResponseCounts[expectedResponse];
 				}
 
-				GameServer::Generated::Echo::FEchoRq requestPacket;
+				Generated::Echo::FEchoRq requestPacket;
 				requestPacket.SetMessageValue(requestMessage);
-				std::vector<char> serializedPayload = GameServer::NetworkLib::Packet::SerializeContentPacket(requestPacket);
+				std::vector<char> serializedPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(requestPacket);
 				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x31 + requestSequence + sessionIndex) & 0xFF);
 				packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), requestRandomKey);
 
-				GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
+				NetworkLib::Packet::Framing::SOutgoingPacket outgoingPacket{};
 				outgoingPacket.randomKey = requestRandomKey;
 				outgoingPacket.checkSum =
-					GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+					NetworkLib::Packet::Framing::CalculatePacketChecksum(
 						serializedPayload.data(),
 						static_cast<std::int32_t>(serializedPayload.size()));
 				outgoingPacket.payload = serializedPayload.data();
@@ -672,8 +675,8 @@ namespace
 
 			while (cycleReceivedResponseCount < expectedResponseCount)
 			{
-				GameServer::NetworkLib::Packet::SFramedPacket framedPacket{};
-				GameServer::NetworkLib::Packet::FPacketView contentPacketView{};
+				NetworkLib::Packet::Framing::SFramedPacket framedPacket{};
+				NetworkLib::Packet::View::FPacketView contentPacketView{};
 				if (!tryReceiveNextContentPacket(framedPacket, contentPacketView))
 				{
 					closesocket(clientSocket);
@@ -681,7 +684,7 @@ namespace
 					return sessionResult;
 				}
 
-				if (contentPacketView.opcode != GameServer::Generated::Echo::FEchoRp::kOpcode)
+				if (contentPacketView.opcode != Generated::Echo::FEchoRp::kOpcode)
 				{
 					std::ostringstream oss;
 					oss << "unexpected opcode: " << contentPacketView.opcode;
@@ -691,8 +694,8 @@ namespace
 					return sessionResult;
 				}
 
-				GameServer::Generated::Echo::FEchoRp responsePacket;
-				if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, responsePacket))
+				Generated::Echo::FEchoRp responsePacket;
+				if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(contentPacketView, responsePacket))
 				{
 					sessionResult.errorMessage = "response packet deserialize failed.";
 					closesocket(clientSocket);
@@ -791,7 +794,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	GameServer::NetworkLib::Packet::FPacketBuffer::ConfigurePageReuse(
+	NetworkLib::Packet::Buffer::FPacketBuffer::ConfigurePageReuse(
 		options.enablePagePool,
 		static_cast<std::size_t>(options.pageSize));
 

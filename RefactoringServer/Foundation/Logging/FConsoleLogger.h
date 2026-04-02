@@ -2,7 +2,7 @@
 
 #include "ILogger.h"
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	class FConsoleLogger final : public ILogger
 	{

@@ -1,9 +1,6 @@
-﻿#pragma once
+#pragma once
 
-#include "Containers/LockFreeCommon.h"
-#include "Memory/FTlsMemoryPool.h"
-
-namespace GameServer::NetworkLib::Containers
+namespace NetworkLib::Containers
 {
 	template <typename T>
 	struct SLockFreeStackNode

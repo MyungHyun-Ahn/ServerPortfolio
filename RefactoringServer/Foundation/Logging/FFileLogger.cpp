@@ -9,7 +9,7 @@ namespace
 	std::mutex g_fileMutex;
 }
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	FFileLogger::FFileLogger(const SLogConfig& logConfig)
 		: m_logConfig(logConfig)

@@ -1,19 +1,6 @@
 #pragma once
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <map>
-#include <span>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <unordered_map>
-#include <utility>
-#include <vector>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Serialization
 {
 	template <typename TValue>
 	concept CPacketReadableScalar =

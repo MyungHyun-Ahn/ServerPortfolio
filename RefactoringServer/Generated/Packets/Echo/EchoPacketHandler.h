@@ -1,44 +1,44 @@
 #pragma once
 
 #include "Generated/Packets/Echo/EchoPackets.h"
-#include "Packet/FPacketSerialization.h"
-#include "Packet/FPacketView.h"
+#include "Packet/Serialization/FPacketSerialization.h"
+#include "Packet/View/FPacketView.h"
 #include "Servers/IServer.h"
 
 #include <cstdint>
 
-namespace GameServer::Generated::Echo
+namespace Generated::Echo
 {
 	class IEchoPacketHandler
 	{
 	public:
 		virtual ~IEchoPacketHandler() = default;
 
-		virtual bool HandleEchoRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FEchoRq& packet) = 0;
-		virtual bool HandleEchoRp(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FEchoRp& packet) = 0;
-		virtual bool HandleEchoNoti(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FEchoNoti& packet) = 0;
+		virtual bool HandleEchoRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FEchoRq& packet) = 0;
+		virtual bool HandleEchoRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FEchoRp& packet) = 0;
+		virtual bool HandleEchoNoti(NetworkLib::IServer& server, std::uint64_t sessionId, const FEchoNoti& packet) = 0;
 	};
 
 	class IEchoPacketDispatcher
 	{
 	public:
 		virtual ~IEchoPacketDispatcher() = default;
-		virtual bool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) = 0;
+		virtual bool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) = 0;
 	};
 
 	class FEchoPacketHandlerBase : public IEchoPacketHandler, public IEchoPacketDispatcher
 	{
 	public:
-		bool DispatchPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) override
+		bool DispatchPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) override
 		{
 			switch (packetView.opcode)
 			{
 			case FEchoRq::kOpcode:
 				{
 					FEchoRq packet;
-					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					NetworkLib::Packet::View::FBorrowedViewScope borrowedViewScope;
 					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
-					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
@@ -48,9 +48,9 @@ namespace GameServer::Generated::Echo
 			case FEchoRp::kOpcode:
 				{
 					FEchoRp packet;
-					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					NetworkLib::Packet::View::FBorrowedViewScope borrowedViewScope;
 					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
-					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
@@ -60,9 +60,9 @@ namespace GameServer::Generated::Echo
 			case FEchoNoti::kOpcode:
 				{
 					FEchoNoti packet;
-					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					NetworkLib::Packet::View::FBorrowedViewScope borrowedViewScope;
 					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
-					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
@@ -74,31 +74,31 @@ namespace GameServer::Generated::Echo
 			}
 		}
 
-		bool HandleEchoRq(GameServer::NetworkLib::IServer&, std::uint64_t, const FEchoRq&) override
+		bool HandleEchoRq(NetworkLib::IServer&, std::uint64_t, const FEchoRq&) override
 		{
 			return false;
 		}
 
-		bool HandleEchoRp(GameServer::NetworkLib::IServer&, std::uint64_t, const FEchoRp&) override
+		bool HandleEchoRp(NetworkLib::IServer&, std::uint64_t, const FEchoRp&) override
 		{
 			return false;
 		}
 
-		bool HandleEchoNoti(GameServer::NetworkLib::IServer&, std::uint64_t, const FEchoNoti&) override
+		bool HandleEchoNoti(NetworkLib::IServer&, std::uint64_t, const FEchoNoti&) override
 		{
 			return false;
 		}
 
 	protected:
-		virtual bool OnUnhandledPacket(GameServer::NetworkLib::IServer&, std::uint64_t, const GameServer::NetworkLib::Packet::FPacketView&)
+		virtual bool OnUnhandledPacket(NetworkLib::IServer&, std::uint64_t, const NetworkLib::Packet::View::FPacketView&)
 		{
 			return false;
 		}
 	};
 
 	template <typename TPacket>
-	inline bool SendGeneratedPacket(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
+	inline bool SendGeneratedPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
 	{
-		return GameServer::NetworkLib::Packet::SendContentPacket(server, sessionId, packet);
+		return NetworkLib::Packet::Serialization::SendContentPacket(server, sessionId, packet);
 	}
 }

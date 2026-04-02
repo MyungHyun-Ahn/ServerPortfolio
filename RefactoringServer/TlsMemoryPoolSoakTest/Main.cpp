@@ -1,3 +1,4 @@
+#include "NetLibPch.h"
 #include "Memory/FTlsMemoryPool.h"
 
 #include <atomic>
@@ -133,7 +134,7 @@ int main(int argc, char* argv[])
 	}
 
 	FLogger logger(config.logPath);
-	GameServer::NetworkLib::Memory::FTlsMemoryPoolManager<SPayload, 64, 4> memoryPool;
+	NetworkLib::Memory::FTlsMemoryPoolManager<SPayload, 64, 4> memoryPool;
 	std::atomic<bool> stopRequested = false;
 	std::atomic<bool> encounteredError = false;
 	std::atomic<std::uint64_t> allocCount = 0;

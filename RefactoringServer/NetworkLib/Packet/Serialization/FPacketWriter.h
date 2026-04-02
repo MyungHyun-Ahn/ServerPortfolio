@@ -1,21 +1,6 @@
 #pragma once
 
-#include "Packet/FPacketBuffer.h"
-
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <map>
-#include <span>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <unordered_map>
-#include <utility>
-#include <vector>
-
-namespace GameServer::NetworkLib::Packet
+namespace NetworkLib::Packet::Serialization
 {
 	template <typename TValue>
 	concept CPacketWritableScalar =
@@ -27,13 +12,13 @@ namespace GameServer::NetworkLib::Packet
 	{
 	public:
 		FPacketWriter() noexcept
-			: m_buffer(FPacketBuffer::Create())
+			: m_buffer(NetworkLib::Packet::Buffer::FPacketBuffer::Create())
 		{
 		}
 
 		~FPacketWriter() noexcept
 		{
-			FPacketBuffer::Release(m_buffer);
+			NetworkLib::Packet::Buffer::FPacketBuffer::Release(m_buffer);
 		}
 
 		FPacketWriter(const FPacketWriter&) = delete;
@@ -48,7 +33,7 @@ namespace GameServer::NetworkLib::Packet
 		{
 			if (this != &other)
 			{
-				FPacketBuffer::Release(m_buffer);
+				NetworkLib::Packet::Buffer::FPacketBuffer::Release(m_buffer);
 				m_buffer = std::exchange(other.m_buffer, nullptr);
 			}
 
@@ -180,6 +165,6 @@ namespace GameServer::NetworkLib::Packet
 		}
 
 	private:
-		FPacketBuffer* m_buffer = nullptr;
+		NetworkLib::Packet::Buffer::FPacketBuffer* m_buffer = nullptr;
 	};
 }

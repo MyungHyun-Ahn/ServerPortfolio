@@ -1,8 +1,8 @@
 #include "Pch.h"
 
-#include "Servers/FSession.h"
+#include "Servers/Session/FSession.h"
 
-namespace GameServer::NetworkLib
+namespace NetworkLib::Session
 {
 	FSession* FSession::Create() noexcept
 	{
@@ -140,12 +140,12 @@ namespace GameServer::NetworkLib
 		return m_recvBuffer.CommitWrite(length);
 	}
 
-	Packet::FRecvBuffer& FSession::GetRecvBuffer() noexcept
+	Packet::Buffer::FRecvBuffer& FSession::GetRecvBuffer() noexcept
 	{
 		return m_recvBuffer;
 	}
 
-	const Packet::FRecvBuffer& FSession::GetRecvBuffer() const noexcept
+	const Packet::Buffer::FRecvBuffer& FSession::GetRecvBuffer() const noexcept
 	{
 		return m_recvBuffer;
 	}
@@ -160,7 +160,7 @@ namespace GameServer::NetworkLib
 		return m_sendContext;
 	}
 
-	void FSession::EnqueueSendBuffer(FSendBuffer* sendBuffer) noexcept
+	void FSession::EnqueueSendBuffer(NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer) noexcept
 	{
 		m_sendQueue.Enqueue(sendBuffer);
 		const std::uint32_t queuedCount = m_queuedSendBufferCount.fetch_add(1) + 1;
@@ -224,7 +224,7 @@ namespace GameServer::NetworkLib
 
 		while (m_activeSendBuffers.size() < maxSendCount)
 		{
-			FSendBuffer* sendBuffer = nullptr;
+			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer = nullptr;
 			if (!m_sendQueue.Dequeue(&sendBuffer))
 			{
 				break;
@@ -245,9 +245,9 @@ namespace GameServer::NetworkLib
 
 	void FSession::ReleaseActiveSendBuffers() noexcept
 	{
-		for (FSendBuffer* sendBuffer : m_activeSendBuffers)
+		for (NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer : m_activeSendBuffers)
 		{
-			FSendBuffer::Release(sendBuffer);
+			NetworkLib::Packet::Buffer::FSendBuffer::Release(sendBuffer);
 		}
 
 		m_activeSendBuffers.clear();
@@ -256,11 +256,11 @@ namespace GameServer::NetworkLib
 
 	void FSession::ReleaseQueuedSendBuffers() noexcept
 	{
-		FSendBuffer* sendBuffer = nullptr;
+		NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer = nullptr;
 		while (m_sendQueue.Dequeue(&sendBuffer))
 		{
 			m_queuedSendBufferCount.fetch_sub(1);
-			FSendBuffer::Release(sendBuffer);
+			NetworkLib::Packet::Buffer::FSendBuffer::Release(sendBuffer);
 			sendBuffer = nullptr;
 		}
 	}

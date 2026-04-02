@@ -10,8 +10,9 @@
 #include "Generated/Packets/Login/LoginPacketHandler.h"
 #include "Generated/Packets/PacketRouter.h"
 #include "Crypto/FDefaultPacketCipher.h"
-#include "Packet/FDefaultPacketFramer.h"
-#include "Servers/FServerFactory.h"
+#include "Packet/Framing/FDefaultPacketFramer.h"
+#include "Servers/Core/BackendTypes.h"
+#include "Servers/Core/FServerFactory.h"
 #include "Servers/IApplicationHandler.h"
 
 #include <array>
@@ -127,14 +128,14 @@ namespace
 	}
 
 	class FEchoApplication final
-		: public GameServer::NetworkLib::IApplicationHandler
-		, public GameServer::Generated::Chat::FChatPacketHandlerBase
-		, public GameServer::Generated::Echo::FEchoPacketHandlerBase
-		, public GameServer::Generated::Login::FLoginPacketHandlerBase
+		: public NetworkLib::IApplicationHandler
+		, public Generated::Chat::FChatPacketHandlerBase
+		, public Generated::Echo::FEchoPacketHandlerBase
+		, public Generated::Login::FLoginPacketHandlerBase
 	{
 	public:
 		FEchoApplication(
-			std::shared_ptr<GameServer::Foundation::ILogger> logger,
+			std::shared_ptr<Foundation::ILogger> logger,
 			std::uint32_t maxSessionCount,
 			SServerRuntimeOptions runtimeOptions)
 			: m_logger(std::move(logger))
@@ -147,27 +148,27 @@ namespace
 		}
 
 	public:
-		void OnServerStarted(GameServer::NetworkLib::IServer& server) override
+		void OnServerStarted(NetworkLib::IServer& server) override
 		{
 			std::ostringstream oss;
 			oss << "EchoServer started. backend=" << static_cast<int>(server.GetBackendKind());
-			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 
 		void OnClientConnected(std::uint64_t sessionId) override
 		{
 			std::ostringstream oss;
 			oss << "client connected. sessionId=" << sessionId;
-			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 
-		void OnPacketReceived(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::NetworkLib::Packet::FPacketView& packetView) override
+		void OnPacketReceived(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) override
 		{
 			if (!m_packetRouter.DispatchPacket(server, sessionId, packetView) && m_runtimeOptions.logPackets)
 			{
 				std::ostringstream oss;
 				oss << "Unhandled packet. sessionId=" << sessionId << " opcode=" << packetView.opcode;
-				Log(GameServer::Foundation::ELogLevel::Warn, oss.str());
+				Log(Foundation::ELogLevel::Warn, oss.str());
 			}
 		}
 
@@ -177,19 +178,19 @@ namespace
 
 			std::ostringstream oss;
 			oss << "client disconnected. sessionId=" << sessionId;
-			Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 
 		void OnServerStopped() override
 		{
-			Log(GameServer::Foundation::ELogLevel::Info, "EchoServer stopped.");
+			Log(Foundation::ELogLevel::Info, "EchoServer stopped.");
 		}
 
-		bool HandleEchoRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Echo::FEchoRq& packet) override
+		bool HandleEchoRq(NetworkLib::IServer& server, std::uint64_t sessionId, const Generated::Echo::FEchoRq& packet) override
 		{
 			if (!IsLoggedIn(sessionId))
 			{
-				Log(GameServer::Foundation::ELogLevel::Warn, "echo request rejected before login.");
+				Log(Foundation::ELogLevel::Warn, "echo request rejected before login.");
 				return false;
 			}
 
@@ -197,14 +198,14 @@ namespace
 			{
 				std::ostringstream oss;
 				oss << "received. sessionId=" << sessionId << " opcode=" << packet.GetOpcode() << " message=" << packet.GetMessageValue();
-				Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+				Log(Foundation::ELogLevel::Info, oss.str());
 			}
 
 			if (m_runtimeOptions.sendThreadCount == 1 && m_runtimeOptions.responsesPerThread == 1)
 			{
-				GameServer::Generated::Echo::FEchoRp responsePacket;
+				Generated::Echo::FEchoRp responsePacket;
 				responsePacket.SetMessageValue(packet.GetMessageValue());
-				return GameServer::Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
+				return Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
 			}
 
 			std::vector<std::thread> sendThreads;
@@ -221,9 +222,9 @@ namespace
 							<< "|r=" << responseIndex;
 
 						const std::string responseMessage = responseBuilder.str();
-						GameServer::Generated::Echo::FEchoRp responsePacket;
+						Generated::Echo::FEchoRp responsePacket;
 						responsePacket.SetMessageValue(responseMessage);
-						GameServer::Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
+						Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
 					}
 				});
 			}
@@ -236,15 +237,15 @@ namespace
 			return true;
 		}
 
-		bool HandleRoomSnapshotRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Chat::FRoomSnapshotRq& packet) override
+		bool HandleRoomSnapshotRq(NetworkLib::IServer& server, std::uint64_t sessionId, const Generated::Chat::FRoomSnapshotRq& packet) override
 		{
 			if (!IsLoggedIn(sessionId))
 			{
-				Log(GameServer::Foundation::ELogLevel::Warn, "chat snapshot request rejected before login.");
+				Log(Foundation::ELogLevel::Warn, "chat snapshot request rejected before login.");
 				return false;
 			}
 
-			GameServer::Generated::Chat::FRoomSnapshotRp snapshotPacket;
+			Generated::Chat::FRoomSnapshotRp snapshotPacket;
 			snapshotPacket.roomId = packet.roomId;
 			snapshotPacket.participants = { "alpha", "bravo", "charlie" };
 			snapshotPacket.unreadCounts = {
@@ -257,7 +258,7 @@ namespace
 				{ "owner", "alpha" }
 			};
 
-			const bool snapshotSent = GameServer::Generated::Chat::SendGeneratedPacket(server, sessionId, snapshotPacket);
+			const bool snapshotSent = Generated::Chat::SendGeneratedPacket(server, sessionId, snapshotPacket);
 
 			const std::array<std::uint8_t, 8> binaryPayload = {
 				static_cast<std::uint8_t>(packet.roomId & 0xFF),
@@ -265,10 +266,10 @@ namespace
 				0x10, 0x20, 0x30, 0x40, 0x50, 0x60
 			};
 
-			GameServer::Generated::Chat::FRoomBinarySnapshotNoti binarySnapshotPacket;
+			Generated::Chat::FRoomBinarySnapshotNoti binarySnapshotPacket;
 			binarySnapshotPacket.roomId = packet.roomId;
 			binarySnapshotPacket.SetPayloadValue(std::span<const std::uint8_t>(binaryPayload.data(), binaryPayload.size()));
-			const bool binarySnapshotSent = GameServer::Generated::Chat::SendGeneratedPacket(server, sessionId, binarySnapshotPacket);
+			const bool binarySnapshotSent = Generated::Chat::SendGeneratedPacket(server, sessionId, binarySnapshotPacket);
 
 			if (m_runtimeOptions.logPackets)
 			{
@@ -276,13 +277,13 @@ namespace
 				oss << "chat snapshot served. sessionId=" << sessionId
 					<< " roomId=" << packet.roomId
 					<< " binaryBytes=" << binaryPayload.size();
-				Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+				Log(Foundation::ELogLevel::Info, oss.str());
 			}
 
 			return snapshotSent && binarySnapshotSent;
 		}
 
-		bool HandleLoginRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Login::FLoginRq& packet) override
+		bool HandleLoginRq(NetworkLib::IServer& server, std::uint64_t sessionId, const Generated::Login::FLoginRq& packet) override
 		{
 			const bool success = packet.userId != 0;
 			SetLoggedInUser(sessionId, success ? packet.userId : 0);
@@ -292,13 +293,13 @@ namespace
 				oss << "login " << (success ? "succeeded" : "failed")
 					<< ". sessionId=" << sessionId
 					<< " userId=" << packet.userId;
-				Log(success ? GameServer::Foundation::ELogLevel::Info : GameServer::Foundation::ELogLevel::Warn, oss.str());
+				Log(success ? Foundation::ELogLevel::Info : Foundation::ELogLevel::Warn, oss.str());
 			}
 
-			GameServer::Generated::Login::FLoginRp responsePacket;
+			Generated::Login::FLoginRp responsePacket;
 			responsePacket.userId = packet.userId;
 			responsePacket.success = success;
-			return GameServer::Generated::Login::SendGeneratedPacket(server, sessionId, responsePacket);
+			return Generated::Login::SendGeneratedPacket(server, sessionId, responsePacket);
 		}
 
 	private:
@@ -328,7 +329,7 @@ namespace
 			SetLoggedInUser(sessionId, 0);
 		}
 
-		void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const
+		void Log(Foundation::ELogLevel logLevel, const std::string& message) const
 		{
 			if (m_logger != nullptr)
 			{
@@ -337,35 +338,35 @@ namespace
 		}
 
 	private:
-		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
+		std::shared_ptr<Foundation::ILogger> m_logger;
 		SServerRuntimeOptions m_runtimeOptions;
-		GameServer::Generated::FPacketRouter m_packetRouter;
+		Generated::FPacketRouter m_packetRouter;
 		std::vector<std::atomic<std::uint32_t>> m_loggedInUsers;
 	};
 }
 
 int main(int argc, char* argv[])
 {
-	GameServer::NetworkLib::SServerConfig serverConfig{};
+	NetworkLib::Core::SServerConfig serverConfig{};
 	bool requestManualDump = false;
 	bool runHeadless = false;
 	SServerRuntimeOptions runtimeOptions{};
 	const std::filesystem::path executableDirectory = GetExecutableDirectory();
-	serverConfig.backendKind = GameServer::NetworkLib::EBackendKind::Iocp;
+	serverConfig.backendKind = NetworkLib::Core::EBackendKind::Iocp;
 	serverConfig.bindIp = "127.0.0.1";
 	serverConfig.port = 19000;
 	serverConfig.workerThreadCount = 2;
 	serverConfig.maxSessionCount = 512;
 	serverConfig.recvBufferSize = 1024;
-	serverConfig.logConfig.minimumLevel = GameServer::Foundation::ELogLevel::Info;
+	serverConfig.logConfig.minimumLevel = Foundation::ELogLevel::Info;
 	serverConfig.logConfig.outputDirectory = (executableDirectory / "logs" / "EchoServer").string();
 	serverConfig.logConfig.consoleEnabled = true;
 	serverConfig.logConfig.fileEnabled = true;
 	serverConfig.logConfig.includeThreadId = true;
-	GameServer::NetworkLib::Crypto::SDefaultPacketCipherConfig packetCipherConfig{};
+	NetworkLib::Crypto::SDefaultPacketCipherConfig packetCipherConfig{};
 	packetCipherConfig.packetKey = 0x37;
-	serverConfig.packetCipher = std::make_shared<GameServer::NetworkLib::Crypto::FDefaultPacketCipher>(packetCipherConfig);
-	serverConfig.packetFramer = std::make_shared<GameServer::NetworkLib::Packet::FDefaultPacketFramer>();
+	serverConfig.packetCipher = std::make_shared<NetworkLib::Crypto::FDefaultPacketCipher>(packetCipherConfig);
+	serverConfig.packetFramer = std::make_shared<NetworkLib::Packet::Framing::FDefaultPacketFramer>();
 
 	if (argc >= 2)
 	{
@@ -374,11 +375,11 @@ int main(int argc, char* argv[])
 			const std::string argument = argv[argumentIndex];
 			if (argument == "rio")
 			{
-				serverConfig.backendKind = GameServer::NetworkLib::EBackendKind::Rio;
+				serverConfig.backendKind = NetworkLib::Core::EBackendKind::Rio;
 			}
 			else if (argument == "asio")
 			{
-				serverConfig.backendKind = GameServer::NetworkLib::EBackendKind::BoostAsio;
+				serverConfig.backendKind = NetworkLib::Core::EBackendKind::BoostAsio;
 			}
 			else if (argument == "--manual-dump")
 			{
@@ -414,48 +415,48 @@ int main(int argc, char* argv[])
 	serverConfig.enablePageBufferReuse = runtimeOptions.enablePagePool;
 	serverConfig.pageBufferSize = runtimeOptions.pageSize;
 
-	auto compositeLogger = std::make_shared<GameServer::Foundation::FCompositeLogger>();
-	compositeLogger->AddSink(std::make_shared<GameServer::Foundation::FConsoleLogger>(serverConfig.logConfig));
-	compositeLogger->AddSink(std::make_shared<GameServer::Foundation::FFileLogger>(serverConfig.logConfig));
+	auto compositeLogger = std::make_shared<Foundation::FCompositeLogger>();
+	compositeLogger->AddSink(std::make_shared<Foundation::FConsoleLogger>(serverConfig.logConfig));
+	compositeLogger->AddSink(std::make_shared<Foundation::FFileLogger>(serverConfig.logConfig));
 	serverConfig.logger = compositeLogger;
 
-	GameServer::Foundation::SCrashDumpConfig crashDumpConfig{};
+	Foundation::SCrashDumpConfig crashDumpConfig{};
 	crashDumpConfig.outputDirectory = (executableDirectory / "dumps" / "EchoServer").string();
 	crashDumpConfig.logger = compositeLogger;
-	GameServer::Foundation::FCrashDump::Initialize(crashDumpConfig);
+	Foundation::FCrashDump::Initialize(crashDumpConfig);
 
 	if (requestManualDump)
 	{
-		const bool dumpWritten = GameServer::Foundation::FCrashDump::WriteManualDumpForDiagnostics();
-		GameServer::Foundation::FCrashDump::Shutdown();
+		const bool dumpWritten = Foundation::FCrashDump::WriteManualDumpForDiagnostics();
+		Foundation::FCrashDump::Shutdown();
 		return dumpWritten ? 0 : 1;
 	}
 
 	FEchoApplication echoApplication(compositeLogger, serverConfig.maxSessionCount, runtimeOptions);
-	std::unique_ptr<GameServer::NetworkLib::IServer> server = GameServer::NetworkLib::FServerFactory::Create(serverConfig.backendKind);
+	std::unique_ptr<NetworkLib::IServer> server = NetworkLib::Core::FServerFactory::Create(serverConfig.backendKind);
 	if (server == nullptr)
 	{
-		compositeLogger->Log(GameServer::Foundation::ELogLevel::Error, "EchoServer", "server factory failed.");
-		GameServer::Foundation::FCrashDump::Shutdown();
+		compositeLogger->Log(Foundation::ELogLevel::Error, "EchoServer", "server factory failed.");
+		Foundation::FCrashDump::Shutdown();
 		return 1;
 	}
 
 	if (!server->Start(serverConfig, echoApplication))
 	{
-		compositeLogger->Log(GameServer::Foundation::ELogLevel::Error, "EchoServer", "server start failed.");
-		GameServer::Foundation::FCrashDump::Shutdown();
+		compositeLogger->Log(Foundation::ELogLevel::Error, "EchoServer", "server start failed.");
+		Foundation::FCrashDump::Shutdown();
 		return 1;
 	}
 
 	if (runHeadless)
 	{
-		compositeLogger->Log(GameServer::Foundation::ELogLevel::Info, "EchoServer", "Headless mode enabled.");
-		GameServer::NetworkLib::SServerStats previousStats = server->GetStatsSnapshot();
+		compositeLogger->Log(Foundation::ELogLevel::Info, "EchoServer", "Headless mode enabled.");
+		NetworkLib::Core::SServerStats previousStats = server->GetStatsSnapshot();
 		SProcessMetricsSnapshot previousProcessMetrics = CaptureProcessMetricsSnapshot();
 		while (true)
 		{
 			std::this_thread::sleep_for(std::chrono::seconds(1));
-			const GameServer::NetworkLib::SServerStats currentStats = server->GetStatsSnapshot();
+			const NetworkLib::Core::SServerStats currentStats = server->GetStatsSnapshot();
 			const SProcessMetricsSnapshot currentProcessMetrics = CaptureProcessMetricsSnapshot();
 			const std::uint64_t acceptTps = currentStats.acceptedSessionCount - previousStats.acceptedSessionCount;
 			const std::uint64_t recvTps = currentStats.receivedPacketCount - previousStats.receivedPacketCount;
@@ -492,9 +493,9 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	compositeLogger->Log(GameServer::Foundation::ELogLevel::Info, "EchoServer", "Press Enter to stop server.");
+	compositeLogger->Log(Foundation::ELogLevel::Info, "EchoServer", "Press Enter to stop server.");
 	std::cin.get();
 	server->Stop();
-	GameServer::Foundation::FCrashDump::Shutdown();
+	Foundation::FCrashDump::Shutdown();
 	return 0;
 }

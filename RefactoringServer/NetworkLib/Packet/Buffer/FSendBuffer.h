@@ -1,16 +1,6 @@
 #pragma once
 
-#include "Memory/FTlsMemoryPool.h"
-#include "Packet/PacketTypes.h"
-
-#include <WinSock2.h>
-
-#include <array>
-#include <atomic>
-#include <utility>
-#include <vector>
-
-namespace GameServer::NetworkLib
+namespace NetworkLib::Packet::Buffer
 {
 	class FSendBuffer
 	{
@@ -25,7 +15,7 @@ namespace GameServer::NetworkLib
 			m_buffer = std::move(buffer);
 		}
 
-		void Initialize(const GameServer::NetworkLib::Packet::SFramedPacketBufferParts& packetParts, std::vector<char>&& payloadBuffer) noexcept
+		void Initialize(const NetworkLib::Packet::Framing::SFramedPacketBufferParts& packetParts, std::vector<char>&& payloadBuffer) noexcept
 		{
 			m_headerBytes = packetParts.headerBytes;
 			m_headerLength = packetParts.headerLength;
@@ -57,7 +47,7 @@ namespace GameServer::NetworkLib
 			return sendBuffer;
 		}
 
-		static FSendBuffer* Create(const GameServer::NetworkLib::Packet::SFramedPacketBufferParts& packetParts, std::vector<char>&& payloadBuffer) noexcept
+		static FSendBuffer* Create(const NetworkLib::Packet::Framing::SFramedPacketBufferParts& packetParts, std::vector<char>&& payloadBuffer) noexcept
 		{
 			FSendBuffer* sendBuffer = s_sendBufferPool.Alloc();
 			sendBuffer->Initialize(packetParts, std::move(payloadBuffer));
@@ -136,11 +126,11 @@ namespace GameServer::NetworkLib
 		}
 
 	private:
-		std::array<char, sizeof(GameServer::NetworkLib::Packet::SPacketHeader)> m_headerBytes{};
+		std::array<char, sizeof(NetworkLib::Packet::Framing::SPacketHeader)> m_headerBytes{};
 		ULONG m_headerLength = 0;
 		std::vector<char> m_buffer;
 		inline static std::atomic<bool> s_pageReuseEnabled{ true };
 		inline static std::atomic<std::size_t> s_pageSize{ kDefaultPageSize };
-		inline static Memory::FTlsMemoryPoolManager<FSendBuffer, 256, 2> s_sendBufferPool{};
+		inline static NetworkLib::Memory::FTlsMemoryPoolManager<FSendBuffer, 256, 2> s_sendBufferPool{};
 	};
 }

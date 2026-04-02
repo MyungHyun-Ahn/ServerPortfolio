@@ -1,4 +1,4 @@
-﻿#include "Pch.h"
+#include "Pch.h"
 
 #include "Containers/FLockFreeQueue.h"
 #include "Containers/FLockFreeStack.h"
@@ -13,17 +13,17 @@ namespace
 
 	void RunLockFreeSmoke() noexcept
 	{
-		GameServer::NetworkLib::Containers::FLockFreeStack<int> stack;
+		NetworkLib::Containers::FLockFreeStack<int> stack;
 		stack.Push(10);
 		int stackValue = 0;
 		stack.Pop(stackValue);
 
-		GameServer::NetworkLib::Containers::FLockFreeQueue<int> queue;
+		NetworkLib::Containers::FLockFreeQueue<int> queue;
 		queue.Enqueue(20);
 		int queueValue = 0;
 		queue.Dequeue(queueValue);
 
-		GameServer::NetworkLib::Memory::FTlsMemoryPoolManager<FLockFreeSmokeNode> pool;
+		NetworkLib::Memory::FTlsMemoryPoolManager<FLockFreeSmokeNode> pool;
 		FLockFreeSmokeNode* node = pool.Alloc();
 		node->value = stackValue + queueValue;
 		pool.Free(node);

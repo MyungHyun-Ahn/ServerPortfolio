@@ -2,7 +2,7 @@
 
 #include "FCompositeLogger.h"
 
-namespace GameServer::Foundation
+namespace Foundation
 {
 	void FCompositeLogger::AddSink(std::shared_ptr<ILogger> logger)
 	{
