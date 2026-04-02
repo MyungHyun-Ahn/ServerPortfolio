@@ -217,8 +217,9 @@ namespace
 							<< "|t=" << threadIndex
 							<< "|r=" << responseIndex;
 
+						const std::string responseMessage = responseBuilder.str();
 						GameServer::Generated::Echo::FEchoRp responsePacket;
-						responsePacket.message = responseBuilder.str();
+						responsePacket.message = responseMessage;
 						GameServer::Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
 					}
 				});

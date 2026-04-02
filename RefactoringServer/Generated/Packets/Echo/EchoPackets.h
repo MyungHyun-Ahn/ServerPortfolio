@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -18,7 +19,7 @@ namespace GameServer::Generated::Echo
 	public:
 		static constexpr std::uint16_t kOpcode = 1000;
 
-		std::string message;
+		std::string_view message;
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -47,7 +48,7 @@ namespace GameServer::Generated::Echo
 	public:
 		static constexpr std::uint16_t kOpcode = 1001;
 
-		std::string message;
+		std::string_view message;
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -76,7 +77,7 @@ namespace GameServer::Generated::Echo
 	public:
 		static constexpr std::uint16_t kOpcode = 1002;
 
-		std::string message;
+		std::string_view message;
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override

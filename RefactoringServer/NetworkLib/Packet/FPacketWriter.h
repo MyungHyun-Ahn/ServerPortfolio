@@ -8,6 +8,7 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -90,6 +91,13 @@ namespace GameServer::NetworkLib::Packet
 		}
 
 		void Write(const std::string& value)
+		{
+			const std::uint32_t length = static_cast<std::uint32_t>(value.size());
+			Write(length);
+			WriteBytes(value.data(), value.size());
+		}
+
+		void Write(const std::string_view value)
 		{
 			const std::uint32_t length = static_cast<std::uint32_t>(value.size());
 			Write(length);

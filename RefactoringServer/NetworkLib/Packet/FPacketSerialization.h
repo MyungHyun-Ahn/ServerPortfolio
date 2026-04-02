@@ -6,6 +6,7 @@
 #include "Packet/FPacketWriter.h"
 #include "Servers/IServer.h"
 
+#include <string_view>
 #include <vector>
 
 namespace GameServer::NetworkLib::Packet
@@ -18,6 +19,11 @@ namespace GameServer::NetworkLib::Packet
 	}
 
 	inline std::size_t GetSerializedSize(const std::string& value) noexcept
+	{
+		return sizeof(std::uint32_t) + value.size();
+	}
+
+	inline std::size_t GetSerializedSize(const std::string_view value) noexcept
 	{
 		return sizeof(std::uint32_t) + value.size();
 	}

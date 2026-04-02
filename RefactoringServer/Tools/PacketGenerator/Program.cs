@@ -268,6 +268,7 @@ internal static class PacketTypeMapping
         ["float"] = "float",
         ["double"] = "double",
         ["string"] = "std::string",
+        ["string_view"] = "std::string_view",
         ["bytes"] = "std::vector<std::uint8_t>"
     };
 
@@ -285,6 +286,7 @@ internal static class PacketTypeMapping
         ["float"] = "float",
         ["double"] = "double",
         ["string"] = "string",
+        ["string_view"] = "string",
         ["bytes"] = "byte[]"
     };
 
@@ -462,6 +464,7 @@ internal static class CppPacketGenerator
         builder.AppendLine("#include <cstddef>");
         builder.AppendLine("#include <cstdint>");
         builder.AppendLine("#include <string>");
+        builder.AppendLine("#include <string_view>");
         builder.AppendLine("#include <vector>");
         builder.AppendLine("#include <map>");
         builder.AppendLine("#include <unordered_map>");

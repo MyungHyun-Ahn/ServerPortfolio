@@ -6,6 +6,7 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -61,6 +62,19 @@ namespace GameServer::NetworkLib::Packet
 
 			outValue.resize(length);
 			return ReadBytes(outValue.data(), length);
+		}
+
+		bool Read(std::string_view& outValue) noexcept
+		{
+			std::uint32_t length = 0;
+			if (!Read(length) || !CanRead(length))
+			{
+				return false;
+			}
+
+			outValue = std::string_view(m_data + m_offset, length);
+			m_offset += length;
+			return true;
 		}
 
 		template <typename TValue>

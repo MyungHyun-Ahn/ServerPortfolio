@@ -570,7 +570,7 @@ namespace
 					return sessionResult;
 				}
 
-				const std::string& responseMessage = responsePacket.message;
+				const std::string responseMessage(responsePacket.message);
 
 				auto expectedIt = expectedResponseCounts.find(responseMessage);
 				if (expectedIt == expectedResponseCounts.end() || expectedIt->second <= 0)
