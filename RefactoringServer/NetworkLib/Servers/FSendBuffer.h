@@ -4,6 +4,7 @@
 
 #include <WinSock2.h>
 
+#include <atomic>
 #include <utility>
 #include <vector>
 
@@ -12,6 +13,8 @@ namespace GameServer::NetworkLib
 	class FSendBuffer
 	{
 	public:
+		inline static constexpr std::size_t kDefaultPageSize = 4096;
+
 		FSendBuffer() = default;
 
 		void Initialize(std::vector<char>&& buffer) noexcept
@@ -21,6 +24,18 @@ namespace GameServer::NetworkLib
 
 		void Reset() noexcept
 		{
+			if (!IsPageReuseEnabled())
+			{
+				std::vector<char>().swap(m_buffer);
+				return;
+			}
+
+			const std::size_t pageSize = GetConfiguredPageSize();
+			if (m_buffer.capacity() < pageSize)
+			{
+				m_buffer.reserve(pageSize);
+			}
+
 			m_buffer.clear();
 		}
 
@@ -52,6 +67,22 @@ namespace GameServer::NetworkLib
 			return s_sendBufferPool.GetUseCount();
 		}
 
+		static void ConfigurePageReuse(bool enabled, std::size_t pageSize = kDefaultPageSize) noexcept
+		{
+			s_pageReuseEnabled.store(enabled, std::memory_order_relaxed);
+			s_pageSize.store(pageSize == 0 ? kDefaultPageSize : pageSize, std::memory_order_relaxed);
+		}
+
+		static bool IsPageReuseEnabled() noexcept
+		{
+			return s_pageReuseEnabled.load(std::memory_order_relaxed);
+		}
+
+		static std::size_t GetConfiguredPageSize() noexcept
+		{
+			return s_pageSize.load(std::memory_order_relaxed);
+		}
+
 		const char* GetData() const noexcept
 		{
 			return m_buffer.data();
@@ -77,6 +108,8 @@ namespace GameServer::NetworkLib
 
 	private:
 		std::vector<char> m_buffer;
+		inline static std::atomic<bool> s_pageReuseEnabled{ true };
+		inline static std::atomic<std::size_t> s_pageSize{ kDefaultPageSize };
 		inline static Memory::FTlsMemoryPoolManager<FSendBuffer, 256, 2> s_sendBufferPool{};
 	};
 }

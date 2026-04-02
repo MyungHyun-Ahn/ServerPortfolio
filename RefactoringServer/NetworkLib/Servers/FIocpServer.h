@@ -63,6 +63,8 @@ namespace GameServer::NetworkLib
 		std::atomic<std::uint64_t> m_acceptedSessionCount = 0;
 		std::atomic<std::uint64_t> m_receivedPacketCount = 0;
 		std::atomic<std::uint64_t> m_sentPacketCount = 0;
+		std::atomic<std::uint64_t> m_receivedByteCount = 0;
+		std::atomic<std::uint64_t> m_sentByteCount = 0;
 		std::atomic<std::uint64_t> m_wsaRecvCallCount = 0;
 		std::atomic<std::uint64_t> m_wsaSendCallCount = 0;
 		std::atomic<bool> m_isRunning = false;

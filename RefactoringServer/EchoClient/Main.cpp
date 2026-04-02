@@ -39,6 +39,8 @@ namespace
 		int packetsPerSend = 1;
 		int reconnectProbabilityPercent = 0;
 		int reconnectDelayMs = 100;
+		bool enablePagePool = true;
+		int pageSize = 4096;
 		bool verbose = true;
 	};
 
@@ -183,6 +185,17 @@ namespace
 			else if (argument == "--reconnect-delay-ms" && argumentIndex + 1 < argc)
 			{
 				if (!TryParseInt(argv[++argumentIndex], outOptions.reconnectDelayMs) || outOptions.reconnectDelayMs < 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--disable-page-pool")
+			{
+				outOptions.enablePagePool = false;
+			}
+			else if (argument == "--page-size" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.pageSize) || outOptions.pageSize <= 0)
 				{
 					return false;
 				}
@@ -636,9 +649,13 @@ int main(int argc, char* argv[])
 	SClientOptions options{};
 	if (!ParseArguments(argc, argv, options))
 	{
-		std::cerr << "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] [--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] [--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] [--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] [--quiet]\n";
+		std::cerr << "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] [--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] [--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] [--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] [--disable-page-pool] [--page-size 4096] [--quiet]\n";
 		return 1;
 	}
+
+	GameServer::NetworkLib::Packet::FPacketBuffer::ConfigurePageReuse(
+		options.enablePagePool,
+		static_cast<std::size_t>(options.pageSize));
 
 	WSADATA wsaData{};
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)

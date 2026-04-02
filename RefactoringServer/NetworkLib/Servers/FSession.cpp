@@ -58,6 +58,8 @@ namespace GameServer::NetworkLib
 		m_sendInFlight.store(false);
 		m_liveSendIoCount.store(0);
 		m_maxObservedConcurrentSendIoCount.store(0);
+		m_queuedSendBufferCount.store(0);
+		m_maxObservedQueuedSendBufferCount.store(0);
 		m_recvContext = {};
 		m_sendContext = {};
 	}
@@ -78,6 +80,8 @@ namespace GameServer::NetworkLib
 		m_sendInFlight.store(false);
 		m_liveSendIoCount.store(0);
 		m_maxObservedConcurrentSendIoCount.store(0);
+		m_queuedSendBufferCount.store(0);
+		m_maxObservedQueuedSendBufferCount.store(0);
 	}
 
 	SOCKET FSession::GetSocket() const noexcept
@@ -159,6 +163,12 @@ namespace GameServer::NetworkLib
 	void FSession::EnqueueSendBuffer(FSendBuffer* sendBuffer) noexcept
 	{
 		m_sendQueue.Enqueue(sendBuffer);
+		const std::uint32_t queuedCount = m_queuedSendBufferCount.fetch_add(1) + 1;
+		std::uint32_t currentMax = m_maxObservedQueuedSendBufferCount.load();
+		while (queuedCount > currentMax &&
+			!m_maxObservedQueuedSendBufferCount.compare_exchange_weak(currentMax, queuedCount))
+		{
+		}
 	}
 
 	bool FSession::TryBeginSend() noexcept
@@ -194,6 +204,16 @@ namespace GameServer::NetworkLib
 		return m_maxObservedConcurrentSendIoCount.load();
 	}
 
+	std::uint32_t FSession::GetQueuedSendBufferCount() const noexcept
+	{
+		return m_queuedSendBufferCount.load();
+	}
+
+	std::uint32_t FSession::GetMaxObservedQueuedSendBufferCount() const noexcept
+	{
+		return m_maxObservedQueuedSendBufferCount.load();
+	}
+
 	bool FSession::FillSendBatch(std::size_t maxSendCount) noexcept
 	{
 		m_activeSendBuffers.clear();
@@ -210,6 +230,7 @@ namespace GameServer::NetworkLib
 				break;
 			}
 
+			m_queuedSendBufferCount.fetch_sub(1);
 			m_activeSendBuffers.push_back(sendBuffer);
 			m_sendWsabufs.push_back(sendBuffer->MakeWsabuf());
 		}
@@ -238,6 +259,7 @@ namespace GameServer::NetworkLib
 		FSendBuffer* sendBuffer = nullptr;
 		while (m_sendQueue.Dequeue(&sendBuffer))
 		{
+			m_queuedSendBufferCount.fetch_sub(1);
 			FSendBuffer::Release(sendBuffer);
 			sendBuffer = nullptr;
 		}

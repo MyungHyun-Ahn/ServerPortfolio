@@ -51,4 +51,9 @@
 - 패킷 프레이밍 계층 추가
 - `EchoServer` 다음 단계 샘플 서버 정의
 - 콘텐츠 단위 디렉터리와 패킷 스키마 정착
+- `NetworkLib` 성능 고도화
+  - 버퍼 재사용
+  - page pool
+  - 계측
+  - 세션 경량화
 - 이후 `Gateway` 또는 `WorldServer` 역할 분리

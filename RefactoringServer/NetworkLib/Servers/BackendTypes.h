@@ -42,6 +42,8 @@ namespace GameServer::NetworkLib
 		std::uint32_t workerThreadCount = 2;
 		std::uint32_t maxSessionCount = 64;
 		std::uint32_t recvBufferSize = 1024;
+		bool enablePageBufferReuse = true;
+		std::uint32_t pageBufferSize = 4096;
 		GameServer::Foundation::SLogConfig logConfig{};
 		std::shared_ptr<GameServer::Foundation::ILogger> logger;
 		std::shared_ptr<GameServer::NetworkLib::Crypto::IPacketCipher> packetCipher;
@@ -54,7 +56,17 @@ namespace GameServer::NetworkLib
 		std::uint64_t acceptedSessionCount = 0;
 		std::uint64_t receivedPacketCount = 0;
 		std::uint64_t sentPacketCount = 0;
+		std::uint64_t receivedByteCount = 0;
+		std::uint64_t sentByteCount = 0;
 		std::uint64_t wsaRecvCallCount = 0;
 		std::uint64_t wsaSendCallCount = 0;
+		std::uint64_t queuedSendBufferCount = 0;
+		std::uint64_t maxObservedQueuedSendBufferCount = 0;
+		std::uint32_t sessionPoolCapacity = 0;
+		std::uint32_t sessionPoolUsage = 0;
+		std::uint32_t sendBufferPoolCapacity = 0;
+		std::uint32_t sendBufferPoolUsage = 0;
+		std::uint32_t packetBufferPoolCapacity = 0;
+		std::uint32_t packetBufferPoolUsage = 0;
 	};
 }

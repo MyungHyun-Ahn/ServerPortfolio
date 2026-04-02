@@ -71,6 +71,8 @@ namespace GameServer::NetworkLib
 		int BeginSendIo() noexcept;
 		int FinishSendIo() noexcept;
 		int GetMaxObservedConcurrentSendIoCount() const noexcept;
+		std::uint32_t GetQueuedSendBufferCount() const noexcept;
+		std::uint32_t GetMaxObservedQueuedSendBufferCount() const noexcept;
 		bool FillSendBatch(std::size_t maxSendCount) noexcept;
 		const std::vector<WSABUF>& GetSendWsabufs() const noexcept;
 		void ReleaseActiveSendBuffers() noexcept;
@@ -95,6 +97,8 @@ namespace GameServer::NetworkLib
 		std::atomic<bool> m_sendInFlight = false;
 		std::atomic<int> m_liveSendIoCount = 0;
 		std::atomic<int> m_maxObservedConcurrentSendIoCount = 0;
+		std::atomic<std::uint32_t> m_queuedSendBufferCount = 0;
+		std::atomic<std::uint32_t> m_maxObservedQueuedSendBufferCount = 0;
 
 	private:
 		inline static Memory::FTlsMemoryPoolManager<FSession, 128, 2> s_sessionPool{};

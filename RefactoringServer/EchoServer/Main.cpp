@@ -16,8 +16,6 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
-#include <mutex>
-#include <unordered_map>
 #include <thread>
 #include <Windows.h>
 
@@ -29,6 +27,8 @@ namespace
 		int sendThreadCount = 1;
 		int responsesPerThread = 1;
 		bool logPackets = false;
+		bool enablePagePool = true;
+		std::uint32_t pageSize = 4096;
 	};
 
 	std::filesystem::path GetExecutableDirectory()
@@ -51,9 +51,11 @@ namespace
 	public:
 		FEchoApplication(
 			std::shared_ptr<GameServer::Foundation::ILogger> logger,
+			std::uint32_t maxSessionCount,
 			SServerRuntimeOptions runtimeOptions)
 			: m_logger(std::move(logger))
 			, m_runtimeOptions(runtimeOptions)
+			, m_loggedInUsers(static_cast<std::size_t>(maxSessionCount))
 		{
 			m_packetRouter.SetEchoHandler(this);
 			m_packetRouter.SetLoginHandler(this);
@@ -86,10 +88,7 @@ namespace
 
 		void OnClientDisconnected(std::uint64_t sessionId) override
 		{
-			{
-				std::lock_guard<std::mutex> lock(m_loginMutex);
-				m_loggedInUsers.erase(sessionId);
-			}
+			ResetLoggedInUser(sessionId);
 
 			std::ostringstream oss;
 			oss << "client disconnected. sessionId=" << sessionId;
@@ -154,17 +153,7 @@ namespace
 		bool HandleLoginRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Login::FLoginRq& packet) override
 		{
 			const bool success = packet.userId != 0;
-			{
-				std::lock_guard<std::mutex> lock(m_loginMutex);
-				if (success)
-				{
-					m_loggedInUsers[sessionId] = packet.userId;
-				}
-				else
-				{
-					m_loggedInUsers.erase(sessionId);
-				}
-			}
+			SetLoggedInUser(sessionId, success ? packet.userId : 0);
 
 			{
 				std::ostringstream oss;
@@ -181,10 +170,30 @@ namespace
 		}
 
 	private:
+		std::uint32_t GetSessionSlotIndex(std::uint64_t sessionId) const noexcept
+		{
+			return static_cast<std::uint32_t>(sessionId & 0xFFFFFFFFULL);
+		}
+
 		bool IsLoggedIn(std::uint64_t sessionId)
 		{
-			std::lock_guard<std::mutex> lock(m_loginMutex);
-			return m_loggedInUsers.contains(sessionId);
+			const std::uint32_t slotIndex = GetSessionSlotIndex(sessionId);
+			return slotIndex < m_loggedInUsers.size() &&
+				m_loggedInUsers[slotIndex].load(std::memory_order_relaxed) != 0;
+		}
+
+		void SetLoggedInUser(std::uint64_t sessionId, std::uint32_t userId) noexcept
+		{
+			const std::uint32_t slotIndex = GetSessionSlotIndex(sessionId);
+			if (slotIndex < m_loggedInUsers.size())
+			{
+				m_loggedInUsers[slotIndex].store(userId, std::memory_order_relaxed);
+			}
+		}
+
+		void ResetLoggedInUser(std::uint64_t sessionId) noexcept
+		{
+			SetLoggedInUser(sessionId, 0);
 		}
 
 		void Log(GameServer::Foundation::ELogLevel logLevel, const std::string& message) const
@@ -199,8 +208,7 @@ namespace
 		std::shared_ptr<GameServer::Foundation::ILogger> m_logger;
 		SServerRuntimeOptions m_runtimeOptions;
 		GameServer::Generated::FPacketRouter m_packetRouter;
-		std::mutex m_loginMutex;
-		std::unordered_map<std::uint64_t, std::uint32_t> m_loggedInUsers;
+		std::vector<std::atomic<std::uint32_t>> m_loggedInUsers;
 	};
 }
 
@@ -260,8 +268,19 @@ int main(int argc, char* argv[])
 			{
 				runtimeOptions.logPackets = true;
 			}
+			else if (argument == "--disable-page-pool")
+			{
+				runtimeOptions.enablePagePool = false;
+			}
+			else if (argument == "--page-size" && argumentIndex + 1 < argc)
+			{
+				runtimeOptions.pageSize = static_cast<std::uint32_t>(std::max(1, std::atoi(argv[++argumentIndex])));
+			}
 		}
 	}
+
+	serverConfig.enablePageBufferReuse = runtimeOptions.enablePagePool;
+	serverConfig.pageBufferSize = runtimeOptions.pageSize;
 
 	auto compositeLogger = std::make_shared<GameServer::Foundation::FCompositeLogger>();
 	compositeLogger->AddSink(std::make_shared<GameServer::Foundation::FConsoleLogger>(serverConfig.logConfig));
@@ -280,7 +299,7 @@ int main(int argc, char* argv[])
 		return dumpWritten ? 0 : 1;
 	}
 
-	FEchoApplication echoApplication(compositeLogger, runtimeOptions);
+	FEchoApplication echoApplication(compositeLogger, serverConfig.maxSessionCount, runtimeOptions);
 	std::unique_ptr<GameServer::NetworkLib::IServer> server = GameServer::NetworkLib::FServerFactory::Create(serverConfig.backendKind);
 	if (server == nullptr)
 	{
@@ -307,6 +326,8 @@ int main(int argc, char* argv[])
 			const std::uint64_t acceptTps = currentStats.acceptedSessionCount - previousStats.acceptedSessionCount;
 			const std::uint64_t recvTps = currentStats.receivedPacketCount - previousStats.receivedPacketCount;
 			const std::uint64_t sendTps = currentStats.sentPacketCount - previousStats.sentPacketCount;
+			const std::uint64_t recvBytesPerSec = currentStats.receivedByteCount - previousStats.receivedByteCount;
+			const std::uint64_t sendBytesPerSec = currentStats.sentByteCount - previousStats.sentByteCount;
 			const std::uint64_t wsaRecvTps = currentStats.wsaRecvCallCount - previousStats.wsaRecvCallCount;
 			const std::uint64_t wsaSendTps = currentStats.wsaSendCallCount - previousStats.wsaSendCallCount;
 			std::cout
@@ -314,8 +335,15 @@ int main(int argc, char* argv[])
 				<< " acceptTPS=" << acceptTps
 				<< " recvTPS=" << recvTps
 				<< " sendTPS=" << sendTps
+				<< " recvBps=" << recvBytesPerSec
+				<< " sendBps=" << sendBytesPerSec
 				<< " wsaSendTPS=" << wsaSendTps
 				<< " wsaRecvTPS=" << wsaRecvTps
+				<< " queuedSendBuffers=" << currentStats.queuedSendBufferCount
+				<< " maxQueuedSendBuffers=" << currentStats.maxObservedQueuedSendBufferCount
+				<< " sessionPool=" << currentStats.sessionPoolUsage << "/" << currentStats.sessionPoolCapacity
+				<< " sendBufferPool=" << currentStats.sendBufferPoolUsage << "/" << currentStats.sendBufferPoolCapacity
+				<< " packetBufferPool=" << currentStats.packetBufferPoolUsage << "/" << currentStats.packetBufferPoolCapacity
 				<< " totalWSASendCalls=" << currentStats.wsaSendCallCount
 				<< " totalWSARecvCalls=" << currentStats.wsaRecvCallCount
 				<< std::endl;

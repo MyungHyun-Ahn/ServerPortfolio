@@ -1,6 +1,7 @@
 #include "Pch.h"
 
 #include "Crypto/IPacketCipher.h"
+#include "Packet/FPacketBuffer.h"
 #include "Packet/FPacketSerialization.h"
 #include "Packet/IPacketFramer.h"
 #include "Servers/FIocpServer.h"
@@ -31,6 +32,10 @@ namespace GameServer::NetworkLib
 		m_logger = m_serverConfig.logger;
 		m_packetCipher = m_serverConfig.packetCipher;
 		m_packetFramer = m_serverConfig.packetFramer;
+		FSendBuffer::ConfigurePageReuse(m_serverConfig.enablePageBufferReuse, m_serverConfig.pageBufferSize);
+		GameServer::NetworkLib::Packet::FPacketBuffer::ConfigurePageReuse(
+			m_serverConfig.enablePageBufferReuse,
+			m_serverConfig.pageBufferSize);
 		if (m_packetCipher != nullptr && m_packetFramer == nullptr)
 		{
 			Log(GameServer::Foundation::ELogLevel::Error, "Packet cipher requires packet framer.");
@@ -156,11 +161,17 @@ namespace GameServer::NetworkLib
 		if (m_packetFramer != nullptr)
 		{
 			std::vector<char> payloadBuffer;
+			payloadBuffer.resize(sizeof(GameServer::NetworkLib::Packet::SContentHeader) + static_cast<std::size_t>(length));
+			GameServer::NetworkLib::Packet::SContentHeader contentHeader{};
+			contentHeader.opcode = opcode;
+			std::memcpy(payloadBuffer.data(), &contentHeader, sizeof(contentHeader));
 			if (length > 0)
 			{
-				payloadBuffer.assign(buffer, buffer + length);
+				std::memcpy(
+					payloadBuffer.data() + sizeof(GameServer::NetworkLib::Packet::SContentHeader),
+					buffer,
+					static_cast<std::size_t>(length));
 			}
-			payloadBuffer = GameServer::NetworkLib::Packet::BuildContentPayload(opcode, std::move(payloadBuffer));
 			std::uint8_t randomKey = 0;
 			if (m_packetCipher != nullptr)
 			{
@@ -191,6 +202,7 @@ namespace GameServer::NetworkLib
 
 		sessionContext->EnqueueSendBuffer(FSendBuffer::Create(std::move(framedBuffer)));
 		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
+		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(length > 0 ? length : 0), std::memory_order_relaxed);
 		PostSend(*sessionContext);
 
 		ReleaseSession(sessionContext);
@@ -209,8 +221,34 @@ namespace GameServer::NetworkLib
 		stats.acceptedSessionCount = m_acceptedSessionCount.load(std::memory_order_relaxed);
 		stats.receivedPacketCount = m_receivedPacketCount.load(std::memory_order_relaxed);
 		stats.sentPacketCount = m_sentPacketCount.load(std::memory_order_relaxed);
+		stats.receivedByteCount = m_receivedByteCount.load(std::memory_order_relaxed);
+		stats.sentByteCount = m_sentByteCount.load(std::memory_order_relaxed);
 		stats.wsaRecvCallCount = m_wsaRecvCallCount.load(std::memory_order_relaxed);
 		stats.wsaSendCallCount = m_wsaSendCallCount.load(std::memory_order_relaxed);
+		stats.sessionPoolCapacity = static_cast<std::uint32_t>(FSession::GetPoolCapacity());
+		stats.sessionPoolUsage = static_cast<std::uint32_t>(FSession::GetPoolUsage());
+		stats.sendBufferPoolCapacity = static_cast<std::uint32_t>(FSendBuffer::GetPoolCapacity());
+		stats.sendBufferPoolUsage = static_cast<std::uint32_t>(FSendBuffer::GetPoolUsage());
+		stats.packetBufferPoolCapacity = static_cast<std::uint32_t>(GameServer::NetworkLib::Packet::FPacketBuffer::GetPoolCapacity());
+		stats.packetBufferPoolUsage = static_cast<std::uint32_t>(GameServer::NetworkLib::Packet::FPacketBuffer::GetPoolUsage());
+
+		std::uint64_t queuedSendBufferCount = 0;
+		std::uint64_t maxObservedQueuedSendBufferCount = 0;
+		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
+		{
+			FSession* sessionContext = m_sessionSlots[slotIndex].load(std::memory_order_relaxed);
+			if (sessionContext == nullptr)
+			{
+				continue;
+			}
+
+			queuedSendBufferCount += sessionContext->GetQueuedSendBufferCount();
+			maxObservedQueuedSendBufferCount = std::max<std::uint64_t>(
+				maxObservedQueuedSendBufferCount,
+				sessionContext->GetMaxObservedQueuedSendBufferCount());
+		}
+		stats.queuedSendBufferCount = queuedSendBufferCount;
+		stats.maxObservedQueuedSendBufferCount = maxObservedQueuedSendBufferCount;
 		return stats;
 	}
 
@@ -378,6 +416,7 @@ namespace GameServer::NetworkLib
 
 			if (ioContext->ioType == FSession::EIoType::Recv)
 			{
+				m_receivedByteCount.fetch_add(transferredBytes, std::memory_order_relaxed);
 				if (!sessionContext->CommitRecvBytes(transferredBytes))
 				{
 					Log(GameServer::Foundation::ELogLevel::Warn, "Recv buffer overflow detected.");
