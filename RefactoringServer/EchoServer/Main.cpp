@@ -5,6 +5,7 @@
 #include "Foundation/Logging/FConsoleLogger.h"
 #include "Foundation/Logging/FFileLogger.h"
 #include "Foundation/Logging/ILogger.h"
+#include "Generated/Packets/Chat/ChatPacketHandler.h"
 #include "Generated/Packets/Echo/EchoPacketHandler.h"
 #include "Generated/Packets/Login/LoginPacketHandler.h"
 #include "Generated/Packets/PacketRouter.h"
@@ -127,6 +128,7 @@ namespace
 
 	class FEchoApplication final
 		: public GameServer::NetworkLib::IApplicationHandler
+		, public GameServer::Generated::Chat::FChatPacketHandlerBase
 		, public GameServer::Generated::Echo::FEchoPacketHandlerBase
 		, public GameServer::Generated::Login::FLoginPacketHandlerBase
 	{
@@ -139,6 +141,7 @@ namespace
 			, m_runtimeOptions(runtimeOptions)
 			, m_loggedInUsers(static_cast<std::size_t>(maxSessionCount))
 		{
+			m_packetRouter.SetChatHandler(this);
 			m_packetRouter.SetEchoHandler(this);
 			m_packetRouter.SetLoginHandler(this);
 		}
@@ -193,14 +196,14 @@ namespace
 			if (m_runtimeOptions.logPackets)
 			{
 				std::ostringstream oss;
-				oss << "received. sessionId=" << sessionId << " opcode=" << packet.GetOpcode() << " message=" << packet.message;
+				oss << "received. sessionId=" << sessionId << " opcode=" << packet.GetOpcode() << " message=" << packet.GetMessageValue();
 				Log(GameServer::Foundation::ELogLevel::Info, oss.str());
 			}
 
 			if (m_runtimeOptions.sendThreadCount == 1 && m_runtimeOptions.responsesPerThread == 1)
 			{
 				GameServer::Generated::Echo::FEchoRp responsePacket;
-				responsePacket.message = packet.message;
+				responsePacket.SetMessageValue(packet.GetMessageValue());
 				return GameServer::Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
 			}
 
@@ -208,7 +211,7 @@ namespace
 			sendThreads.reserve(static_cast<std::size_t>(m_runtimeOptions.sendThreadCount));
 			for (int threadIndex = 0; threadIndex < m_runtimeOptions.sendThreadCount; ++threadIndex)
 			{
-				sendThreads.emplace_back([&, threadIndex, sessionId, message = packet.message]()
+				sendThreads.emplace_back([&, threadIndex, sessionId, message = std::string(packet.GetMessageValue())]()
 				{
 					for (int responseIndex = 0; responseIndex < m_runtimeOptions.responsesPerThread; ++responseIndex)
 					{
@@ -219,7 +222,7 @@ namespace
 
 						const std::string responseMessage = responseBuilder.str();
 						GameServer::Generated::Echo::FEchoRp responsePacket;
-						responsePacket.message = responseMessage;
+						responsePacket.SetMessageValue(responseMessage);
 						GameServer::Generated::Echo::SendGeneratedPacket(server, sessionId, responsePacket);
 					}
 				});
@@ -231,6 +234,52 @@ namespace
 			}
 
 			return true;
+		}
+
+		bool HandleRoomSnapshotRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Chat::FRoomSnapshotRq& packet) override
+		{
+			if (!IsLoggedIn(sessionId))
+			{
+				Log(GameServer::Foundation::ELogLevel::Warn, "chat snapshot request rejected before login.");
+				return false;
+			}
+
+			GameServer::Generated::Chat::FRoomSnapshotRp snapshotPacket;
+			snapshotPacket.roomId = packet.roomId;
+			snapshotPacket.participants = { "alpha", "bravo", "charlie" };
+			snapshotPacket.unreadCounts = {
+				{ "alpha", 1u },
+				{ "bravo", 3u },
+				{ "charlie", 5u }
+			};
+			snapshotPacket.metadata = {
+				{ "topic", "general" },
+				{ "owner", "alpha" }
+			};
+
+			const bool snapshotSent = GameServer::Generated::Chat::SendGeneratedPacket(server, sessionId, snapshotPacket);
+
+			const std::array<std::uint8_t, 8> binaryPayload = {
+				static_cast<std::uint8_t>(packet.roomId & 0xFF),
+				static_cast<std::uint8_t>((packet.roomId >> 8) & 0xFF),
+				0x10, 0x20, 0x30, 0x40, 0x50, 0x60
+			};
+
+			GameServer::Generated::Chat::FRoomBinarySnapshotNoti binarySnapshotPacket;
+			binarySnapshotPacket.roomId = packet.roomId;
+			binarySnapshotPacket.SetPayloadValue(std::span<const std::uint8_t>(binaryPayload.data(), binaryPayload.size()));
+			const bool binarySnapshotSent = GameServer::Generated::Chat::SendGeneratedPacket(server, sessionId, binarySnapshotPacket);
+
+			if (m_runtimeOptions.logPackets)
+			{
+				std::ostringstream oss;
+				oss << "chat snapshot served. sessionId=" << sessionId
+					<< " roomId=" << packet.roomId
+					<< " binaryBytes=" << binaryPayload.size();
+				Log(GameServer::Foundation::ELogLevel::Info, oss.str());
+			}
+
+			return snapshotSent && binarySnapshotSent;
 		}
 
 		bool HandleLoginRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const GameServer::Generated::Login::FLoginRq& packet) override

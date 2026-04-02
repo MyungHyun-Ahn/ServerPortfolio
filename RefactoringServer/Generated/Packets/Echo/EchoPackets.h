@@ -20,7 +20,22 @@ namespace GameServer::Generated::Echo
 	public:
 		static constexpr std::uint16_t kOpcode = 1000;
 
-		std::string_view message;
+		void SetMessageValue(std::string_view value) noexcept
+		{
+			m_message = value;
+		}
+
+		std::string_view GetMessageValue() const noexcept
+		{
+			GameServer::NetworkLib::Packet::ValidateBorrowedViewAccess(m_borrowedViewScope);
+			return m_message;
+		}
+
+
+		void BindBorrowedViewScope(const std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState>& scope) noexcept override
+		{
+			m_borrowedViewScope = scope;
+		}
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -28,20 +43,29 @@ namespace GameServer::Generated::Echo
 			return kOpcode;
 		}
 
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return true;
+		}
+
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(message);
+			return GameServer::NetworkLib::Packet::GetSerializedSize(m_message);
 		}
 
 		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
 		{
-			writer.Write(message);
+			writer.Write(m_message);
 		}
 
 		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
 		{
-			return reader.Read(message);
+			return reader.Read(m_message);
 		}
+
+	private:
+		std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState> m_borrowedViewScope;
+		std::string_view m_message;
 	};
 
 	class FEchoRp final : public GameServer::NetworkLib::Packet::IContentPacket
@@ -49,7 +73,22 @@ namespace GameServer::Generated::Echo
 	public:
 		static constexpr std::uint16_t kOpcode = 1001;
 
-		std::string_view message;
+		void SetMessageValue(std::string_view value) noexcept
+		{
+			m_message = value;
+		}
+
+		std::string_view GetMessageValue() const noexcept
+		{
+			GameServer::NetworkLib::Packet::ValidateBorrowedViewAccess(m_borrowedViewScope);
+			return m_message;
+		}
+
+
+		void BindBorrowedViewScope(const std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState>& scope) noexcept override
+		{
+			m_borrowedViewScope = scope;
+		}
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -57,20 +96,29 @@ namespace GameServer::Generated::Echo
 			return kOpcode;
 		}
 
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return true;
+		}
+
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(message);
+			return GameServer::NetworkLib::Packet::GetSerializedSize(m_message);
 		}
 
 		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
 		{
-			writer.Write(message);
+			writer.Write(m_message);
 		}
 
 		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
 		{
-			return reader.Read(message);
+			return reader.Read(m_message);
 		}
+
+	private:
+		std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState> m_borrowedViewScope;
+		std::string_view m_message;
 	};
 
 	class FEchoNoti final : public GameServer::NetworkLib::Packet::IContentPacket
@@ -78,7 +126,22 @@ namespace GameServer::Generated::Echo
 	public:
 		static constexpr std::uint16_t kOpcode = 1002;
 
-		std::string_view message;
+		void SetMessageValue(std::string_view value) noexcept
+		{
+			m_message = value;
+		}
+
+		std::string_view GetMessageValue() const noexcept
+		{
+			GameServer::NetworkLib::Packet::ValidateBorrowedViewAccess(m_borrowedViewScope);
+			return m_message;
+		}
+
+
+		void BindBorrowedViewScope(const std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState>& scope) noexcept override
+		{
+			m_borrowedViewScope = scope;
+		}
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -86,20 +149,29 @@ namespace GameServer::Generated::Echo
 			return kOpcode;
 		}
 
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return true;
+		}
+
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return GameServer::NetworkLib::Packet::GetSerializedSize(message);
+			return GameServer::NetworkLib::Packet::GetSerializedSize(m_message);
 		}
 
 		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
 		{
-			writer.Write(message);
+			writer.Write(m_message);
 		}
 
 		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
 		{
-			return reader.Read(message);
+			return reader.Read(m_message);
 		}
+
+	private:
+		std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState> m_borrowedViewScope;
+		std::string_view m_message;
 	};
 
 }

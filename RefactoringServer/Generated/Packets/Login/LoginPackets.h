@@ -28,6 +28,11 @@ namespace GameServer::Generated::Login
 			return kOpcode;
 		}
 
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return false;
+		}
+
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
 			return GameServer::NetworkLib::Packet::GetSerializedSize(userId);
@@ -56,6 +61,11 @@ namespace GameServer::Generated::Login
 		std::uint16_t GetOpcode() const noexcept override
 		{
 			return kOpcode;
+		}
+
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return false;
 		}
 
 		std::size_t GetEstimatedBodySize() const noexcept override

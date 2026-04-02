@@ -36,6 +36,8 @@ namespace GameServer::Generated::Echo
 			case FEchoRq::kOpcode:
 				{
 					FEchoRq packet;
+					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
 					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
@@ -46,6 +48,8 @@ namespace GameServer::Generated::Echo
 			case FEchoRp::kOpcode:
 				{
 					FEchoRp packet;
+					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
 					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
@@ -56,6 +60,8 @@ namespace GameServer::Generated::Echo
 			case FEchoNoti::kOpcode:
 				{
 					FEchoNoti packet;
+					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
 					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
 					{
 						return false;

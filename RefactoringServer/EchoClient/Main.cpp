@@ -1,6 +1,7 @@
 #include "Pch.h"
 
 #include "Crypto/FDefaultPacketCipher.h"
+#include "Generated/Packets/Chat/ChatPackets.h"
 #include "Generated/Packets/Echo/EchoPackets.h"
 #include "Generated/Packets/Login/LoginPackets.h"
 #include "Packet/FDefaultPacketFramer.h"
@@ -482,6 +483,135 @@ namespace
 				}
 			}
 
+			{
+				const std::uint32_t roomId = 77u + static_cast<std::uint32_t>(sessionIndex);
+				GameServer::Generated::Chat::FRoomSnapshotRq snapshotRequest;
+				snapshotRequest.roomId = roomId;
+
+				std::vector<char> serializedPayload = GameServer::NetworkLib::Packet::SerializeContentPacket(snapshotRequest);
+				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x61 + sessionIndex) & 0xFF);
+				packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), requestRandomKey);
+
+				GameServer::NetworkLib::Packet::SOutgoingPacket outgoingPacket{};
+				outgoingPacket.randomKey = requestRandomKey;
+				outgoingPacket.checkSum =
+					GameServer::NetworkLib::Packet::CalculatePacketChecksum(
+						serializedPayload.data(),
+						static_cast<std::int32_t>(serializedPayload.size()));
+				outgoingPacket.payload = serializedPayload.data();
+				outgoingPacket.payloadLength = static_cast<std::int32_t>(serializedPayload.size());
+
+				std::vector<char> outboundPacket;
+				if (!packetFramer.BuildPacket(outgoingPacket, outboundPacket))
+				{
+					sessionResult.errorMessage = "BuildPacket failed for chat snapshot request.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				if (!SendPacketWithOptionalChunking(clientSocket, outboundPacket, options.sendChunkSize, options.sendChunkDelayMs))
+				{
+					sessionResult.errorMessage = "send failed for chat snapshot request.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				bool receivedSnapshotResponse = false;
+				bool receivedBinarySnapshot = false;
+				while (!receivedSnapshotResponse || !receivedBinarySnapshot)
+				{
+					GameServer::NetworkLib::Packet::SFramedPacket framedPacket{};
+					GameServer::NetworkLib::Packet::FPacketView contentPacketView{};
+					if (!tryReceiveNextContentPacket(framedPacket, contentPacketView))
+					{
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					if (contentPacketView.opcode == GameServer::Generated::Chat::FRoomSnapshotRp::kOpcode)
+					{
+						GameServer::Generated::Chat::FRoomSnapshotRp snapshotResponse;
+						if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, snapshotResponse))
+						{
+							sessionResult.errorMessage = "chat snapshot response deserialize failed.";
+							closesocket(clientSocket);
+							clientSocket = INVALID_SOCKET;
+							return sessionResult;
+						}
+
+						if (snapshotResponse.roomId != roomId || snapshotResponse.participants.size() != 3)
+						{
+							sessionResult.errorMessage = "chat snapshot response validation failed.";
+							closesocket(clientSocket);
+							clientSocket = INVALID_SOCKET;
+							return sessionResult;
+						}
+
+						receivedSnapshotResponse = true;
+						continue;
+					}
+
+					if (contentPacketView.opcode == GameServer::Generated::Chat::FRoomBinarySnapshotNoti::kOpcode)
+					{
+						GameServer::Generated::Chat::FRoomBinarySnapshotNoti binarySnapshot;
+						if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(contentPacketView, binarySnapshot))
+						{
+							sessionResult.errorMessage = "chat binary snapshot deserialize failed.";
+							closesocket(clientSocket);
+							clientSocket = INVALID_SOCKET;
+							return sessionResult;
+						}
+
+						if (!binarySnapshot.ContainsBorrowedViews())
+						{
+							sessionResult.errorMessage = "chat binary snapshot should report borrowed view payload.";
+							closesocket(clientSocket);
+							clientSocket = INVALID_SOCKET;
+							return sessionResult;
+						}
+
+						const std::array<std::uint8_t, 8> expectedPayload = {
+							static_cast<std::uint8_t>(roomId & 0xFF),
+							static_cast<std::uint8_t>((roomId >> 8) & 0xFF),
+							0x10, 0x20, 0x30, 0x40, 0x50, 0x60
+						};
+
+						const std::span<const std::uint8_t> binaryPayload = binarySnapshot.GetPayloadValue();
+						if (binarySnapshot.roomId != roomId || binaryPayload.size() != expectedPayload.size())
+						{
+							sessionResult.errorMessage = "chat binary snapshot validation failed.";
+							closesocket(clientSocket);
+							clientSocket = INVALID_SOCKET;
+							return sessionResult;
+						}
+
+						for (std::size_t payloadIndex = 0; payloadIndex < expectedPayload.size(); ++payloadIndex)
+						{
+							if (binaryPayload[payloadIndex] != expectedPayload[payloadIndex])
+							{
+								sessionResult.errorMessage = "chat binary snapshot payload mismatch.";
+								closesocket(clientSocket);
+								clientSocket = INVALID_SOCKET;
+								return sessionResult;
+							}
+						}
+
+						receivedBinarySnapshot = true;
+						continue;
+					}
+
+					std::ostringstream oss;
+					oss << "unexpected pre-echo opcode: " << contentPacketView.opcode;
+					sessionResult.errorMessage = oss.str();
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+			}
+
 			for (int requestIndex = 0; requestIndex < options.requestCount; ++requestIndex)
 			{
 				const std::string requestMessage = BuildRequestMessage(sessionIndex, requestSequence++, options.payloadSize);
@@ -491,7 +621,7 @@ namespace
 				}
 
 				GameServer::Generated::Echo::FEchoRq requestPacket;
-				requestPacket.message = requestMessage;
+				requestPacket.SetMessageValue(requestMessage);
 				std::vector<char> serializedPayload = GameServer::NetworkLib::Packet::SerializeContentPacket(requestPacket);
 				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x31 + requestSequence + sessionIndex) & 0xFF);
 				packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), requestRandomKey);
@@ -570,7 +700,15 @@ namespace
 					return sessionResult;
 				}
 
-				const std::string responseMessage(responsePacket.message);
+				if (!responsePacket.ContainsBorrowedViews())
+				{
+					sessionResult.errorMessage = "echo response should report borrowed view payload.";
+					closesocket(clientSocket);
+					clientSocket = INVALID_SOCKET;
+					return sessionResult;
+				}
+
+				const std::string responseMessage(responsePacket.GetMessageValue());
 
 				auto expectedIt = expectedResponseCounts.find(responseMessage);
 				if (expectedIt == expectedResponseCounts.end() || expectedIt->second <= 0)

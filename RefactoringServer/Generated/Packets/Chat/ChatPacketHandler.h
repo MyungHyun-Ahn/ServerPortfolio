@@ -56,6 +56,8 @@ namespace GameServer::Generated::Chat
 			case FRoomBinarySnapshotNoti::kOpcode:
 				{
 					FRoomBinarySnapshotNoti packet;
+					GameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;
+					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
 					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
 					{
 						return false;

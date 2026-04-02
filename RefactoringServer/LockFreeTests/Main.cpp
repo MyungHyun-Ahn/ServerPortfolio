@@ -606,7 +606,7 @@ namespace
 	STestResult RunGeneratedEchoPacketRoundTripTest()
 	{
 		GameServer::Generated::Echo::FEchoRq requestPacket;
-		requestPacket.message = "generated-echo-message";
+		requestPacket.SetMessageValue("generated-echo-message");
 
 		std::vector<char> payload = GameServer::NetworkLib::Packet::SerializeContentBody(requestPacket);
 		GameServer::Generated::Echo::FEchoRq decodedPacket;
@@ -615,12 +615,17 @@ namespace
 			return { false, "Generated echo packet round trip", "DeserializeContentPacket failed" };
 		}
 
+		if (!decodedPacket.ContainsBorrowedViews())
+		{
+			return { false, "Generated echo packet round trip", "echo packet should report borrowed view payload" };
+		}
+
 		if (decodedPacket.GetOpcode() != requestPacket.GetOpcode())
 		{
 			return { false, "Generated echo packet round trip", "opcode mismatch" };
 		}
 
-		if (decodedPacket.message != requestPacket.message)
+		if (decodedPacket.GetMessageValue() != requestPacket.GetMessageValue())
 		{
 			return { false, "Generated echo packet round trip", "message mismatch" };
 		}
@@ -711,7 +716,7 @@ namespace
 		using namespace GameServer::NetworkLib::Packet;
 
 		Echo::FEchoRq echoPacket;
-		echoPacket.message = "estimate-check";
+		echoPacket.SetMessageValue("estimate-check");
 		const std::vector<char> echoPayload = SerializeContentBody(echoPacket);
 		if (echoPacket.GetEstimatedBodySize() != echoPayload.size())
 		{
@@ -779,7 +784,7 @@ namespace
 		const std::vector<std::uint8_t> originalPayload = { 10, 20, 30, 40, 50, 60 };
 		FRoomBinarySnapshotNoti packet;
 		packet.roomId = 88;
-		packet.payload = std::span<const std::uint8_t>(originalPayload.data(), originalPayload.size());
+		packet.SetPayloadValue(std::span<const std::uint8_t>(originalPayload.data(), originalPayload.size()));
 
 		std::vector<char> payload = SerializeContentBody(packet);
 		FRoomBinarySnapshotNoti decodedPacket;
@@ -788,19 +793,25 @@ namespace
 			return { false, "Generated chat bytes_view packet round trip", "DeserializeContentPacket failed" };
 		}
 
+		if (!decodedPacket.ContainsBorrowedViews())
+		{
+			return { false, "Generated chat bytes_view packet round trip", "packet should report borrowed view payload" };
+		}
+
 		if (decodedPacket.roomId != packet.roomId)
 		{
 			return { false, "Generated chat bytes_view packet round trip", "roomId mismatch" };
 		}
 
-		if (decodedPacket.payload.size() != originalPayload.size())
+		const std::span<const std::uint8_t> decodedPayload = decodedPacket.GetPayloadValue();
+		if (decodedPayload.size() != originalPayload.size())
 		{
 			return { false, "Generated chat bytes_view packet round trip", "payload size mismatch" };
 		}
 
 		for (std::size_t index = 0; index < originalPayload.size(); ++index)
 		{
-			if (decodedPacket.payload[index] != originalPayload[index])
+			if (decodedPayload[index] != originalPayload[index])
 			{
 				return { false, "Generated chat bytes_view packet round trip", "payload mismatch" };
 			}

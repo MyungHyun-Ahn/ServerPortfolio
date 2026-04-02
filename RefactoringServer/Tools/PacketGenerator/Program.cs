@@ -633,6 +633,7 @@ internal static class CppPacketGenerator
         }
 
         string className = $"F{messageName}{kindSuffix}";
+        bool containsBorrowedViews = EndpointContainsBorrowedViews(endpoint);
         builder.AppendLine($"\tclass {className} final : public GameServer::NetworkLib::Packet::IContentPacket");
         builder.AppendLine("\t{");
         builder.AppendLine("\tpublic:");
@@ -641,7 +642,24 @@ internal static class CppPacketGenerator
 
         foreach (PacketSchemaField field in endpoint.Fields)
         {
-            builder.AppendLine($"\t\t{PacketTypeMapping.RenderCppType(field.Type)} {field.Name};");
+            if (FieldContainsBorrowedView(field))
+            {
+                builder.AppendLine($"\t\tvoid Set{ToAccessorSuffix(field.Name)}Value({PacketTypeMapping.RenderCppType(field.Type)} value) noexcept");
+                builder.AppendLine("\t\t{");
+                builder.AppendLine($"\t\t\tm_{field.Name} = value;");
+                builder.AppendLine("\t\t}");
+                builder.AppendLine();
+                builder.AppendLine($"\t\t{PacketTypeMapping.RenderCppType(field.Type)} Get{ToAccessorSuffix(field.Name)}Value() const noexcept");
+                builder.AppendLine("\t\t{");
+                builder.AppendLine("\t\t\tGameServer::NetworkLib::Packet::ValidateBorrowedViewAccess(m_borrowedViewScope);");
+                builder.AppendLine($"\t\t\treturn m_{field.Name};");
+                builder.AppendLine("\t\t}");
+                builder.AppendLine();
+            }
+            else
+            {
+                builder.AppendLine($"\t\t{PacketTypeMapping.RenderCppType(field.Type)} {field.Name};");
+            }
         }
 
         if (endpoint.Fields.Count > 0)
@@ -649,10 +667,24 @@ internal static class CppPacketGenerator
             builder.AppendLine();
         }
 
+        if (containsBorrowedViews)
+        {
+            builder.AppendLine("\t\tvoid BindBorrowedViewScope(const std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState>& scope) noexcept override");
+            builder.AppendLine("\t\t{");
+            builder.AppendLine("\t\t\tm_borrowedViewScope = scope;");
+            builder.AppendLine("\t\t}");
+            builder.AppendLine();
+        }
+
         builder.AppendLine("\tpublic:");
         builder.AppendLine("\t\tstd::uint16_t GetOpcode() const noexcept override");
         builder.AppendLine("\t\t{");
         builder.AppendLine("\t\t\treturn kOpcode;");
+        builder.AppendLine("\t\t}");
+        builder.AppendLine();
+        builder.AppendLine("\t\tbool ContainsBorrowedViews() const noexcept override");
+        builder.AppendLine("\t\t{");
+        builder.AppendLine($"\t\t\treturn {(containsBorrowedViews ? "true" : "false")};");
         builder.AppendLine("\t\t}");
         builder.AppendLine();
         builder.AppendLine("\t\tstd::size_t GetEstimatedBodySize() const noexcept override");
@@ -673,7 +705,7 @@ internal static class CppPacketGenerator
                     builder.Append("\t\t\t\t+ ");
                 }
 
-                builder.Append($"GameServer::NetworkLib::Packet::GetSerializedSize({field.Name})");
+                builder.Append($"GameServer::NetworkLib::Packet::GetSerializedSize({RenderFieldAccess(field)})");
             }
 
             builder.AppendLine(";");
@@ -684,7 +716,7 @@ internal static class CppPacketGenerator
         builder.AppendLine("\t\t{");
         foreach (PacketSchemaField field in endpoint.Fields)
         {
-            builder.AppendLine($"\t\t\twriter.Write({field.Name});");
+            builder.AppendLine($"\t\t\twriter.Write({RenderFieldAccess(field)});");
         }
         builder.AppendLine("\t\t}");
         builder.AppendLine();
@@ -706,12 +738,25 @@ internal static class CppPacketGenerator
                     builder.Append("\t\t\t\t&& ");
                 }
 
-                builder.Append($"reader.Read({field.Name})");
+                builder.Append($"reader.Read({RenderFieldAccess(field)})");
             }
 
             builder.AppendLine(";");
         }
         builder.AppendLine("\t\t}");
+        if (containsBorrowedViews)
+        {
+            builder.AppendLine();
+            builder.AppendLine("\tprivate:");
+            builder.AppendLine("\t\tstd::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState> m_borrowedViewScope;");
+            foreach (PacketSchemaField field in endpoint.Fields)
+            {
+                if (FieldContainsBorrowedView(field))
+                {
+                    builder.AppendLine($"\t\t{PacketTypeMapping.RenderCppType(field.Type)} m_{field.Name};");
+                }
+            }
+        }
         builder.AppendLine("\t};");
         builder.AppendLine();
     }
@@ -753,6 +798,11 @@ internal static class CppPacketGenerator
         builder.AppendLine($"\t\t\tcase {className}::kOpcode:");
         builder.AppendLine("\t\t\t\t{");
         builder.AppendLine($"\t\t\t\t\t{className} packet;");
+        if (EndpointContainsBorrowedViews(endpoint))
+        {
+            builder.AppendLine("\t\t\t\t\tGameServer::NetworkLib::Packet::FBorrowedViewScope borrowedViewScope;");
+            builder.AppendLine("\t\t\t\t\tpacket.BindBorrowedViewScope(borrowedViewScope.GetState());");
+        }
         builder.AppendLine("\t\t\t\t\tif (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))");
         builder.AppendLine("\t\t\t\t\t{");
         builder.AppendLine("\t\t\t\t\t\treturn false;");
@@ -792,5 +842,56 @@ internal static class CppPacketGenerator
         }
 
         return char.ToLowerInvariant(contentName[0]) + contentName[1..];
+    }
+
+    private static bool EndpointContainsBorrowedViews(PacketSchemaEndpoint endpoint)
+    {
+        foreach (PacketSchemaField field in endpoint.Fields)
+        {
+            if (FieldContainsBorrowedView(field))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool FieldContainsBorrowedView(PacketSchemaField field)
+    {
+        return SchemaTypeContainsBorrowedView(SchemaTypeParser.Parse(field.Type));
+    }
+
+    private static bool SchemaTypeContainsBorrowedView(SchemaTypeNode typeNode)
+    {
+        if (typeNode.Name is "string_view" or "bytes_view")
+        {
+            return true;
+        }
+
+        foreach (SchemaTypeNode childType in typeNode.TypeArguments)
+        {
+            if (SchemaTypeContainsBorrowedView(childType))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string RenderFieldAccess(PacketSchemaField field)
+    {
+        return FieldContainsBorrowedView(field) ? $"m_{field.Name}" : field.Name;
+    }
+
+    private static string ToAccessorSuffix(string fieldName)
+    {
+        if (string.IsNullOrEmpty(fieldName))
+        {
+            return "Field";
+        }
+
+        return char.ToUpperInvariant(fieldName[0]) + fieldName[1..];
     }
 }

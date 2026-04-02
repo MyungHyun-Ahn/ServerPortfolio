@@ -28,6 +28,11 @@ namespace GameServer::Generated::Chat
 			return kOpcode;
 		}
 
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return false;
+		}
+
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
 			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId);
@@ -58,6 +63,11 @@ namespace GameServer::Generated::Chat
 		std::uint16_t GetOpcode() const noexcept override
 		{
 			return kOpcode;
+		}
+
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return false;
 		}
 
 		std::size_t GetEstimatedBodySize() const noexcept override
@@ -91,7 +101,22 @@ namespace GameServer::Generated::Chat
 		static constexpr std::uint16_t kOpcode = 3002;
 
 		std::uint32_t roomId;
-		std::span<const std::uint8_t> payload;
+		void SetPayloadValue(std::span<const std::uint8_t> value) noexcept
+		{
+			m_payload = value;
+		}
+
+		std::span<const std::uint8_t> GetPayloadValue() const noexcept
+		{
+			GameServer::NetworkLib::Packet::ValidateBorrowedViewAccess(m_borrowedViewScope);
+			return m_payload;
+		}
+
+
+		void BindBorrowedViewScope(const std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState>& scope) noexcept override
+		{
+			m_borrowedViewScope = scope;
+		}
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -99,23 +124,32 @@ namespace GameServer::Generated::Chat
 			return kOpcode;
 		}
 
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return true;
+		}
+
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
 			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId)
-				+ GameServer::NetworkLib::Packet::GetSerializedSize(payload);
+				+ GameServer::NetworkLib::Packet::GetSerializedSize(m_payload);
 		}
 
 		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
 		{
 			writer.Write(roomId);
-			writer.Write(payload);
+			writer.Write(m_payload);
 		}
 
 		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
 		{
 			return reader.Read(roomId)
-				&& reader.Read(payload);
+				&& reader.Read(m_payload);
 		}
+
+	private:
+		std::shared_ptr<GameServer::NetworkLib::Packet::FBorrowedViewScopeState> m_borrowedViewScope;
+		std::span<const std::uint8_t> m_payload;
 	};
 
 }
