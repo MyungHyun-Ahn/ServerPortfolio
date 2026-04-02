@@ -16,9 +16,11 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <Psapi.h>
 #include <thread>
 #include <Windows.h>
 
+#pragma comment(lib, "Psapi.lib")
 
 namespace
 {
@@ -30,6 +32,86 @@ namespace
 		bool enablePagePool = true;
 		std::uint32_t pageSize = 4096;
 	};
+
+	struct SProcessMetricsSnapshot
+	{
+		ULONGLONG tickCountMs = 0;
+		std::uint64_t processTime100ns = 0;
+		SIZE_T workingSetBytes = 0;
+		SIZE_T peakWorkingSetBytes = 0;
+		bool valid = false;
+	};
+
+	std::uint64_t FileTimeToUInt64(const FILETIME& fileTime) noexcept
+	{
+		ULARGE_INTEGER value{};
+		value.LowPart = fileTime.dwLowDateTime;
+		value.HighPart = fileTime.dwHighDateTime;
+		return value.QuadPart;
+	}
+
+	SProcessMetricsSnapshot CaptureProcessMetricsSnapshot() noexcept
+	{
+		SProcessMetricsSnapshot snapshot{};
+		snapshot.tickCountMs = GetTickCount64();
+
+		FILETIME creationTime{};
+		FILETIME exitTime{};
+		FILETIME kernelTime{};
+		FILETIME userTime{};
+		if (!GetProcessTimes(GetCurrentProcess(), &creationTime, &exitTime, &kernelTime, &userTime))
+		{
+			return snapshot;
+		}
+
+		PROCESS_MEMORY_COUNTERS_EX memoryCounters{};
+		if (!GetProcessMemoryInfo(
+			GetCurrentProcess(),
+			reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memoryCounters),
+			sizeof(memoryCounters)))
+		{
+			return snapshot;
+		}
+
+		snapshot.processTime100ns = FileTimeToUInt64(kernelTime) + FileTimeToUInt64(userTime);
+		snapshot.workingSetBytes = memoryCounters.WorkingSetSize;
+		snapshot.peakWorkingSetBytes = memoryCounters.PeakWorkingSetSize;
+		snapshot.valid = true;
+		return snapshot;
+	}
+
+	double CalculateCpuUsagePercent(const SProcessMetricsSnapshot& previous, const SProcessMetricsSnapshot& current) noexcept
+	{
+		if (!previous.valid || !current.valid || current.tickCountMs <= previous.tickCountMs)
+		{
+			return 0.0;
+		}
+
+		const std::uint64_t wallTime100ns =
+			static_cast<std::uint64_t>(current.tickCountMs - previous.tickCountMs) * 10000ULL;
+		if (wallTime100ns == 0 || current.processTime100ns < previous.processTime100ns)
+		{
+			return 0.0;
+		}
+
+		SYSTEM_INFO systemInfo{};
+		GetSystemInfo(&systemInfo);
+		const std::uint32_t logicalProcessorCount =
+			std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(systemInfo.dwNumberOfProcessors));
+		const double processTimeDelta = static_cast<double>(current.processTime100ns - previous.processTime100ns);
+		const double totalTime = static_cast<double>(wallTime100ns) * static_cast<double>(logicalProcessorCount);
+		if (totalTime <= 0.0)
+		{
+			return 0.0;
+		}
+
+		return (processTimeDelta / totalTime) * 100.0;
+	}
+
+	double BytesToMegabytes(const SIZE_T bytes) noexcept
+	{
+		return static_cast<double>(bytes) / (1024.0 * 1024.0);
+	}
 
 	std::filesystem::path GetExecutableDirectory()
 	{
@@ -319,10 +401,12 @@ int main(int argc, char* argv[])
 	{
 		compositeLogger->Log(GameServer::Foundation::ELogLevel::Info, "EchoServer", "Headless mode enabled.");
 		GameServer::NetworkLib::SServerStats previousStats = server->GetStatsSnapshot();
+		SProcessMetricsSnapshot previousProcessMetrics = CaptureProcessMetricsSnapshot();
 		while (true)
 		{
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 			const GameServer::NetworkLib::SServerStats currentStats = server->GetStatsSnapshot();
+			const SProcessMetricsSnapshot currentProcessMetrics = CaptureProcessMetricsSnapshot();
 			const std::uint64_t acceptTps = currentStats.acceptedSessionCount - previousStats.acceptedSessionCount;
 			const std::uint64_t recvTps = currentStats.receivedPacketCount - previousStats.receivedPacketCount;
 			const std::uint64_t sendTps = currentStats.sentPacketCount - previousStats.sentPacketCount;
@@ -330,6 +414,9 @@ int main(int argc, char* argv[])
 			const std::uint64_t sendBytesPerSec = currentStats.sentByteCount - previousStats.sentByteCount;
 			const std::uint64_t wsaRecvTps = currentStats.wsaRecvCallCount - previousStats.wsaRecvCallCount;
 			const std::uint64_t wsaSendTps = currentStats.wsaSendCallCount - previousStats.wsaSendCallCount;
+			const double cpuUsagePercent = CalculateCpuUsagePercent(previousProcessMetrics, currentProcessMetrics);
+			const double workingSetMb = currentProcessMetrics.valid ? BytesToMegabytes(currentProcessMetrics.workingSetBytes) : 0.0;
+			const double peakWorkingSetMb = currentProcessMetrics.valid ? BytesToMegabytes(currentProcessMetrics.peakWorkingSetBytes) : 0.0;
 			std::cout
 				<< "[EchoStats] sessions=" << currentStats.activeSessionCount
 				<< " acceptTPS=" << acceptTps
@@ -344,10 +431,14 @@ int main(int argc, char* argv[])
 				<< " sessionPool=" << currentStats.sessionPoolUsage << "/" << currentStats.sessionPoolCapacity
 				<< " sendBufferPool=" << currentStats.sendBufferPoolUsage << "/" << currentStats.sendBufferPoolCapacity
 				<< " packetBufferPool=" << currentStats.packetBufferPoolUsage << "/" << currentStats.packetBufferPoolCapacity
+				<< " cpuPercent=" << std::fixed << std::setprecision(2) << cpuUsagePercent
+				<< " workingSetMB=" << std::fixed << std::setprecision(2) << workingSetMb
+				<< " peakWorkingSetMB=" << std::fixed << std::setprecision(2) << peakWorkingSetMb
 				<< " totalWSASendCalls=" << currentStats.wsaSendCallCount
 				<< " totalWSARecvCalls=" << currentStats.wsaRecvCallCount
 				<< std::endl;
 			previousStats = currentStats;
+			previousProcessMetrics = currentProcessMetrics;
 		}
 	}
 

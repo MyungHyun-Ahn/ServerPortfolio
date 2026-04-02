@@ -1,42 +1,49 @@
-# 성능 최적화 리뷰
+# 네트워크 성능 최적화 리뷰
 
 ## 1. 목적
-- `NetworkLib` 성능 고도화 작업의 현재 적용 상태와 측정 결과를 한 문서에서 확인할 수 있도록 정리한다.
+- `NetworkLib` 성능 고도화 작업의 적용 상태와 측정 결과를 한 문서에서 확인할 수 있도록 정리한다.
 
 ## 2. 이번 단계에서 적용한 내용
 ### 2-1. 버퍼 재사용
 - `FSession`에 TLS 풀을 적용했다.
 - `FSendBuffer`에 TLS 풀을 적용했다.
-- `FPacketWriter` 내부 버퍼인 `FPacketBuffer`에 TLS 풀을 적용했다.
+- `FPacketWriter` 내부 버퍼가 `FPacketBuffer` 기반 재사용 경로를 타도록 정리했다.
 - `FPacketBuffer`, `FSendBuffer`는 page 성격의 capacity 재사용이 가능하도록 정리했다.
 
 ### 2-2. 계측 추가
 - 서버 통계에 아래 항목을 추가했다.
-  - `receivedByteCount`
-  - `sentByteCount`
-  - `queuedSendBufferCount`
-  - `maxObservedQueuedSendBufferCount`
-  - `sessionPoolUsage/capacity`
-  - `sendBufferPoolUsage/capacity`
-  - `packetBufferPoolUsage/capacity`
+  - `acceptTPS`
+  - `recvTPS`
+  - `sendTPS`
+  - `recvBps`
+  - `sendBps`
+  - `wsaSendTPS`
+  - `wsaRecvTPS`
+  - `cpuPercent`
+  - `workingSetMB`
+  - `peakWorkingSetMB`
+  - `queuedSendBuffers`
+  - `maxQueuedSendBuffers`
+  - `sessionPool`
+  - `sendBufferPool`
+  - `packetBufferPool`
 
 ### 2-3. 세션/컨텍스트 경량화
-- `EchoServer`의 로그인 상태 관리를 `unordered_map + mutex`에서 세션 슬롯 기반 `vector<atomic<uint32_t>>`로 변경했다.
-- 이 변경은 샘플 서버 기준의 콘텐츠 상태 경량화 예시다.
+- `EchoServer` 로그인 상태 관리를 `unordered_map + mutex`에서 세션 슬롯 기반 원자 배열로 변경했다.
+- 샘플 서버 기준에서 콘텐츠 상태 접근 비용을 줄이는 방향의 초안으로 본다.
 
 ### 2-4. 벤치마크 실행 경로
 - [Run-EchoPerfBenchmark.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-EchoPerfBenchmark.ps1)
 - [Run-EchoPerfBenchmark.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-EchoPerfBenchmark.cmd)
 
 ## 3. Page Pool 옵션
-- page 성격의 버퍼 재사용은 강제가 아니라 옵션이다.
+- page 성격 버퍼 재사용은 강제가 아니라 옵션이다.
 - 서버 설정:
   - `SServerConfig.enablePageBufferReuse`
   - `SServerConfig.pageBufferSize`
-- 샘플 클라이언트 실행 옵션:
+- 샘플 실행 옵션:
   - `--disable-page-pool`
   - `--page-size <bytes>`
-- 따라서 같은 시나리오를 page pool `on/off`로 공정하게 비교할 수 있다.
 
 ## 4. Page Pool 성능 비교 결과
 ### 4-1. 측정 조건
@@ -64,9 +71,8 @@
   - `AvgWsaRecvTPS = 3481.44`
 
 ### 4-3. 해석
-- 현재 고정 작업량 Echo 벤치마크 기준으로는 `page pool on`이 `off`보다 대략 `4% ~ 5%` 정도 더 좋게 나왔다.
-- 차이가 압도적이지는 않으므로, 구조적 돌파라기보다 실용적인 최적화로 보는 편이 맞다.
-- 장기적인 판단을 위해서는 같은 조건으로 반복 측정과 장시간 비교가 더 필요하다.
+- 현재 고정 작업량 Echo 벤치마크 기준으로 `page pool on`이 `off`보다 대략 `4% ~ 5%` 정도 더 좋았다.
+- 차이가 아주 크진 않지만, 구조 복잡도를 감안해도 유지할 가치가 있는 수준으로 본다.
 
 ### 4-4. 근거 로그
 - [echo_server_perf_20260402_105058.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_105058.log)
@@ -74,11 +80,11 @@
 
 ## 5. BuildPacket 복사 감소 적용 결과
 ### 5-1. 적용 내용
-- send 경로에서 `payloadBuffer -> framedBuffer`로 한 번 더 큰 버퍼를 만들던 구조를 줄였다.
+- send 경로에서 `payloadBuffer -> framedBuffer`로 한 번 더 복사하는 경로를 줄였다.
 - 현재는 `FSendBuffer`가 아래 두 조각을 send completion 시점까지 소유한다.
   - frame header 조각
   - payload 조각
-- 즉, 단일 `WSASend` 규칙은 유지하면서 `BuildPacket()`의 큰 중간 버퍼 복사를 줄이는 방향으로 바꿨다.
+- 즉 `1-session 1 in-flight WSASend` 규칙은 유지하면서 중간 버퍼 복사를 줄이는 방향으로 정리했다.
 
 ### 5-2. 비교 조건
 - `sessions=50`
@@ -94,21 +100,19 @@
 - 변경 전 평균
   - `AvgRecvTPS = 163.16`
   - `AvgSendTPS = 163.16`
-  - `AvgRecvBps ≈ 22402.87`
+  - `AvgRecvBps = 22402.87`
   - `AvgSendBps = 21202.63`
-  - `AvgWsaRecvTPS ≈ 3208.14`
+  - `AvgWsaRecvTPS = 3208.14`
 - 변경 후 평균
   - `AvgRecvTPS = 163.16`
   - `AvgSendTPS = 163.16`
-  - `AvgRecvBps ≈ 22383.53`
+  - `AvgRecvBps = 22383.53`
   - `AvgSendBps = 21202.63`
-  - `AvgWsaRecvTPS ≈ 3205.27`
+  - `AvgWsaRecvTPS = 3205.27`
 
 ### 5-4. 해석
 - 현재 Echo 고정 작업량 시나리오에서는 `BuildPacket` 복사 감소만으로 눈에 띄는 TPS 개선은 확인되지 않았다.
-- 즉 구조상 복사는 줄였지만, 이 시나리오에서는 병목이 다른 지점에 있거나 개선 폭이 측정 노이즈보다 작은 것으로 보인다.
-- 이 결과는 실패가 아니라, 다음 최적화 우선순위를 다시 잡는 근거로 봐야 한다.
-- 더 높은 세션 수, 더 큰 payload, 더 높은 `packetsPerSend` 조건에서 다시 확인할 필요가 있다.
+- 구조상 복사 수는 줄었지만, 이 시나리오에서는 병목이 다른 지점이거나 개선 폭이 측정 노이즈보다 작은 것으로 보인다.
 
 ### 5-5. 근거 로그
 - 변경 전
@@ -118,26 +122,29 @@
   - [echo_server_perf_20260402_113809.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_113809.log)
   - [echo_server_perf_20260402_113831.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_113831.log)
 
-## 6. 현재 서버 콘솔에서 볼 수 있는 통계
-- `acceptTPS`
-- `recvTPS`
-- `sendTPS`
-- `recvBps`
-- `sendBps`
-- `wsaSendTPS`
-- `wsaRecvTPS`
-- `queuedSendBuffers`
-- `maxQueuedSendBuffers`
-- `sessionPool`
-- `sendBufferPool`
-- `packetBufferPool`
+## 6. CPU / 메모리 계측 확인
+### 6-1. 추가한 항목
+- `cpuPercent`
+- `workingSetMB`
+- `peakWorkingSetMB`
+
+### 6-2. 스모크 확인 결과
+- headless 서버 출력에서 위 세 항목이 실제로 1초 통계에 포함되는 것을 확인했다.
+- 예시:
+  - `cpuPercent=0.19`
+  - `workingSetMB=7.84`
+  - `peakWorkingSetMB=7.84`
+
+### 6-3. 근거 로그
+- [cpu_mem_smoke_server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\cpu_mem_smoke_server.log)
+- [cpu_mem_smoke_client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\cpu_mem_smoke_client.log)
 
 ## 7. 검증 근거
 - 빌드:
   - `RefactoringServer.sln` x64 Debug
 - 테스트:
   - [LockFreeTests.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\LockFreeTests.exe)
-- 런타임:
+- 실행:
   - [EchoServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoServer.exe)
   - [EchoClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)
 
@@ -145,9 +152,7 @@
 - 장시간 성능 검증이 아직 필요하다.
 - 다음 단계:
   - 같은 page pool `on/off` 비교를 `2시간`, `8시간`으로 반복
-  - 평균 TPS, bytes/sec, CPU 사용량, pool usage 안정성 비교
-  - 짧은 벤치마크에서 나온 `4% ~ 5%` 우위가 장시간에도 유지되는지 확인
+  - 평균 TPS, bytes/sec, CPU 사용량, working set, pool usage 안정성 비교
+  - 지금 벤치마크에서 확인한 `4% ~ 5%` 차이가 장시간에도 유지되는지 확인
   - `BuildPacket` 복사 감소 적용분을 더 고부하 시나리오에서 재측정
-    - 더 많은 세션 수
-    - 더 큰 payload
-    - 더 높은 `packetsPerSend`
+  - 더 많은 세션 수, 더 큰 payload, 더 높은 `packetsPerSend` 조건 추가
