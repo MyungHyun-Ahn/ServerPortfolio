@@ -72,7 +72,53 @@
 - [echo_server_perf_20260402_105058.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_105058.log)
 - [echo_server_perf_20260402_105117.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_105117.log)
 
-## 5. 현재 서버 콘솔에서 볼 수 있는 통계
+## 5. BuildPacket 복사 감소 적용 결과
+### 5-1. 적용 내용
+- send 경로에서 `payloadBuffer -> framedBuffer`로 한 번 더 큰 버퍼를 만들던 구조를 줄였다.
+- 현재는 `FSendBuffer`가 아래 두 조각을 send completion 시점까지 소유한다.
+  - frame header 조각
+  - payload 조각
+- 즉, 단일 `WSASend` 규칙은 유지하면서 `BuildPacket()`의 큰 중간 버퍼 복사를 줄이는 방향으로 바꿨다.
+
+### 5-2. 비교 조건
+- `sessions=50`
+- `requestCount=64`
+- `payloadSize=128`
+- `packetsPerSend=4`
+- `holdSeconds=0`
+- `intervalMs=0`
+- `sendChunkSize=7`
+- `recvBufferSize=13`
+
+### 5-3. 측정 결과
+- 변경 전 평균
+  - `AvgRecvTPS = 163.16`
+  - `AvgSendTPS = 163.16`
+  - `AvgRecvBps ≈ 22402.87`
+  - `AvgSendBps = 21202.63`
+  - `AvgWsaRecvTPS ≈ 3208.14`
+- 변경 후 평균
+  - `AvgRecvTPS = 163.16`
+  - `AvgSendTPS = 163.16`
+  - `AvgRecvBps ≈ 22383.53`
+  - `AvgSendBps = 21202.63`
+  - `AvgWsaRecvTPS ≈ 3205.27`
+
+### 5-4. 해석
+- 현재 Echo 고정 작업량 시나리오에서는 `BuildPacket` 복사 감소만으로 눈에 띄는 TPS 개선은 확인되지 않았다.
+- 즉 구조상 복사는 줄였지만, 이 시나리오에서는 병목이 다른 지점에 있거나 개선 폭이 측정 노이즈보다 작은 것으로 보인다.
+- 이 결과는 실패가 아니라, 다음 최적화 우선순위를 다시 잡는 근거로 봐야 한다.
+- 더 높은 세션 수, 더 큰 payload, 더 높은 `packetsPerSend` 조건에서 다시 확인할 필요가 있다.
+
+### 5-5. 근거 로그
+- 변경 전
+  - [echo_server_perf_20260402_113537.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_113537.log)
+  - [echo_server_perf_20260402_113559.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_113559.log)
+- 변경 후
+  - [echo_server_perf_20260402_113809.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_113809.log)
+  - [echo_server_perf_20260402_113831.log](D:\Project\ServerPortfolio\RefactoringServer\Out\perf\echo_server_perf_20260402_113831.log)
+
+## 6. 현재 서버 콘솔에서 볼 수 있는 통계
 - `acceptTPS`
 - `recvTPS`
 - `sendTPS`
@@ -86,7 +132,7 @@
 - `sendBufferPool`
 - `packetBufferPool`
 
-## 6. 검증 근거
+## 7. 검증 근거
 - 빌드:
   - `RefactoringServer.sln` x64 Debug
 - 테스트:
@@ -95,9 +141,13 @@
   - [EchoServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoServer.exe)
   - [EchoClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)
 
-## 7. TODO
+## 8. TODO
 - 장시간 성능 검증이 아직 필요하다.
 - 다음 단계:
   - 같은 page pool `on/off` 비교를 `2시간`, `8시간`으로 반복
   - 평균 TPS, bytes/sec, CPU 사용량, pool usage 안정성 비교
   - 짧은 벤치마크에서 나온 `4% ~ 5%` 우위가 장시간에도 유지되는지 확인
+  - `BuildPacket` 복사 감소 적용분을 더 고부하 시나리오에서 재측정
+    - 더 많은 세션 수
+    - 더 큰 payload
+    - 더 높은 `packetsPerSend`

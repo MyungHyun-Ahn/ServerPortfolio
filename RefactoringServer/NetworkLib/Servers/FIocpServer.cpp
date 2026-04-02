@@ -188,19 +188,21 @@ namespace GameServer::NetworkLib
 			outgoingPacket.payload = payloadBuffer.data();
 			outgoingPacket.payloadLength = static_cast<std::int32_t>(payloadBuffer.size());
 
-			if (!m_packetFramer->BuildPacket(outgoingPacket, framedBuffer))
+			GameServer::NetworkLib::Packet::SFramedPacketBufferParts packetParts{};
+			if (!m_packetFramer->BuildPacketParts(outgoingPacket, packetParts))
 			{
-				Log(GameServer::Foundation::ELogLevel::Error, "BuildPacket failed during send path.");
+				Log(GameServer::Foundation::ELogLevel::Error, "BuildPacketParts failed during send path.");
 				ReleaseSession(sessionContext);
 				return false;
 			}
+
+			sessionContext->EnqueueSendBuffer(FSendBuffer::Create(packetParts, std::move(payloadBuffer)));
 		}
 		else
 		{
 			framedBuffer.assign(buffer, buffer + length);
+			sessionContext->EnqueueSendBuffer(FSendBuffer::Create(std::move(framedBuffer)));
 		}
-
-		sessionContext->EnqueueSendBuffer(FSendBuffer::Create(std::move(framedBuffer)));
 		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
 		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(length > 0 ? length : 0), std::memory_order_relaxed);
 		PostSend(*sessionContext);

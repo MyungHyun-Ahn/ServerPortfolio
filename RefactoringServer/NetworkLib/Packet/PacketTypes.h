@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -27,6 +28,12 @@ namespace GameServer::NetworkLib::Packet
 		std::uint8_t randomKey = 0;
 		std::uint8_t checkSum = 0;
 		std::vector<char> payload;
+	};
+
+	struct SFramedPacketBufferParts
+	{
+		std::array<char, sizeof(SPacketHeader)> headerBytes{};
+		std::uint32_t headerLength = 0;
 	};
 
 	inline std::uint8_t CalculatePacketChecksum(const char* payload, std::int32_t payloadLength) noexcept

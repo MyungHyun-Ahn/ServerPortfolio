@@ -220,7 +220,7 @@ namespace GameServer::NetworkLib
 		m_sendWsabufs.clear();
 
 		m_activeSendBuffers.reserve(maxSendCount);
-		m_sendWsabufs.reserve(maxSendCount);
+		m_sendWsabufs.reserve(maxSendCount * 2);
 
 		while (m_activeSendBuffers.size() < maxSendCount)
 		{
@@ -232,7 +232,7 @@ namespace GameServer::NetworkLib
 
 			m_queuedSendBufferCount.fetch_sub(1);
 			m_activeSendBuffers.push_back(sendBuffer);
-			m_sendWsabufs.push_back(sendBuffer->MakeWsabuf());
+			sendBuffer->AppendWsabufs(m_sendWsabufs);
 		}
 
 		return !m_activeSendBuffers.empty();

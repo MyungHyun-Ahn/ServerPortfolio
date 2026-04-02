@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Memory/FTlsMemoryPool.h"
+#include "Packet/PacketTypes.h"
 
 #include <WinSock2.h>
 
+#include <array>
 #include <atomic>
 #include <utility>
 #include <vector>
@@ -19,11 +21,20 @@ namespace GameServer::NetworkLib
 
 		void Initialize(std::vector<char>&& buffer) noexcept
 		{
+			m_headerLength = 0;
 			m_buffer = std::move(buffer);
+		}
+
+		void Initialize(const GameServer::NetworkLib::Packet::SFramedPacketBufferParts& packetParts, std::vector<char>&& payloadBuffer) noexcept
+		{
+			m_headerBytes = packetParts.headerBytes;
+			m_headerLength = packetParts.headerLength;
+			m_buffer = std::move(payloadBuffer);
 		}
 
 		void Reset() noexcept
 		{
+			m_headerLength = 0;
 			if (!IsPageReuseEnabled())
 			{
 				std::vector<char>().swap(m_buffer);
@@ -43,6 +54,13 @@ namespace GameServer::NetworkLib
 		{
 			FSendBuffer* sendBuffer = s_sendBufferPool.Alloc();
 			sendBuffer->Initialize(std::move(buffer));
+			return sendBuffer;
+		}
+
+		static FSendBuffer* Create(const GameServer::NetworkLib::Packet::SFramedPacketBufferParts& packetParts, std::vector<char>&& payloadBuffer) noexcept
+		{
+			FSendBuffer* sendBuffer = s_sendBufferPool.Alloc();
+			sendBuffer->Initialize(packetParts, std::move(payloadBuffer));
 			return sendBuffer;
 		}
 
@@ -98,15 +116,28 @@ namespace GameServer::NetworkLib
 			return m_buffer.size();
 		}
 
-		WSABUF MakeWsabuf() noexcept
+		void AppendWsabufs(std::vector<WSABUF>& outWsabufs) noexcept
 		{
-			WSABUF wsabuf{};
-			wsabuf.buf = m_buffer.empty() ? nullptr : m_buffer.data();
-			wsabuf.len = static_cast<ULONG>(m_buffer.size());
-			return wsabuf;
+			if (m_headerLength > 0)
+			{
+				WSABUF headerWsabuf{};
+				headerWsabuf.buf = m_headerBytes.data();
+				headerWsabuf.len = m_headerLength;
+				outWsabufs.push_back(headerWsabuf);
+			}
+
+			if (!m_buffer.empty())
+			{
+				WSABUF payloadWsabuf{};
+				payloadWsabuf.buf = m_buffer.data();
+				payloadWsabuf.len = static_cast<ULONG>(m_buffer.size());
+				outWsabufs.push_back(payloadWsabuf);
+			}
 		}
 
 	private:
+		std::array<char, sizeof(GameServer::NetworkLib::Packet::SPacketHeader)> m_headerBytes{};
+		ULONG m_headerLength = 0;
 		std::vector<char> m_buffer;
 		inline static std::atomic<bool> s_pageReuseEnabled{ true };
 		inline static std::atomic<std::size_t> s_pageSize{ kDefaultPageSize };
