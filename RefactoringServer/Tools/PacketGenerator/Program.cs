@@ -269,7 +269,8 @@ internal static class PacketTypeMapping
         ["double"] = "double",
         ["string"] = "std::string",
         ["string_view"] = "std::string_view",
-        ["bytes"] = "std::vector<std::uint8_t>"
+        ["bytes"] = "std::vector<std::uint8_t>",
+        ["bytes_view"] = "std::span<const std::uint8_t>"
     };
 
     private static readonly Dictionary<string, string> CSharpScalarTypes = new(StringComparer.Ordinal)
@@ -287,7 +288,8 @@ internal static class PacketTypeMapping
         ["double"] = "double",
         ["string"] = "string",
         ["string_view"] = "string",
-        ["bytes"] = "byte[]"
+        ["bytes"] = "byte[]",
+        ["bytes_view"] = "byte[]"
     };
 
     public static string RenderCppType(string schemaType)
@@ -463,6 +465,7 @@ internal static class CppPacketGenerator
         builder.AppendLine();
         builder.AppendLine("#include <cstddef>");
         builder.AppendLine("#include <cstdint>");
+        builder.AppendLine("#include <span>");
         builder.AppendLine("#include <string>");
         builder.AppendLine("#include <string_view>");
         builder.AppendLine("#include <vector>");

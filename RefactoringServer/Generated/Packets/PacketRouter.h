@@ -36,6 +36,8 @@ namespace GameServer::Generated
 				return m_chatHandler != nullptr ? m_chatHandler->DispatchPacket(server, sessionId, packetView) : false;
 			case Chat::FRoomSnapshotRp::kOpcode:
 				return m_chatHandler != nullptr ? m_chatHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chat::FRoomBinarySnapshotNoti::kOpcode:
+				return m_chatHandler != nullptr ? m_chatHandler->DispatchPacket(server, sessionId, packetView) : false;
 			case Echo::FEchoRq::kOpcode:
 				return m_echoHandler != nullptr ? m_echoHandler->DispatchPacket(server, sessionId, packetView) : false;
 			case Echo::FEchoRp::kOpcode:

@@ -5,7 +5,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -80,6 +82,39 @@ namespace GameServer::Generated::Chat
 				&& reader.Read(participants)
 				&& reader.Read(unreadCounts)
 				&& reader.Read(metadata);
+		}
+	};
+
+	class FRoomBinarySnapshotNoti final : public GameServer::NetworkLib::Packet::IContentPacket
+	{
+	public:
+		static constexpr std::uint16_t kOpcode = 3002;
+
+		std::uint32_t roomId;
+		std::span<const std::uint8_t> payload;
+
+	public:
+		std::uint16_t GetOpcode() const noexcept override
+		{
+			return kOpcode;
+		}
+
+		std::size_t GetEstimatedBodySize() const noexcept override
+		{
+			return GameServer::NetworkLib::Packet::GetSerializedSize(roomId)
+				+ GameServer::NetworkLib::Packet::GetSerializedSize(payload);
+		}
+
+		void Serialize(GameServer::NetworkLib::Packet::FPacketWriter& writer) const override
+		{
+			writer.Write(roomId);
+			writer.Write(payload);
+		}
+
+		bool Deserialize(GameServer::NetworkLib::Packet::FPacketReader& reader) override
+		{
+			return reader.Read(roomId)
+				&& reader.Read(payload);
 		}
 	};
 

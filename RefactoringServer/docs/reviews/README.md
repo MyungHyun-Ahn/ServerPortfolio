@@ -12,6 +12,7 @@
 - 네트워크 패킷 생성기/라우팅 리뷰는 [packet-codegen-and-routing-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-codegen-and-routing-review.md)를 본다.
 - 네트워크 패킷 컨테이너 지원 리뷰는 [packet-container-support-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-container-support-review.md)를 본다.
 - 네트워크 패킷 컨테이너 정책은 [packet-container-support-policy.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-container-support-policy.md)를 본다.
+- 네트워크 bytes view zero-copy 리뷰는 [bytes-view-zero-copy-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\bytes-view-zero-copy-review.md)를 본다.
 - 네트워크 수신 역직렬화 zero-copy 리뷰는 [recv-deserialize-zero-copy-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\recv-deserialize-zero-copy-review.md)를 본다.
 - 네트워크 성능 최적화 리뷰는 [performance-optimization-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\performance-optimization-review.md)를 본다.
 - 네트워크 세션 recv buffer 리뷰는 [session-recv-buffer-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\session-recv-buffer-review.md)를 본다.

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <span>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -739,6 +740,75 @@ namespace
 		return { true, "Generated packet estimated size", "passed" };
 	}
 
+	STestResult RunPacketBytesViewRoundTripTest()
+	{
+		using namespace GameServer::NetworkLib::Packet;
+
+		const std::array<std::uint8_t, 6> originalBytes = { 1, 3, 5, 7, 9, 11 };
+		FPacketWriter writer;
+		writer.Write(std::span<const std::uint8_t>(originalBytes.data(), originalBytes.size()));
+
+		FPacketReader reader(writer.GetBuffer().data(), writer.GetBuffer().size());
+		std::span<const std::uint8_t> decodedBytes;
+		if (!reader.Read(decodedBytes) || !reader.IsAtEnd())
+		{
+			return { false, "Packet bytes_view round trip", "read failed" };
+		}
+
+		if (decodedBytes.size() != originalBytes.size())
+		{
+			return { false, "Packet bytes_view round trip", "size mismatch" };
+		}
+
+		for (std::size_t index = 0; index < originalBytes.size(); ++index)
+		{
+			if (decodedBytes[index] != originalBytes[index])
+			{
+				return { false, "Packet bytes_view round trip", "payload mismatch" };
+			}
+		}
+
+		return { true, "Packet bytes_view round trip", "passed" };
+	}
+
+	STestResult RunGeneratedChatBytesViewPacketRoundTripTest()
+	{
+		using namespace GameServer::Generated::Chat;
+		using namespace GameServer::NetworkLib::Packet;
+
+		const std::vector<std::uint8_t> originalPayload = { 10, 20, 30, 40, 50, 60 };
+		FRoomBinarySnapshotNoti packet;
+		packet.roomId = 88;
+		packet.payload = std::span<const std::uint8_t>(originalPayload.data(), originalPayload.size());
+
+		std::vector<char> payload = SerializeContentBody(packet);
+		FRoomBinarySnapshotNoti decodedPacket;
+		if (!DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
+		{
+			return { false, "Generated chat bytes_view packet round trip", "DeserializeContentPacket failed" };
+		}
+
+		if (decodedPacket.roomId != packet.roomId)
+		{
+			return { false, "Generated chat bytes_view packet round trip", "roomId mismatch" };
+		}
+
+		if (decodedPacket.payload.size() != originalPayload.size())
+		{
+			return { false, "Generated chat bytes_view packet round trip", "payload size mismatch" };
+		}
+
+		for (std::size_t index = 0; index < originalPayload.size(); ++index)
+		{
+			if (decodedPacket.payload[index] != originalPayload[index])
+			{
+				return { false, "Generated chat bytes_view packet round trip", "payload mismatch" };
+			}
+		}
+
+		return { true, "Generated chat bytes_view packet round trip", "passed" };
+	}
+
 	template <>
 	STestResult RunParallelSumTest<TQueue>(const char* testName)
 	{
@@ -841,6 +911,8 @@ int main()
 	results.push_back(RunGeneratedEchoPacketRoundTripTest());
 	results.push_back(RunGeneratedChatContainerPacketRoundTripTest());
 	results.push_back(RunPacketScalarContainerBulkRoundTripTest());
+	results.push_back(RunPacketBytesViewRoundTripTest());
+	results.push_back(RunGeneratedChatBytesViewPacketRoundTripTest());
 	results.push_back(RunGeneratedPacketEstimatedSizeTest());
 
 	bool allPassed = true;

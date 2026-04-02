@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -102,6 +103,13 @@ namespace GameServer::NetworkLib::Packet
 			const std::uint32_t length = static_cast<std::uint32_t>(value.size());
 			Write(length);
 			WriteBytes(value.data(), value.size());
+		}
+
+		void Write(const std::span<const std::uint8_t> value)
+		{
+			const std::uint32_t length = static_cast<std::uint32_t>(value.size());
+			Write(length);
+			WriteBytes(value.data(), value.size_bytes());
 		}
 
 		template <typename TValue>

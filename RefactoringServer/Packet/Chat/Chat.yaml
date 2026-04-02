@@ -13,3 +13,9 @@ messages:
         - { name: participants, type: vector<string> }
         - { name: unreadCounts, type: "map<string, uint32>" }
         - { name: metadata, type: "unordered_map<string, string>" }
+  - name: RoomBinarySnapshot
+    noti:
+      opcode: 3002
+      fields:
+        - { name: roomId, type: uint32 }
+        - { name: payload, type: bytes_view }

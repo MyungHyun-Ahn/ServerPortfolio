@@ -6,6 +6,7 @@
 #include "Packet/FPacketWriter.h"
 #include "Servers/IServer.h"
 
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -26,6 +27,11 @@ namespace GameServer::NetworkLib::Packet
 	inline std::size_t GetSerializedSize(const std::string_view value) noexcept
 	{
 		return sizeof(std::uint32_t) + value.size();
+	}
+
+	inline std::size_t GetSerializedSize(const std::span<const std::uint8_t> value) noexcept
+	{
+		return sizeof(std::uint32_t) + value.size_bytes();
 	}
 
 	template <typename TValue>

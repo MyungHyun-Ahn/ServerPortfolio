@@ -16,6 +16,7 @@ namespace GameServer::Generated::Chat
 
 		virtual bool HandleRoomSnapshotRq(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRq& packet) = 0;
 		virtual bool HandleRoomSnapshotRp(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRp& packet) = 0;
+		virtual bool HandleRoomBinarySnapshotNoti(GameServer::NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomBinarySnapshotNoti& packet) = 0;
 	};
 
 	class IChatPacketDispatcher
@@ -52,6 +53,16 @@ namespace GameServer::Generated::Chat
 
 					return HandleRoomSnapshotRp(server, sessionId, packet);
 				}
+			case FRoomBinarySnapshotNoti::kOpcode:
+				{
+					FRoomBinarySnapshotNoti packet;
+					if (!GameServer::NetworkLib::Packet::DeserializeContentPacket(packetView, packet))
+					{
+						return false;
+					}
+
+					return HandleRoomBinarySnapshotNoti(server, sessionId, packet);
+				}
 			default:
 				return OnUnhandledPacket(server, sessionId, packetView);
 			}
@@ -63,6 +74,11 @@ namespace GameServer::Generated::Chat
 		}
 
 		bool HandleRoomSnapshotRp(GameServer::NetworkLib::IServer&, std::uint64_t, const FRoomSnapshotRp&) override
+		{
+			return false;
+		}
+
+		bool HandleRoomBinarySnapshotNoti(GameServer::NetworkLib::IServer&, std::uint64_t, const FRoomBinarySnapshotNoti&) override
 		{
 			return false;
 		}

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <map>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -73,6 +74,21 @@ namespace GameServer::NetworkLib::Packet
 			}
 
 			outValue = std::string_view(m_data + m_offset, length);
+			m_offset += length;
+			return true;
+		}
+
+		bool Read(std::span<const std::uint8_t>& outValue) noexcept
+		{
+			std::uint32_t length = 0;
+			if (!Read(length) || !CanRead(length))
+			{
+				return false;
+			}
+
+			outValue = std::span<const std::uint8_t>(
+				reinterpret_cast<const std::uint8_t*>(m_data + m_offset),
+				length);
 			m_offset += length;
 			return true;
 		}
