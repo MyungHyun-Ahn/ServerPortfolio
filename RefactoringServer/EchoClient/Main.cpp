@@ -43,8 +43,10 @@ namespace
 		int packetsPerSend = 1;
 		int reconnectProbabilityPercent = 0;
 		int reconnectDelayMs = 100;
+		int recvTimeoutMs = 0;
 		bool enablePagePool = true;
 		int pageSize = 4096;
+		bool bootstrapTrace = false;
 		bool verbose = true;
 	};
 
@@ -193,6 +195,13 @@ namespace
 					return false;
 				}
 			}
+			else if (argument == "--recv-timeout-ms" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.recvTimeoutMs) || outOptions.recvTimeoutMs < 0)
+				{
+					return false;
+				}
+			}
 			else if (argument == "--disable-page-pool")
 			{
 				outOptions.enablePagePool = false;
@@ -207,6 +216,10 @@ namespace
 			else if (argument == "--quiet")
 			{
 				outOptions.verbose = false;
+			}
+			else if (argument == "--bootstrap-trace")
+			{
+				outOptions.bootstrapTrace = true;
 			}
 			else
 			{
@@ -327,6 +340,20 @@ namespace
 			return false;
 		}
 
+		if (options.recvTimeoutMs > 0)
+		{
+			const DWORD timeoutMs = static_cast<DWORD>(options.recvTimeoutMs);
+			if (setsockopt(outSocket, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeoutMs), sizeof(timeoutMs)) == SOCKET_ERROR)
+			{
+				std::ostringstream oss;
+				oss << "setsockopt(SO_RCVTIMEO) failed: " << WSAGetLastError();
+				outErrorMessage = oss.str();
+				closesocket(outSocket);
+				outSocket = INVALID_SOCKET;
+				return false;
+			}
+		}
+
 		return true;
 	}
 
@@ -374,7 +401,10 @@ namespace
 			std::unordered_map<std::string, int> expectedResponseCounts;
 			std::vector<char> sendBatchBuffer;
 			auto tryReceiveNextContentPacket =
-				[&](NetworkLib::Packet::Framing::SFramedPacket& outFramedPacket, NetworkLib::Packet::View::FPacketView& outContentPacketView) -> bool
+				[&](
+					const char* stageName,
+					NetworkLib::Packet::Framing::SFramedPacket& outFramedPacket,
+					NetworkLib::Packet::View::FPacketView& outContentPacketView) -> bool
 				{
 					while (true)
 					{
@@ -410,7 +440,17 @@ namespace
 						const int recvBytes = recv(clientSocket, recvChunk.data(), static_cast<int>(recvChunk.size()), 0);
 						if (recvBytes <= 0)
 						{
-							sessionResult.errorMessage = "recv failed before all responses arrived.";
+							const int errorCode = WSAGetLastError();
+							std::ostringstream oss;
+							oss << "recv failed at stage="
+								<< (stageName != nullptr ? stageName : "unknown")
+								<< " sessionIndex=" << sessionIndex
+								<< " error=" << errorCode;
+							if (errorCode == WSAETIMEDOUT)
+							{
+								oss << " (timeout)";
+							}
+							sessionResult.errorMessage = oss.str();
 							return false;
 						}
 
@@ -455,7 +495,7 @@ namespace
 
 				NetworkLib::Packet::Framing::SFramedPacket loginResponseFramedPacket{};
 				NetworkLib::Packet::View::FPacketView loginResponsePacketView{};
-				if (!tryReceiveNextContentPacket(loginResponseFramedPacket, loginResponsePacketView))
+				if (!tryReceiveNextContentPacket("login-response", loginResponseFramedPacket, loginResponsePacketView))
 				{
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
@@ -487,6 +527,12 @@ namespace
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
 					return sessionResult;
+				}
+
+				if (options.bootstrapTrace)
+				{
+					std::cerr << "bootstrap trace: login response ok. sessionIndex=" << sessionIndex
+						<< " userId=" << loginResponse.userId << "\n";
 				}
 
 				const std::uint32_t roomId = 77u + static_cast<std::uint32_t>(sessionIndex);
@@ -523,13 +569,19 @@ namespace
 					return sessionResult;
 				}
 
+				if (options.bootstrapTrace)
+				{
+					std::cerr << "bootstrap trace: snapshot request sent. sessionIndex=" << sessionIndex
+						<< " roomId=" << roomId << "\n";
+				}
+
 				bool receivedSnapshotResponse = false;
 				bool receivedBinarySnapshot = false;
 				while (!receivedSnapshotResponse || !receivedBinarySnapshot)
 				{
 					NetworkLib::Packet::Framing::SFramedPacket framedPacket{};
 					NetworkLib::Packet::View::FPacketView contentPacketView{};
-					if (!tryReceiveNextContentPacket(framedPacket, contentPacketView))
+					if (!tryReceiveNextContentPacket("chat-bootstrap", framedPacket, contentPacketView))
 					{
 						closesocket(clientSocket);
 						clientSocket = INVALID_SOCKET;
@@ -556,6 +608,11 @@ namespace
 						}
 
 						receivedSnapshotResponse = true;
+						if (options.bootstrapTrace)
+						{
+							std::cerr << "bootstrap trace: snapshot response ok. sessionIndex=" << sessionIndex
+								<< " roomId=" << roomId << "\n";
+						}
 						continue;
 					}
 
@@ -605,6 +662,11 @@ namespace
 						}
 
 						receivedBinarySnapshot = true;
+						if (options.bootstrapTrace)
+						{
+							std::cerr << "bootstrap trace: binary snapshot ok. sessionIndex=" << sessionIndex
+								<< " roomId=" << roomId << "\n";
+						}
 						continue;
 					}
 
@@ -681,7 +743,7 @@ namespace
 			{
 				NetworkLib::Packet::Framing::SFramedPacket framedPacket{};
 				NetworkLib::Packet::View::FPacketView contentPacketView{};
-				if (!tryReceiveNextContentPacket(framedPacket, contentPacketView))
+				if (!tryReceiveNextContentPacket("echo-response", framedPacket, contentPacketView))
 				{
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
@@ -795,7 +857,7 @@ int main(int argc, char* argv[])
 	SClientOptions options{};
 	if (!ParseArguments(argc, argv, options))
 	{
-		std::cerr << "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] [--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] [--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] [--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] [--disable-page-pool] [--page-size 4096] [--quiet]\n";
+		std::cerr << "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] [--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] [--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] [--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] [--recv-timeout-ms 0] [--disable-page-pool] [--page-size 4096] [--bootstrap-trace] [--quiet]\n";
 		return 1;
 	}
 

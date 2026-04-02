@@ -4,6 +4,7 @@
 
 #include "ContentsRuntime/Bridge/IContentBridge.h"
 #include "EchoServer/Contents/ContentTypes.h"
+#include "Generated/Packets/Chat/ChatPackets.h"
 #include "Generated/Packets/Login/LoginPackets.h"
 
 namespace EchoServer::Contents
@@ -40,6 +41,14 @@ namespace EchoServer::Contents
 	{
 		if (opcode != Generated::Login::FLoginRq::kOpcode)
 		{
+			if (opcode == Generated::Chat::FRoomSnapshotRq::kOpcode)
+			{
+				std::ostringstream oss;
+				oss << "bootstrap trace: snapshot request reached auth content before move completed. sessionId="
+					<< sessionId
+					<< " payloadBytes=" << payload.size();
+				Log(Foundation::ELogLevel::Warn, oss.str());
+			}
 			return;
 		}
 
@@ -62,11 +71,25 @@ namespace EchoServer::Contents
 		Generated::Login::FLoginRp responsePacket;
 		responsePacket.userId = packet.userId;
 		responsePacket.success = success;
-		ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, responsePacket);
-
 		if (success)
 		{
-			bridge.MoveSession(sessionId, kEchoContentId);
+			if (!bridge.MoveSession(sessionId, kEchoContentId))
+			{
+				std::ostringstream oss;
+				oss << "move to echo content failed. sessionId=" << sessionId
+					<< " userId=" << packet.userId;
+				Log(Foundation::ELogLevel::Error, oss.str());
+				return;
+			}
+		}
+
+		if (!ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, responsePacket))
+		{
+			std::ostringstream oss;
+			oss << "login response send failed. sessionId=" << sessionId
+				<< " userId=" << packet.userId;
+			Log(Foundation::ELogLevel::Error, oss.str());
+			return;
 		}
 	}
 

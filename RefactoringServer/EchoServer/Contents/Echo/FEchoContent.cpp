@@ -114,6 +114,14 @@ namespace EchoServer::Contents
 		std::span<const char> payload,
 		ContentsRuntime::Bridge::IContentBridge& bridge)
 	{
+		if (m_runtimeOptions.bootstrapTrace)
+		{
+			std::ostringstream oss;
+			oss << "bootstrap trace: snapshot request reached echo content. sessionId=" << sessionId
+				<< " payloadBytes=" << payload.size();
+			Log(Foundation::ELogLevel::Info, oss.str());
+		}
+
 		Generated::Chat::FRoomSnapshotRq packet;
 		if (!ContentsRuntime::Bridge::DeserializeOwnedPacket(Generated::Chat::FRoomSnapshotRq::kOpcode, payload, packet))
 		{
@@ -133,7 +141,14 @@ namespace EchoServer::Contents
 			{ "topic", "general" },
 			{ "owner", "alpha" }
 		};
-		ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, snapshotPacket);
+		if (!ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, snapshotPacket))
+		{
+			std::ostringstream oss;
+			oss << "chat snapshot response send failed. sessionId=" << sessionId
+				<< " roomId=" << packet.roomId;
+			Log(Foundation::ELogLevel::Error, oss.str());
+			return;
+		}
 
 		const std::array<std::uint8_t, 8> binaryPayload = {
 			static_cast<std::uint8_t>(packet.roomId & 0xFF),
@@ -144,7 +159,14 @@ namespace EchoServer::Contents
 		Generated::Chat::FRoomBinarySnapshotNoti binarySnapshotPacket;
 		binarySnapshotPacket.roomId = packet.roomId;
 		binarySnapshotPacket.SetPayloadValue(std::span<const std::uint8_t>(binaryPayload.data(), binaryPayload.size()));
-		ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, binarySnapshotPacket);
+		if (!ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, binarySnapshotPacket))
+		{
+			std::ostringstream oss;
+			oss << "chat binary snapshot send failed. sessionId=" << sessionId
+				<< " roomId=" << packet.roomId;
+			Log(Foundation::ELogLevel::Error, oss.str());
+			return;
+		}
 
 		if (m_runtimeOptions.logPackets)
 		{
@@ -152,6 +174,13 @@ namespace EchoServer::Contents
 			oss << "chat snapshot served. sessionId=" << sessionId
 				<< " roomId=" << packet.roomId
 				<< " binaryBytes=" << binaryPayload.size();
+			Log(Foundation::ELogLevel::Info, oss.str());
+		}
+		else if (m_runtimeOptions.bootstrapTrace)
+		{
+			std::ostringstream oss;
+			oss << "bootstrap trace: snapshot responses sent. sessionId=" << sessionId
+				<< " roomId=" << packet.roomId;
 			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 	}

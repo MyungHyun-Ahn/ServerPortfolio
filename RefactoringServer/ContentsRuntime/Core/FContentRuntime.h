@@ -21,6 +21,7 @@ namespace ContentsRuntime::Core
 		~FContentRuntime() override;
 
 		bool RegisterContent(std::unique_ptr<IContent> content);
+		void SetConfig(const SContentRuntimeConfig& config);
 		void Start(NetworkLib::IServer& server);
 		void Stop();
 		SContentRuntimeStats GetStatsSnapshot();

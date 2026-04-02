@@ -14,7 +14,7 @@ namespace ContentsRuntime::Core
 	class FContentThread
 	{
 	public:
-		FContentThread(IContent& content, Bridge::IContentBridge& bridge);
+		FContentThread(IContent& content, Bridge::IContentBridge& bridge, const SContentRuntimeConfig& config);
 		~FContentThread();
 
 		void Start();

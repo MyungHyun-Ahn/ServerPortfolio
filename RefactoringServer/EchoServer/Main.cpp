@@ -10,6 +10,8 @@
 #include "EchoServer/Contents/Auth/FAuthContent.h"
 #include "EchoServer/Contents/ContentTypes.h"
 #include "EchoServer/Contents/Echo/FEchoContent.h"
+#include "Generated/Packets/Chat/ChatPackets.h"
+#include "Generated/Packets/Login/LoginPackets.h"
 #include "Packet/Framing/FDefaultPacketFramer.h"
 #include "Servers/Core/BackendTypes.h"
 #include "Servers/Core/FServerFactory.h"
@@ -136,6 +138,11 @@ namespace
 		return currentValue >= previousValue ? (currentValue - previousValue) : 0;
 	}
 
+	double ToMicroseconds(std::uint64_t nanoseconds) noexcept
+	{
+		return static_cast<double>(nanoseconds) / 1000.0;
+	}
+
 	std::filesystem::path GetExecutableDirectory()
 	{
 		std::array<char, MAX_PATH> modulePath = {};
@@ -153,10 +160,12 @@ namespace
 	public:
 		FEchoApplication(
 			std::shared_ptr<Foundation::ILogger> logger,
-			EchoServer::Contents::SRuntimeOptions runtimeOptions)
+			EchoServer::Contents::SRuntimeOptions runtimeOptions,
+			ContentsRuntime::Core::SContentRuntimeConfig contentRuntimeConfig)
 			: m_logger(std::move(logger))
 			, m_runtimeOptions(runtimeOptions)
 		{
+			m_contentRuntime.SetConfig(contentRuntimeConfig);
 			m_contentRuntime.RegisterContent(std::make_unique<EchoServer::Contents::FAuthContent>(m_logger));
 			m_contentRuntime.RegisterContent(std::make_unique<EchoServer::Contents::FEchoContent>(m_logger, m_runtimeOptions));
 		}
@@ -183,6 +192,17 @@ namespace
 		void OnPacketReceived(NetworkLib::IServer& server, std::uint64_t sessionId, const NetworkLib::Packet::View::FPacketView& packetView) override
 		{
 			(void)server;
+
+			if (m_runtimeOptions.bootstrapTrace &&
+				(packetView.opcode == Generated::Login::FLoginRq::kOpcode ||
+				 packetView.opcode == Generated::Chat::FRoomSnapshotRq::kOpcode))
+			{
+				std::ostringstream oss;
+				oss << "bootstrap trace: ingress packet. sessionId=" << sessionId
+					<< " opcode=" << packetView.opcode
+					<< " payloadBytes=" << packetView.payloadLength;
+				Log(Foundation::ELogLevel::Info, oss.str());
+			}
 
 			if (!m_contentRuntime.EnqueuePacket(sessionId, packetView.opcode, packetView.payload, packetView.payloadLength) && m_runtimeOptions.logPackets)
 			{
@@ -234,6 +254,7 @@ int main(int argc, char* argv[])
 	bool requestManualDump = false;
 	bool runHeadless = false;
 	EchoServer::Contents::SRuntimeOptions runtimeOptions{};
+	ContentsRuntime::Core::SContentRuntimeConfig contentRuntimeConfig{};
 	const std::filesystem::path executableDirectory = GetExecutableDirectory();
 	serverConfig.backendKind = NetworkLib::Core::EBackendKind::Iocp;
 	serverConfig.bindIp = "127.0.0.1";
@@ -284,6 +305,10 @@ int main(int argc, char* argv[])
 			{
 				runtimeOptions.logPackets = true;
 			}
+			else if (argument == "--bootstrap-trace")
+			{
+				runtimeOptions.bootstrapTrace = true;
+			}
 			else if (argument == "--disable-page-pool")
 			{
 				runtimeOptions.enablePagePool = false;
@@ -292,7 +317,45 @@ int main(int argc, char* argv[])
 			{
 				runtimeOptions.pageSize = static_cast<std::uint32_t>(std::max(1, std::atoi(argv[++argumentIndex])));
 			}
+			else if (argument == "--contents-race-injection")
+			{
+				contentRuntimeConfig.enableRaceInjection = true;
+			}
+			else if (argument == "--contents-race-period" && argumentIndex + 1 < argc)
+			{
+				contentRuntimeConfig.raceInjectionPeriod =
+					static_cast<std::uint32_t>(std::max(1, std::atoi(argv[++argumentIndex])));
+			}
+			else if (argument == "--contents-race-mode" && argumentIndex + 1 < argc)
+			{
+				const std::string mode = argv[++argumentIndex];
+				if (mode == "switch")
+				{
+					contentRuntimeConfig.raceInjectionMode = ContentsRuntime::Core::ERaceInjectionMode::SwitchToThread;
+				}
+				else if (mode == "sleep0")
+				{
+					contentRuntimeConfig.raceInjectionMode = ContentsRuntime::Core::ERaceInjectionMode::Sleep0;
+				}
+				else if (mode == "yield")
+				{
+					contentRuntimeConfig.raceInjectionMode = ContentsRuntime::Core::ERaceInjectionMode::Yield;
+				}
+				else
+				{
+					contentRuntimeConfig.raceInjectionMode = ContentsRuntime::Core::ERaceInjectionMode::None;
+				}
+			}
+			else if (argument == "--contents-fail-fast")
+			{
+				contentRuntimeConfig.failFastOnRuntimeError = true;
+			}
 		}
+	}
+
+	if (contentRuntimeConfig.enableRaceInjection && contentRuntimeConfig.raceInjectionPeriod == 0)
+	{
+		contentRuntimeConfig.raceInjectionPeriod = 100;
 	}
 
 	serverConfig.enablePageBufferReuse = runtimeOptions.enablePagePool;
@@ -315,7 +378,7 @@ int main(int argc, char* argv[])
 		return dumpWritten ? 0 : 1;
 	}
 
-	FEchoApplication echoApplication(compositeLogger, runtimeOptions);
+	FEchoApplication echoApplication(compositeLogger, runtimeOptions, contentRuntimeConfig);
 	std::unique_ptr<NetworkLib::IServer> server = NetworkLib::Core::FServerFactory::Create(serverConfig.backendKind);
 	if (server == nullptr)
 	{
@@ -388,14 +451,24 @@ int main(int argc, char* argv[])
 			std::cout
 				<< "[ContentStats] contents=" << currentContentStats.registeredContentCount
 				<< " sessions=" << currentContentStats.activeSessionCount
+				<< " enterCalls=" << currentContentStats.enterSessionCallCount
+				<< " leaveCalls=" << currentContentStats.leaveSessionCallCount
+				<< " enqueueCalls=" << currentContentStats.enqueuePacketCallCount
 				<< " moveTPS=" << moveTps
 				<< " enqueueFailTPS=" << enqueueFailTps
+				<< " runtimeEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.enqueuePacketLockWaitNs)
+				<< " runtimeEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.maxEnqueuePacketLockWaitNs)
+				<< " runtimeMoveLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.moveSessionLockWaitNs)
+				<< " runtimeMoveMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.maxMoveSessionLockWaitNs)
 				<< " authSessions=" << (currentAuthStats != nullptr ? currentAuthStats->activeSessionCount : 0)
 				<< " authEnterTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::enterCount)
 				<< " authLeaveTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::leaveCount)
 				<< " authPacketTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::packetCount)
 				<< " authQueue=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.packetQueueDepth : 0)
 				<< " authMaxQueue=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.maxPacketQueueDepth : 0)
+				<< " authPacketEnqueueCalls=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.enqueuePacketCallCount : 0)
+				<< " authPacketEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentAuthStats != nullptr ? currentAuthStats->threadStats.enqueuePacketLockWaitNs : 0)
+				<< " authPacketEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentAuthStats != nullptr ? currentAuthStats->threadStats.maxEnqueuePacketLockWaitNs : 0)
 				<< " echoSessions=" << (currentEchoStats != nullptr ? currentEchoStats->activeSessionCount : 0)
 				<< " echoEnterTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::enterCount)
 				<< " echoLeaveTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::leaveCount)
@@ -403,6 +476,9 @@ int main(int argc, char* argv[])
 				<< " echoFrameTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::frameCount)
 				<< " echoQueue=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.packetQueueDepth : 0)
 				<< " echoMaxQueue=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.maxPacketQueueDepth : 0)
+				<< " echoPacketEnqueueCalls=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.enqueuePacketCallCount : 0)
+				<< " echoPacketEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentEchoStats != nullptr ? currentEchoStats->threadStats.enqueuePacketLockWaitNs : 0)
+				<< " echoPacketEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentEchoStats != nullptr ? currentEchoStats->threadStats.maxEnqueuePacketLockWaitNs : 0)
 				<< " echoLastDelayFrame=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.lastDelayFrame : 0)
 				<< " echoMaxDelayFrame=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.maxDelayFrame : 0)
 				<< std::endl;

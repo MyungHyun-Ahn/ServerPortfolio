@@ -12,6 +12,7 @@ namespace EchoServer::Contents
 		int sendThreadCount = 1;
 		int responsesPerThread = 1;
 		bool logPackets = false;
+		bool bootstrapTrace = false;
 		bool enablePagePool = true;
 		std::uint32_t pageSize = 4096;
 	};
