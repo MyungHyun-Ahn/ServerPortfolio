@@ -1,108 +1,404 @@
 # ContentsRuntime 트러블슈팅
 
-## 1. bootstrap 단계 `chat-bootstrap` recv timeout
+## 1. 목적
 
-### 증상
-- `EchoClient`가 `chat-bootstrap` 단계에서 `recv failed ... error=10060 (timeout)`으로 멈췄다.
-- 서버 로그에는 같은 세션에 대해
-  - `login succeeded`
-  - `echo content enter`
-  - `auth content leave`
-  까지는 보이는데, 이어서 와야 할 snapshot 처리 로그가 없었다.
+이 문서는 `ContentsRuntime`와 `EchoServer/EchoClient`를 붙여서 검증하는 과정에서 발견한 문제를 다음 기준으로 정리한다.
 
-### 최초 재현
-- 2026-04-03 기준 `Run-ContentsRuntimeRaceValidation.ps1`의 race injection 검증에서 실제로 한 번 재현했다.
-- 당시 클라이언트 오류:
-  - `session[10] failed: recv failed at stage=chat-bootstrap sessionIndex=10 error=10060 (timeout)`
+- 어떤 증상이 있었는가
+- 어떤 조건에서 재현되었는가
+- 원인을 어떻게 좁혀 갔는가
+- 무엇이 확정되었고, 무엇이 아직 가설인가
+- 어떤 수정/실험을 했고 결과가 어땠는가
 
-## 2. 디버깅 추적 과정
+현재까지 정리 대상은 다음 두 가지다.
 
-### 2.1 처음 확인한 사실
-- 실패 세션은 로그인까지는 정상 진행됐다.
-- 즉 `login-response` 단계는 통과했고, 문제는 그 다음 bootstrap 단계였다.
-- 이것만으로도 `LoginRq` 자체가 유실된 문제는 아니라는 점을 먼저 확인할 수 있었다.
+1. 초기 bootstrap 전이 race
+2. `Lobby -> Room -> RoomChange -> RoomEcho` 흐름에서 드물게 발생하는 `echo-response timeout`
 
-### 2.2 클라이언트 계측 추가
-- `EchoClient`에 `--recv-timeout-ms`를 추가해서 무기한 대기 대신 어느 단계에서 막히는지 로그로 남기게 했다.
-- bootstrap 단계는 다음 순서로 나눠 확인했다.
-  1. `login-response`
-  2. `chat-bootstrap`
-  3. `echo-response`
-- 그 결과 실제 실패 지점이 `chat-bootstrap`임을 확정했다.
+## 2. bootstrap 전이 race
 
-### 2.3 서버 send 실패 가능성 확인
-- `FAuthContent`에서 `LoginRp` send 실패를 로그로 남기도록 했다.
-- `FEchoContent`에서 `RoomSnapshotRp`, `RoomBinarySnapshotNoti` send 실패도 로그로 남기도록 했다.
-- 재현 로그에는 이 send 실패 로그가 없었다.
-- 따라서 단순 send API 실패가 1차 원인일 가능성은 낮다고 봤다.
+### 2.1 증상
 
-### 2.4 bootstrap trace 추가
-- 전체 패킷 로그는 타이밍을 크게 흔들 수 있어서, bootstrap 관련 패킷만 찍는 trace를 넣었다.
-- 확인한 지점:
-  - 서버 ingress에서 `LoginRq`, `RoomSnapshotRq`가 들어왔는지
-  - `EchoContent::HandleRoomSnapshotRq`까지 실제 도달했는지
-  - snapshot 응답 두 개가 전송됐는지
-  - 클라이언트가 login 응답, snapshot 요청, snapshot 응답, binary snapshot을 각각 받았는지
+- 클라이언트가 `chat-bootstrap` 단계에서 멈추고 `10060 timeout` 발생
+- 서버 로그에는 `login succeeded`, `echo content enter`, `auth content leave`까지만 있고, 이후 snapshot 응답 로그가 없음
 
-### 2.5 잘못된 가설 배제
-- `lock-free packet inbox` 자체 유실을 처음엔 의심했다.
-- 하지만 bootstrap trace 기준으로는 `RoomSnapshotRq`가 서버 ingress까지는 보이는 경우가 있었고, lock-free queue만 단독 원인이라고 단정할 수 없었다.
-- 또 전체 패킷 로그를 켜면 재현이 줄어들어, 단순 queue corruption보다 타이밍 race 가능성이 더 커 보였다.
+### 2.2 재현 조건
 
-### 2.6 결정적 코드 점검
-- `FAuthContent`의 로그인 성공 처리 순서를 다시 확인했다.
-- 기존 순서:
-  1. `LoginRp`를 비동기로 전송 enqueue
-  2. 그 다음 `MoveSession(sessionId, kEchoContentId)`
-- 이 순서에서는 클라이언트가 `LoginRp`를 먼저 받고 바로 `RoomSnapshotRq`를 보내는 순간,
-  서버 세션 라우트가 아직 `AuthContent`를 가리킬 수 있다.
-
-### 2.7 최종 원인 확정
-- `RoomSnapshotRq`는 원래 `EchoContent`가 처리해야 한다.
-- 하지만 전이 완료 전에 다음 콘텐츠 요청이 도착하면 그 요청이 아직 이전 콘텐츠로 라우팅될 수 있다.
-- `AuthContent`는 `LoginRq`만 처리하고 나머지는 무시하므로,
-  `RoomSnapshotRq`가 `AuthContent`로 들어간 순간 snapshot 요청은 조용히 버려진다.
-- 그 결과 클라이언트는 `RoomSnapshotRp` / `RoomBinarySnapshotNoti`를 기다리다가 timeout 난다.
-
-## 3. 원인
-- 원인은 `FAuthContent`의 처리 순서 race였다.
-- 기존 순서:
-  1. `LoginRp`를 비동기로 전송 enqueue
-  2. 그 다음 `MoveSession(sessionId, kEchoContentId)`
-- 이 순서에서는 클라이언트가 `LoginRp`를 먼저 받고 곧바로 `RoomSnapshotRq`를 보내는 순간,
-  서버 쪽 세션 라우트가 아직 `AuthContent`를 가리킬 수 있다.
-- 그러면 `RoomSnapshotRq`가 `EchoContent`가 아니라 `AuthContent`로 들어가고,
-  `AuthContent`는 `LoginRq`만 처리하므로 snapshot 요청이 조용히 버려진다.
-- 결과적으로 클라이언트는 `RoomSnapshotRp` / `RoomBinarySnapshotNoti`를 기다리다가 timeout 난다.
-
-## 4. 수정
-- `FAuthContent.cpp`에서 성공 로그인 시 순서를 다음처럼 변경했다.
-  1. `MoveSession(sessionId, kEchoContentId)`
-  2. `LoginRp` 전송
-- 즉 클라이언트가 login 응답을 받은 시점에는 이미 서버 라우트가 `EchoContent`로 넘어가 있게 만들었다.
-
-## 5. 검증
-- 수정 후 `EchoServer` 단독 재빌드 성공
 - `Run-ContentsRuntimeRaceValidation.ps1`
-  - `DurationSeconds=10`
-  - `Sessions=20`
-  - `RacePeriod=1`
-  - `RaceMode=sleep0`
-  조건 스모크 통과
-- 추가로 `100 sessions`, `RacePeriod=1` 단기 반복 검증에서도 동일 증상은 다시 나오지 않았다.
+- `RaceMode=sleep0`
+- `RacePeriod=1`
+- `100 sessions`
 
-## 6. 비고
-- 이전 2시간 장시간 테스트는 `EchoClient` 종료 버그 때문에 신뢰 가능한 합격 결과로 볼 수 없다.
-- bootstrap race 재현과 원인 분석은 장시간 soak 결과와 분리해서 해석해야 한다.
+### 2.3 원인 추적 과정
 
-## 7. 공격적 재접속 시 `connect failed: 10055`
+1. 클라이언트 recv timeout 계측을 추가해 어느 단계에서 멈추는지 확인했다.
+   - 결과: `chat-bootstrap`
+2. 서버 send 실패 가능성을 먼저 점검했다.
+   - `LoginRp`, `RoomSnapshotRp`, `RoomBinarySnapshotNoti` send 실패 로그는 보이지 않았다.
+3. bootstrap trace를 넣어서 `LoginRp` 수신 후 `RoomSnapshotRq`가 언제 들어오는지 확인했다.
+4. 최종적으로 `FAuthContent`의 처리 순서를 확인했다.
+   - 기존 순서:
+     1. `LoginRp` 전송 enqueue
+     2. `MoveSession`
+   - 이 경우 클라이언트가 `LoginRp`를 받자마자 `RoomSnapshotRq`를 보내면, 서버 라우팅이 아직 `AuthContent`를 가리키는 순간이 생겼다.
 
-### 증상
-- `300 sessions + reconnectProbabilityPercent=25` 같은 공격적 검증에서
-  `session[229] failed: connect failed: 10055`
-  가 발생했다.
+### 2.4 확정 원인
 
-### 해석
-- 이건 bootstrap timeout 원인과는 별개다.
-- `10055`는 소켓/버퍼 자원 부족 계열 오류라서, 매우 공격적인 재접속 부하에서 발생한 OS 자원 한계로 봐야 한다.
-- 따라서 `chat-bootstrap timeout` 원인 분석 근거로 사용하면 안 된다.
+- `다음 콘텐츠 요청을 허용하는 Rp`보다 `MoveSession`이 늦게 실행되면서 생긴 전이 race
+
+### 2.5 적용한 해결
+
+- 순서를 다음처럼 변경했다.
+  1. `MoveSession`
+  2. `LoginRp`
+
+### 2.6 결과
+
+- bootstrap timeout은 사라졌다.
+- 이 경험을 바탕으로 별도 문서 [003_content-transition-rules.md](/d:/Project/ServerPortfolio/RefactoringServer/docs/reviews/002_contentsruntime/003_content-transition-rules.md)에 콘텐츠 전이 규칙을 정리했다.
+
+## 3. Room 흐름 timeout
+
+### 3.1 최초 증상
+
+- 장시간 또는 반복 room-change 중 특정 세션이 `echo-response` 단계에서 `10060 timeout`
+- 대표 로그:
+  - [client_20260403_185203.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_longrun/client_20260403_185203.err.log)
+  - `session[0] failed: recv failed at stage=echo-response sessionIndex=0 error=10060 (timeout)`
+- 서버는 살아 있지만 트래픽이 끝난 뒤 idle 상태로 남아 있는 경우가 있었다.
+
+### 3.2 최초 재현 조건
+
+- 서버
+  - `--headless --room-count 50 --room-capacity 4 --contents-fail-fast`
+- 클라이언트
+  - `--sessions 100`
+  - `--count 2`
+  - `--hold-seconds 7200`
+  - `--interval-ms 200`
+  - `--recv-timeout-ms 5000`
+  - `--room-change-probability-percent 70`
+  - `--max-room-enter-retries 20`
+  - `--max-room-change-retries 5`
+
+## 4. 원인 추적 과정
+
+### 4.1 짧은 재현 조건으로 압축
+
+문제를 더 빨리 드러내기 위해 다음과 같은 공격적 조건으로 반복 재현했다.
+
+- 서버
+  - `--headless --room-count 50 --room-capacity 4 --contents-fail-fast`
+- 클라이언트
+  - `--sessions 20~100`
+  - `--count 2`
+  - `--payload-size 9 또는 16`
+  - `--hold-seconds 300`
+  - `--interval-ms 0`
+  - `--recv-timeout-ms 5000`
+  - `--room-change-probability-percent 100`
+  - `--max-room-enter-retries 20`
+  - `--max-room-change-retries 5~10`
+
+### 4.2 실패 세션 trace 추가
+
+- 클라이언트에 `--trace-session-index`
+- 서버에 bootstrap trace를 넣어서 특정 세션의 흐름을 따라갔다.
+
+짧은 단일 세션 trace에서 확인된 사실:
+
+- `RoomChangeRp`를 받기 전에 클라이언트가 `EchoRq`를 보내지는 않는다.
+- 정상 세션에서는 아래 흐름이 모두 보였다.
+  - 서버 ingress
+  - `FContentRuntime::EnqueuePacket` accepted / posted
+  - thread dequeue
+  - room `OnPacket`
+  - `echo request accepted`
+  - `echo response sent`
+
+즉 단일 세션 짧은 재현으로는 문제가 드러나지 않았다.
+
+### 4.3 all-session trace로 전환
+
+특정 세션 하나를 미리 찍는 방식으로는 실패 세션을 놓치기 쉬워서, 이후에는 다음 방식으로 바꿨다.
+
+- `--bootstrap-trace`만 켜고 `--trace-user-id`는 지정하지 않음
+- `tracedSessionId == nullptr`일 때 모든 세션 trace를 남기도록 변경
+
+목적:
+
+- 실패가 난 뒤 `client.err.log`에서 `sessionIndex`를 먼저 찾고
+- `userId = 1000 + sessionIndex`
+- 서버 `login succeeded` 로그에서 대응하는 `sessionId`를 찾은 다음
+- 그 `sessionId` 기준으로 서버 흐름을 역추적하기 위함
+
+### 4.4 generation / local state 가설 점검
+
+의심했던 가설:
+
+- room content 내부의 `m_sessionGenerations`가 runtime route table보다 늦게 갱신되어 stale packet으로 버리는 것
+
+시도:
+
+- 브리지 기준 authoritative route / instance 조회 추가
+- local generation mismatch를 보정하는 완화 실험
+
+결과:
+
+- 보조적인 가설로는 유효했지만, 이것만으로 문제를 설명하거나 해결하지는 못했다.
+
+### 4.5 OnEnter 완료 후 completion callback 방식 적용
+
+사용자 제안 전 실험했던 방향:
+
+- `MoveSessionToInstanceWithCompletion(...)`
+- target content thread의 `OnEnter` 완료 후 success `Rp`를 보내도록 변경
+
+적용 대상:
+
+- `RoomEnterRp success`
+- `RoomChangeRp success`
+
+의도:
+
+- bootstrap 버그와 같은 계열이라면 `Rp`를 너무 빨리 보내서 생기는 문제일 수 있으므로, 실제 `OnEnter`가 끝난 뒤에만 success `Rp`를 보내면 해결될 수 있다고 판단했다.
+
+결과:
+
+- 문제는 완전히 사라지지 않았다.
+- 즉 `RoomChangeRp`를 `OnEnter` 이후로 늦추는 것만으로는 충분하지 않았다.
+
+### 4.6 최신 상태에서 확인된 사실
+
+현재까지 확인된 사실은 다음과 같다.
+
+- 클라이언트는 `RoomChangeRp success`를 받은 뒤에만 `EchoRq`를 보낸다.
+- 짧은 단일 세션 deep trace에서는 다음 네 지점 모두 정상이다.
+  1. 두 번째 `EchoRq`가 서버 ingress까지 도달
+  2. `EnqueuePacket` 전후에서 사라지지 않음
+  3. target room `OnPacket`까지 도달
+  4. `EchoRp` send도 성공
+- 따라서 문제는 단순한 단일 세션 타이밍 버그라기보다, 다중 세션 / 장시간 / 특정 상태 조합에서만 드물게 드러나는 race일 가능성이 높다.
+
+## 5. 최근 재현 실험
+
+### 5.1 3분 / 200세션 / all-session trace
+
+설정:
+
+- 서버
+  - `--headless --room-count 100 --room-capacity 4 --contents-fail-fast --bootstrap-trace`
+- 클라이언트
+  - `--sessions 200 --count 2 --payload-size 16 --hold-seconds 180 --interval-ms 0 --packets-per-send 2 --recv-timeout-ms 5000 --room-change-probability-percent 100 --max-room-enter-retries 20 --max-room-change-retries 10 --bootstrap-trace --quiet`
+
+결과:
+
+- [server_20260404_005105.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/server_20260404_005105.log)
+- [client_20260404_005105.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/client_20260404_005105.err.log)
+- 성공
+
+### 5.2 3분 / 250세션 / room contention 강화
+
+설정:
+
+- 서버
+  - `--room-count 20 --room-capacity 3`
+- 클라이언트
+  - `--sessions 250 --count 1 --interval-ms 0 --room-change-probability-percent 100`
+
+결과:
+
+- [client_20260404_005542_contention.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/client_20260404_005542_contention.err.log)
+- 실패는 났지만 우리가 찾는 버그가 아니라 정상 실패였다.
+  - `session[4] failed: no joinable room available.`
+
+해석:
+
+- room contention을 너무 강하게 주면 rare race보다 `방 없음` 정상 실패가 먼저 튀어나온다.
+
+### 5.3 3분 / 250세션 / balanced 설정
+
+설정:
+
+- 서버
+  - `--room-count 80 --room-capacity 4`
+- 클라이언트
+  - `--sessions 250 --count 1 --interval-ms 0 --room-change-probability-percent 100`
+
+결과:
+
+- [server_20260404_005919_balanced.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/server_20260404_005919_balanced.log)
+- [client_20260404_005919_balanced.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/client_20260404_005919_balanced.err.log)
+- 성공
+
+## 6. 분석용 race injection 실험
+
+문제가 희귀하다고 판단해, 장시간만 기다리지 않고 전이 경계에 race window를 인위적으로 넓히는 실험을 추가했다.
+
+### 6.1 전이 응답 직전 injection
+
+추가 옵션:
+
+- `--transition-race-injection`
+- `--transition-race-mode sleep0`
+
+적용 위치:
+
+- `RoomEnterRp success` 전송 직전
+- `RoomChangeRp success` 전송 직전
+
+결과:
+
+- [server_20260404_010614.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/server_20260404_010614.log)
+- [client_20260404_010614.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/client_20260404_010614.err.log)
+- 3분 / 250세션 기준 성공
+
+### 6.2 전이 응답 직전 + RoomChangeRp 직후 + 첫 EchoRq 직전 injection
+
+추가 옵션:
+
+- `--transition-race-injection --transition-race-mode sleep0`
+- `--post-room-change-race-injection --post-room-change-race-mode sleep0`
+- `--first-echo-race-injection --first-echo-race-mode sleep0`
+
+의도:
+
+- `OnEnter 완료 -> RoomChangeRp`
+- `RoomChangeRp -> 첫 EchoRq`
+- target room에서 전이 직후 첫 `EchoRq` 처리
+
+세 경계를 모두 벌려서 재현률을 높여 보려는 실험
+
+결과 1:
+
+- [server_20260404_011134_double.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/server_20260404_011134_double.log)
+- [client_20260404_011134_double.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/client_20260404_011134_double.err.log)
+- 성공
+
+결과 2 (`room-change=90`)
+
+- [server_20260404_011548_rc90.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/server_20260404_011548_rc90.log)
+- [client_20260404_011548_rc90.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/client_20260404_011548_rc90.err.log)
+- 성공
+
+해석:
+
+- 현재까지는 위 세 지점을 벌려도 3분 / 250세션 기준으로는 재현률이 충분히 올라가지 않았다.
+- 즉 문제는 단순 전이 경계 타이밍만으로 설명되지 않거나, 더 긴 누적 시간 / 더 많은 상태 조합이 필요할 수 있다.
+
+## 7. 현재까지 확정된 것
+
+- bootstrap 버그는 원인과 해결이 확정되었다.
+- room-flow 문제는 `RoomChangeRp를 너무 빨리 보내는 단일 원인`만으로는 더 이상 설명되지 않는다.
+- 클라이언트가 `RoomChangeRp` 전에 `EchoRq`를 보내는 구조는 아니다.
+- 짧은 단일 세션 trace에서는
+  - ingress
+  - enqueue
+  - thread dequeue
+  - room `OnPacket`
+  - `EchoRp send`
+  까지 모두 정상이다.
+
+## 8. 현재까지 확정되지 않은 것
+
+아직 확정되지 않은 핵심 질문은 다음과 같다.
+
+- 장시간 / 다중 세션에서 실패한 바로 그 세션의 마지막 `EchoRq`가 서버 ingress까지 들어왔는가
+- 들어왔다면 `EnqueuePacket` 전후에서 사라졌는가
+- target room `OnPacket`까지 왔는데 generation / instance check에서 버려졌는가
+- `EchoRp`를 만들었지만 send가 실패했는가
+
+즉, 현재 남은 과제는 **실패 세션 하나를 all-session trace에서 정확히 특정하고, 그 세션의 마지막 실패 구간만 끝까지 추적해 네 지점 중 어디서 끊기는지 확정하는 것**이다.
+
+## 9. 현재 결론
+
+- 문제는 여전히 미해결이다.
+- 다만 지금까지의 실험으로 다음 범위까지는 좁혀졌다.
+  - 단순 bootstrap race는 아님
+  - 클라이언트가 `RoomChangeRp` 전에 `EchoRq`를 보내는 문제는 아님
+  - 짧은 단일 세션 흐름 자체는 정상
+  - 희귀한 다중 세션 / 장시간 / 상태 조합 race 가능성이 높음
+
+다음 분석 단계는:
+
+1. all-session trace를 유지한 상태에서 실패 런 확보
+2. `client.err.log`에서 실패 `sessionIndex` 추출
+3. 대응 `userId`, `sessionId`를 찾아 서버 로그에서 같은 세션의 마지막 `EchoRq -> EchoRp` 흐름만 역추적
+
+이 단계에서 원인이 확정되면, 그 다음 해결 방법은 사용자와 합의 후 진행한다.
+
+## 10. send-post lost-wakeup 추가 확인
+
+### 10.1 no-timeout 실험에서 보인 새로운 패턴
+
+- `recv timeout`을 모두 끄고 1분 런을 돌렸는데도 클라이언트가 끝나지 않고 멈췄다.
+- 외부 watchdog이 `90초` 뒤 강제 종료했다.
+- 이때 서버는 오랫동안 다음 상태를 유지했다.
+  - `sessions=1`
+  - `recvTPS=0`
+  - `sendTPS=0`
+  - `queuedSendBuffers=1`
+  - `totalWSASendCalls` 증가 없음
+
+해석:
+
+- 이 패턴은 `응답이 매우 느리다`보다는 `send queue에 버퍼가 남아 있는데 WSASend가 다시 시작되지 않는다`에 더 가깝다.
+
+### 10.2 레거시와 비교해서 좁혀진 원인
+
+- 레거시 프로젝트는 `SendPacket()` / `EnqueuePacket()` 분리보다 더 중요한 보장이 하나 있었다.
+- `m_iSendFlag + ENQUEUE_FLAG`로 `send 중 새 enqueue가 들어오면 다음 PostSend를 놓치지 않게` 만들고 있었다.
+- 현재 `RefactoringServer`는 이 부분이 `std::atomic<bool> m_sendInFlight`로 단순화돼 있었다.
+
+즉 이번 건은:
+
+- `EnqueuePacket` 같은 특수 API를 잘못 써서 `PostSend`를 안 불렀다
+
+가 아니라
+
+- 레거시의 send 재기동 보장이 빠진 상태에서 lost-wakeup race가 생겼다
+
+로 보는 게 맞다.
+
+### 10.3 현재 코드에서 가능했던 race
+
+1. send completion 쪽이 `PostSend()`에 들어가 `m_sendInFlight=true`를 잡는다.
+2. queue를 확인했더니 비어 있어서 종료하려고 한다.
+3. 그 사이 다른 스레드가 새 send buffer를 enqueue하고 `PostSend()`를 호출한다.
+4. 하지만 `m_sendInFlight=true`라서 두 번째 `PostSend()`는 바로 빠진다.
+5. 첫 번째 `PostSend()`는 `m_sendInFlight=false`로 내리고 끝난다.
+6. 결과적으로 queue에는 버퍼가 남았는데 send는 재시작되지 않는다.
+
+이 패턴은 실제 관찰된
+
+- `queuedSendBuffers=1`
+- `sendTPS=0`
+- `WSASend` 호출 정지
+
+와 잘 맞는다.
+
+### 10.4 적용한 수정과 결과
+
+- `FSession`에 send 상태 비트를 도입했다.
+  - `kSendInFlightFlag`
+  - `kSendPendingFlag`
+- enqueue 시 pending 비트를 세운다.
+- `PostSend()`가 빈 queue로 끝나려 할 때 pending 비트를 보고 다시 돈다.
+- send completion 뒤에도 pending 비트 또는 잔여 queue가 있으면 다시 `PostSend()`를 건다.
+
+수정 파일:
+
+- [FSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.h)
+- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
+- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
+
+짧은 무timeout 재실행 결과:
+
+- 클라이언트 정상 종료
+- 서버 마지막 상태 `sessions=0`, `queuedSendBuffers=0`
+- 이전처럼 `sessions=1`, `queuedSendBuffers=1`로 멈추는 패턴은 다시 나오지 않았다.
+
+### 10.5 현재 해석
+
+- room-flow에서 보였던 일부 hang/timeout은 콘텐츠 전이 로직이 아니라 `NetworkLib` send 재기동 보장 누락으로 설명된다.
+- 따라서 이후 `echo-response timeout`, `room-change-list timeout`, `room-change timeout`은 이 send fix 적용 이후 기준으로 다시 분리해서 평가해야 한다.

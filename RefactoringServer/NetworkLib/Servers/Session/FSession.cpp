@@ -55,7 +55,7 @@ namespace NetworkLib::Session
 		m_recvBuffer.Initialize(recvBufferCapacity);
 		m_activeSendBuffers.clear();
 		m_sendWsabufs.clear();
-		m_sendInFlight.store(false);
+		m_sendState.store(0);
 		m_liveSendIoCount.store(0);
 		m_maxObservedConcurrentSendIoCount.store(0);
 		m_queuedSendBufferCount.store(0);
@@ -77,7 +77,7 @@ namespace NetworkLib::Session
 		m_recvContext = {};
 		m_sendContext = {};
 		m_recvBuffer.Clear();
-		m_sendInFlight.store(false);
+		m_sendState.store(0);
 		m_liveSendIoCount.store(0);
 		m_maxObservedConcurrentSendIoCount.store(0);
 		m_queuedSendBufferCount.store(0);
@@ -163,6 +163,7 @@ namespace NetworkLib::Session
 	void FSession::EnqueueSendBuffer(NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer) noexcept
 	{
 		m_sendQueue.Enqueue(sendBuffer);
+		m_sendState.fetch_or(kSendPendingFlag, std::memory_order_release);
 		const std::uint32_t queuedCount = m_queuedSendBufferCount.fetch_add(1) + 1;
 		std::uint32_t currentMax = m_maxObservedQueuedSendBufferCount.load();
 		while (queuedCount > currentMax &&
@@ -173,13 +174,31 @@ namespace NetworkLib::Session
 
 	bool FSession::TryBeginSend() noexcept
 	{
-		bool expected = false;
-		return m_sendInFlight.compare_exchange_strong(expected, true);
+		std::uint32_t expected = m_sendState.load(std::memory_order_acquire);
+		while (true)
+		{
+			if ((expected & kSendInFlightFlag) != 0)
+			{
+				return false;
+			}
+
+			const std::uint32_t desired = (expected | kSendInFlightFlag) & ~kSendPendingFlag;
+			if (m_sendState.compare_exchange_weak(
+				expected,
+				desired,
+				std::memory_order_acq_rel,
+				std::memory_order_acquire))
+			{
+				return true;
+			}
+		}
 	}
 
-	void FSession::EndSend() noexcept
+	bool FSession::EndSend() noexcept
 	{
-		m_sendInFlight.store(false);
+		const std::uint32_t previousState =
+			m_sendState.fetch_and(~kSendInFlightFlag, std::memory_order_acq_rel);
+		return (previousState & kSendPendingFlag) != 0;
 	}
 
 	int FSession::BeginSendIo() noexcept

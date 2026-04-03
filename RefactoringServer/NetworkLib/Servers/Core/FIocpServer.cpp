@@ -522,10 +522,13 @@ namespace NetworkLib::Core
 			{
 				sessionContext->FinishSendIo();
 				sessionContext->ReleaseActiveSendBuffers();
-				sessionContext->EndSend();
+				const bool sendRestartRequested = sessionContext->EndSend();
 				if (!sessionContext->IsClosing())
 				{
-					PostSend(*sessionContext);
+					if (sendRestartRequested || sessionContext->GetQueuedSendBufferCount() > 0)
+					{
+						PostSend(*sessionContext);
+					}
 				}
 			}
 
@@ -567,70 +570,81 @@ namespace NetworkLib::Core
 
 	bool FIocpServer::PostSend(FSession& sessionContext)
 	{
-		if (!sessionContext.TryBeginSend())
+		while (true)
 		{
-			return false;
+			if (!sessionContext.TryBeginSend())
+			{
+				return false;
+			}
+
+			if (sessionContext.IsClosing())
+			{
+				const bool sendRestartRequested = sessionContext.EndSend();
+				if (sendRestartRequested)
+				{
+					continue;
+				}
+				return false;
+			}
+
+			if (!sessionContext.FillSendBatch(kMaxSendBatchCount))
+			{
+				const bool sendRestartRequested = sessionContext.EndSend();
+				if (sendRestartRequested)
+				{
+					continue;
+				}
+				return false;
+			}
+
+			FSession::SIoContext& sendContext = sessionContext.GetSendContext();
+			sendContext.Prepare(FSession::EIoType::Send, &sessionContext);
+
+			sessionContext.AcquireRef();
+			const int concurrentSendIoCount = sessionContext.BeginSendIo();
+			if (concurrentSendIoCount > 1)
+			{
+				std::ostringstream oss;
+				oss << "Concurrent WSASend detected. sessionId=" << sessionContext.GetSessionId()
+					<< " concurrentSendIoCount=" << concurrentSendIoCount;
+				Log(Foundation::ELogLevel::Error, oss.str());
+				sessionContext.FinishSendIo();
+				sessionContext.ReleaseActiveSendBuffers();
+				sessionContext.EndSend();
+				ReleaseSession(&sessionContext);
+				CloseSession(sessionContext);
+				return false;
+			}
+
+			DWORD sentBytes = 0;
+			DWORD sendFlags = 0;
+			const std::vector<WSABUF>& sendBuffers = sessionContext.GetSendWsabufs();
+			m_wsaSendCallCount.fetch_add(1, std::memory_order_relaxed);
+			const int sendResult = WSASend(
+				sessionContext.GetSocket(),
+				const_cast<WSABUF*>(sendBuffers.data()),
+				static_cast<DWORD>(sendBuffers.size()),
+				&sentBytes,
+				sendFlags,
+				&sendContext.overlapped,
+				nullptr);
+
+			if (sendResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
+			{
+				const int errorCode = WSAGetLastError();
+				std::ostringstream oss;
+				oss << "WSASend failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
+				Log(Foundation::ELogLevel::Error, oss.str());
+				sessionContext.FinishSendIo();
+				sessionContext.ReleaseActiveSendBuffers();
+				sessionContext.EndSend();
+				ReleaseSession(&sessionContext);
+				CloseSession(sessionContext);
+				return false;
+			}
+
+			return true;
 		}
-
-		if (sessionContext.IsClosing())
-		{
-			sessionContext.EndSend();
-			return false;
-		}
-
-		if (!sessionContext.FillSendBatch(kMaxSendBatchCount))
-		{
-			sessionContext.EndSend();
-			return false;
-		}
-
-		FSession::SIoContext& sendContext = sessionContext.GetSendContext();
-		sendContext.Prepare(FSession::EIoType::Send, &sessionContext);
-
-		sessionContext.AcquireRef();
-		const int concurrentSendIoCount = sessionContext.BeginSendIo();
-		if (concurrentSendIoCount > 1)
-		{
-			std::ostringstream oss;
-			oss << "Concurrent WSASend detected. sessionId=" << sessionContext.GetSessionId()
-				<< " concurrentSendIoCount=" << concurrentSendIoCount;
-			Log(Foundation::ELogLevel::Error, oss.str());
-			sessionContext.FinishSendIo();
-			sessionContext.ReleaseActiveSendBuffers();
-			sessionContext.EndSend();
-			ReleaseSession(&sessionContext);
-			CloseSession(sessionContext);
-			return false;
-		}
-
-		DWORD sentBytes = 0;
-		DWORD sendFlags = 0;
-		const std::vector<WSABUF>& sendBuffers = sessionContext.GetSendWsabufs();
-		m_wsaSendCallCount.fetch_add(1, std::memory_order_relaxed);
-		const int sendResult = WSASend(
-			sessionContext.GetSocket(),
-			const_cast<WSABUF*>(sendBuffers.data()),
-			static_cast<DWORD>(sendBuffers.size()),
-			&sentBytes,
-			sendFlags,
-			&sendContext.overlapped,
-			nullptr);
-
-		if (sendResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
-		{
-			const int errorCode = WSAGetLastError();
-			std::ostringstream oss;
-			oss << "WSASend failed. sessionId=" << sessionContext.GetSessionId() << " error=" << errorCode;
-			Log(Foundation::ELogLevel::Error, oss.str());
-			sessionContext.FinishSendIo();
-			sessionContext.ReleaseActiveSendBuffers();
-			sessionContext.EndSend();
-			ReleaseSession(&sessionContext);
-			CloseSession(sessionContext);
-			return false;
-		}
-
-		return true;
 	}
 
 	void FIocpServer::CloseSession(FSession& sessionContext)

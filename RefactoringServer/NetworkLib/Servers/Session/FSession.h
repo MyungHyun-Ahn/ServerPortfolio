@@ -56,7 +56,7 @@ namespace NetworkLib::Session
 
 		void EnqueueSendBuffer(NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer) noexcept;
 		bool TryBeginSend() noexcept;
-		void EndSend() noexcept;
+		bool EndSend() noexcept;
 		int BeginSendIo() noexcept;
 		int FinishSendIo() noexcept;
 		int GetMaxObservedConcurrentSendIoCount() const noexcept;
@@ -71,6 +71,8 @@ namespace NetworkLib::Session
 
 	private:
 		inline static constexpr std::size_t kDefaultSendBatchCapacity = 32;
+		inline static constexpr std::uint32_t kSendInFlightFlag = 1u << 0;
+		inline static constexpr std::uint32_t kSendPendingFlag = 1u << 1;
 		SOCKET m_socket = INVALID_SOCKET;
 		std::uint64_t m_sessionId = 0;
 		std::uint32_t m_slotIndex = 0;
@@ -83,7 +85,7 @@ namespace NetworkLib::Session
 		NetworkLib::Containers::FLockFreeQueue<NetworkLib::Packet::Buffer::FSendBuffer*> m_sendQueue;
 		std::vector<NetworkLib::Packet::Buffer::FSendBuffer*> m_activeSendBuffers;
 		std::vector<WSABUF> m_sendWsabufs;
-		std::atomic<bool> m_sendInFlight = false;
+		std::atomic<std::uint32_t> m_sendState = 0;
 		std::atomic<int> m_liveSendIoCount = 0;
 		std::atomic<int> m_maxObservedConcurrentSendIoCount = 0;
 		std::atomic<std::uint32_t> m_queuedSendBufferCount = 0;
