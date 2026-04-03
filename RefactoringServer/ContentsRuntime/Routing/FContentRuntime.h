@@ -30,15 +30,27 @@ namespace ContentsRuntime::Routing
 		Core::SContentRuntimeStats GetStatsSnapshot();
 
 		bool EnterSession(std::uint64_t sessionId, Core::FContentId initialContentId);
+		bool EnterSessionToInstance(std::uint64_t sessionId, Core::FContentInstanceId initialContentInstanceId);
 		void LeaveSession(std::uint64_t sessionId);
 		bool EnqueuePacket(std::uint64_t sessionId, std::uint16_t opcode, const char* payload, std::int32_t payloadLength);
 
 	public:
 		bool SendRaw(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) override;
 		bool MoveSession(std::uint64_t sessionId, Core::FContentId targetContentId) override;
+		bool MoveSessionToInstance(std::uint64_t sessionId, Core::FContentInstanceId targetContentInstanceId) override;
+		bool MoveSessionWithCompletion(
+			std::uint64_t sessionId,
+			Core::FContentId targetContentId,
+			Core::FTransitionCompletionCallback onCompleted) override;
+		bool MoveSessionToInstanceWithCompletion(
+			std::uint64_t sessionId,
+			Core::FContentInstanceId targetContentInstanceId,
+			Core::FTransitionCompletionCallback onCompleted) override;
 		bool DisconnectSession(std::uint64_t sessionId) override;
 		bool IsSessionAlive(std::uint64_t sessionId) const override;
+		bool HasContentInstance(Core::FContentInstanceId contentInstanceId) const override;
 		std::optional<Core::FContentId> GetCurrentContentId(std::uint64_t sessionId) const override;
+		std::optional<Core::FContentInstanceId> GetCurrentContentInstanceId(std::uint64_t sessionId) const override;
 
 	private:
 		struct SImpl;

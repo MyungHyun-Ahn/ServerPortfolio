@@ -3,6 +3,8 @@
 namespace ContentsRuntime::Core
 {
 	using FContentId = std::uint16_t;
+	using FContentInstanceId = std::uint32_t;
+	using FTransitionCompletionCallback = std::function<void()>;
 }
 
 namespace ContentsRuntime::Bridge
@@ -14,9 +16,20 @@ namespace ContentsRuntime::Bridge
 
 		virtual bool SendRaw(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) = 0;
 		virtual bool MoveSession(std::uint64_t sessionId, Core::FContentId targetContentId) = 0;
+		virtual bool MoveSessionToInstance(std::uint64_t sessionId, Core::FContentInstanceId targetContentInstanceId) = 0;
+		virtual bool MoveSessionWithCompletion(
+			std::uint64_t sessionId,
+			Core::FContentId targetContentId,
+			Core::FTransitionCompletionCallback onCompleted) = 0;
+		virtual bool MoveSessionToInstanceWithCompletion(
+			std::uint64_t sessionId,
+			Core::FContentInstanceId targetContentInstanceId,
+			Core::FTransitionCompletionCallback onCompleted) = 0;
 		virtual bool DisconnectSession(std::uint64_t sessionId) = 0;
 		virtual bool IsSessionAlive(std::uint64_t sessionId) const = 0;
+		virtual bool HasContentInstance(Core::FContentInstanceId contentInstanceId) const = 0;
 		virtual std::optional<Core::FContentId> GetCurrentContentId(std::uint64_t sessionId) const = 0;
+		virtual std::optional<Core::FContentInstanceId> GetCurrentContentInstanceId(std::uint64_t sessionId) const = 0;
 	};
 
 	template <typename TPacket>

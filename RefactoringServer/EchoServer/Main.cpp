@@ -10,7 +10,10 @@
 #include "EchoServer/Contents/Auth/FAuthContent.h"
 #include "EchoServer/Contents/ContentTypes.h"
 #include "EchoServer/Contents/Echo/FEchoContent.h"
+#include "EchoServer/Contents/Lobby/FLobbyContent.h"
+#include "EchoServer/Contents/Room/FRoomRegistry.h"
 #include "Generated/Packets/Chat/ChatPackets.h"
+#include "Generated/Packets/Echo/EchoPackets.h"
 #include "Generated/Packets/Login/LoginPackets.h"
 #include "Packet/Framing/FDefaultPacketFramer.h"
 #include "Servers/Core/BackendTypes.h"
@@ -28,6 +31,25 @@
 
 namespace
 {
+	bool ShouldTraceSession(
+		const EchoServer::Contents::SRuntimeOptions& runtimeOptions,
+		const std::uint64_t sessionId) noexcept
+	{
+		if (!runtimeOptions.bootstrapTrace)
+		{
+			return false;
+		}
+
+		if (runtimeOptions.tracedSessionId == nullptr)
+		{
+			return true;
+		}
+
+		const std::uint64_t tracedSessionId =
+			runtimeOptions.tracedSessionId->load(std::memory_order_relaxed);
+		return tracedSessionId != 0 && tracedSessionId == sessionId;
+	}
+
 	struct SProcessMetricsSnapshot
 	{
 		ULONGLONG tickCountMs = 0;
@@ -108,33 +130,61 @@ namespace
 		return static_cast<double>(bytes) / (1024.0 * 1024.0);
 	}
 
-	const ContentsRuntime::Core::SContentRuntimeContentStats* FindContentStats(
+	ContentsRuntime::Core::SContentRuntimeContentStats AggregateContentStats(
 		const ContentsRuntime::Core::SContentRuntimeStats& stats,
 		const ContentsRuntime::Core::FContentId contentId) noexcept
 	{
+		ContentsRuntime::Core::SContentRuntimeContentStats aggregated{};
+		aggregated.contentId = contentId;
+
 		for (const auto& contentStats : stats.contents)
 		{
 			if (contentStats.contentId == contentId)
 			{
-				return &contentStats;
+				aggregated.activeSessionCount += contentStats.activeSessionCount;
+				aggregated.threadStats.contentId = contentId;
+				aggregated.threadStats.enqueueEnterCallCount += contentStats.threadStats.enqueueEnterCallCount;
+				aggregated.threadStats.enqueueLeaveCallCount += contentStats.threadStats.enqueueLeaveCallCount;
+				aggregated.threadStats.enqueuePacketCallCount += contentStats.threadStats.enqueuePacketCallCount;
+				aggregated.threadStats.enterCount += contentStats.threadStats.enterCount;
+				aggregated.threadStats.leaveCount += contentStats.threadStats.leaveCount;
+				aggregated.threadStats.packetCount += contentStats.threadStats.packetCount;
+				aggregated.threadStats.frameCount += contentStats.threadStats.frameCount;
+				aggregated.threadStats.enterQueueDepth += contentStats.threadStats.enterQueueDepth;
+				aggregated.threadStats.leaveQueueDepth += contentStats.threadStats.leaveQueueDepth;
+				aggregated.threadStats.packetQueueDepth += contentStats.threadStats.packetQueueDepth;
+				aggregated.threadStats.maxEnterQueueDepth =
+					std::max(aggregated.threadStats.maxEnterQueueDepth, contentStats.threadStats.maxEnterQueueDepth);
+				aggregated.threadStats.maxLeaveQueueDepth =
+					std::max(aggregated.threadStats.maxLeaveQueueDepth, contentStats.threadStats.maxLeaveQueueDepth);
+				aggregated.threadStats.maxPacketQueueDepth =
+					std::max(aggregated.threadStats.maxPacketQueueDepth, contentStats.threadStats.maxPacketQueueDepth);
+				aggregated.threadStats.enqueueEnterLockWaitNs += contentStats.threadStats.enqueueEnterLockWaitNs;
+				aggregated.threadStats.enqueueLeaveLockWaitNs += contentStats.threadStats.enqueueLeaveLockWaitNs;
+				aggregated.threadStats.enqueuePacketLockWaitNs += contentStats.threadStats.enqueuePacketLockWaitNs;
+				aggregated.threadStats.maxEnqueueEnterLockWaitNs =
+					std::max(aggregated.threadStats.maxEnqueueEnterLockWaitNs, contentStats.threadStats.maxEnqueueEnterLockWaitNs);
+				aggregated.threadStats.maxEnqueueLeaveLockWaitNs =
+					std::max(aggregated.threadStats.maxEnqueueLeaveLockWaitNs, contentStats.threadStats.maxEnqueueLeaveLockWaitNs);
+				aggregated.threadStats.maxEnqueuePacketLockWaitNs =
+					std::max(aggregated.threadStats.maxEnqueuePacketLockWaitNs, contentStats.threadStats.maxEnqueuePacketLockWaitNs);
+				aggregated.threadStats.lastDelayFrame =
+					std::max(aggregated.threadStats.lastDelayFrame, contentStats.threadStats.lastDelayFrame);
+				aggregated.threadStats.maxDelayFrame =
+					std::max(aggregated.threadStats.maxDelayFrame, contentStats.threadStats.maxDelayFrame);
 			}
 		}
 
-		return nullptr;
+		return aggregated;
 	}
 
 	std::uint64_t DeltaThreadCount(
-		const ContentsRuntime::Core::SContentRuntimeContentStats* currentStats,
-		const ContentsRuntime::Core::SContentRuntimeContentStats* previousStats,
+		const ContentsRuntime::Core::SContentRuntimeContentStats& currentStats,
+		const ContentsRuntime::Core::SContentRuntimeContentStats& previousStats,
 		std::uint64_t ContentsRuntime::Core::SContentThreadStats::* member) noexcept
 	{
-		if (currentStats == nullptr)
-		{
-			return 0;
-		}
-
-		const std::uint64_t currentValue = currentStats->threadStats.*member;
-		const std::uint64_t previousValue = previousStats != nullptr ? previousStats->threadStats.*member : 0;
+		const std::uint64_t currentValue = currentStats.threadStats.*member;
+		const std::uint64_t previousValue = previousStats.threadStats.*member;
 		return currentValue >= previousValue ? (currentValue - previousValue) : 0;
 	}
 
@@ -166,8 +216,37 @@ namespace
 			, m_runtimeOptions(runtimeOptions)
 		{
 			m_contentRuntime.SetConfig(contentRuntimeConfig);
-			m_contentRuntime.RegisterContent(std::make_unique<EchoServer::Contents::FAuthContent>(m_logger));
-			m_contentRuntime.RegisterContent(std::make_unique<EchoServer::Contents::FEchoContent>(m_logger, m_runtimeOptions));
+			m_roomRegistry = std::make_shared<EchoServer::Contents::FRoomRegistry>();
+			std::vector<EchoServer::Contents::SRoomInfoSnapshot> roomDefinitions;
+			roomDefinitions.reserve(static_cast<std::size_t>(std::max(1, m_runtimeOptions.roomCount)));
+			for (int roomIndex = 0; roomIndex < std::max(1, m_runtimeOptions.roomCount); ++roomIndex)
+			{
+				const std::uint32_t roomOrdinal = static_cast<std::uint32_t>(roomIndex);
+				roomDefinitions.push_back({
+					EchoServer::Contents::MakeRoomId(roomOrdinal),
+					EchoServer::Contents::MakeRoomContentInstanceId(roomOrdinal),
+					"Room-" + std::to_string(roomOrdinal + 1),
+					0,
+					static_cast<std::uint32_t>(std::max(1, m_runtimeOptions.roomCapacity)),
+					true
+				});
+			}
+			m_roomRegistry->Initialize(roomDefinitions);
+
+			m_contentRuntime.RegisterContent(
+				std::make_unique<EchoServer::Contents::FAuthContent>(m_logger, m_runtimeOptions));
+				m_contentRuntime.RegisterContent(
+					std::make_unique<EchoServer::Contents::FLobbyContent>(m_logger, m_roomRegistry, m_runtimeOptions));
+			for (const auto& roomDefinition : roomDefinitions)
+			{
+				m_contentRuntime.RegisterContent(
+					std::make_unique<EchoServer::Contents::FEchoContent>(
+						m_logger,
+						roomDefinition.contentInstanceId,
+						m_roomRegistry,
+						roomDefinition.roomId,
+						m_runtimeOptions));
+			}
 		}
 
 	public:
@@ -193,9 +272,12 @@ namespace
 		{
 			(void)server;
 
-			if (m_runtimeOptions.bootstrapTrace &&
+			if (ShouldTraceSession(m_runtimeOptions, sessionId) &&
 				(packetView.opcode == Generated::Login::FLoginRq::kOpcode ||
-				 packetView.opcode == Generated::Chat::FRoomSnapshotRq::kOpcode))
+				 packetView.opcode == Generated::Chat::FRoomListRq::kOpcode ||
+				 packetView.opcode == Generated::Chat::FRoomEnterRq::kOpcode ||
+				 packetView.opcode == Generated::Chat::FRoomChangeRq::kOpcode ||
+				 packetView.opcode == Generated::Echo::FEchoRq::kOpcode))
 			{
 				std::ostringstream oss;
 				oss << "bootstrap trace: ingress packet. sessionId=" << sessionId
@@ -243,6 +325,7 @@ namespace
 
 	private:
 		std::shared_ptr<Foundation::ILogger> m_logger;
+		std::shared_ptr<EchoServer::Contents::FRoomRegistry> m_roomRegistry;
 		EchoServer::Contents::SRuntimeOptions m_runtimeOptions;
 		ContentsRuntime::Routing::FContentRuntime m_contentRuntime;
 	};
@@ -301,6 +384,18 @@ int main(int argc, char* argv[])
 			{
 				runtimeOptions.responsesPerThread = std::max(1, std::atoi(argv[++argumentIndex]));
 			}
+			else if (argument == "--room-count" && argumentIndex + 1 < argc)
+			{
+				runtimeOptions.roomCount = std::max(1, std::atoi(argv[++argumentIndex]));
+			}
+			else if (argument == "--room-capacity" && argumentIndex + 1 < argc)
+			{
+				runtimeOptions.roomCapacity = std::max(1, std::atoi(argv[++argumentIndex]));
+			}
+			else if (argument == "--trace-user-id" && argumentIndex + 1 < argc)
+			{
+				runtimeOptions.traceUserId = static_cast<std::uint32_t>(std::max(0, std::atoi(argv[++argumentIndex])));
+			}
 			else if (argument == "--log-packets")
 			{
 				runtimeOptions.logPackets = true;
@@ -308,6 +403,90 @@ int main(int argc, char* argv[])
 			else if (argument == "--bootstrap-trace")
 			{
 				runtimeOptions.bootstrapTrace = true;
+			}
+			else if (argument == "--transition-race-injection")
+			{
+				runtimeOptions.enableTransitionResponseRaceInjection = true;
+			}
+			else if (argument == "--transition-race-mode" && argumentIndex + 1 < argc)
+			{
+				const std::string mode = argv[++argumentIndex];
+				if (mode == "switch")
+				{
+					runtimeOptions.transitionRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::SwitchToThread;
+				}
+				else if (mode == "sleep0")
+				{
+					runtimeOptions.transitionRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Sleep0;
+				}
+				else if (mode == "yield")
+				{
+					runtimeOptions.transitionRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Yield;
+				}
+				else
+				{
+					runtimeOptions.transitionRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+				}
+			}
+			else if (argument == "--post-room-change-race-injection")
+			{
+				runtimeOptions.enablePostRoomChangeResponseRaceInjection = true;
+			}
+			else if (argument == "--post-room-change-race-mode" && argumentIndex + 1 < argc)
+			{
+				const std::string mode = argv[++argumentIndex];
+				if (mode == "switch")
+				{
+					runtimeOptions.postRoomChangeResponseRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::SwitchToThread;
+				}
+				else if (mode == "sleep0")
+				{
+					runtimeOptions.postRoomChangeResponseRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Sleep0;
+				}
+				else if (mode == "yield")
+				{
+					runtimeOptions.postRoomChangeResponseRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Yield;
+				}
+				else
+				{
+					runtimeOptions.postRoomChangeResponseRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+				}
+			}
+			else if (argument == "--first-echo-race-injection")
+			{
+				runtimeOptions.enableFirstEchoAfterRoomChangeRaceInjection = true;
+			}
+			else if (argument == "--first-echo-race-mode" && argumentIndex + 1 < argc)
+			{
+				const std::string mode = argv[++argumentIndex];
+				if (mode == "switch")
+				{
+					runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::SwitchToThread;
+				}
+				else if (mode == "sleep0")
+				{
+					runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Sleep0;
+				}
+				else if (mode == "yield")
+				{
+					runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Yield;
+				}
+				else
+				{
+					runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode =
+						EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+				}
 			}
 			else if (argument == "--disable-page-pool")
 			{
@@ -358,6 +537,12 @@ int main(int argc, char* argv[])
 		contentRuntimeConfig.raceInjectionPeriod = 100;
 	}
 
+	if (runtimeOptions.bootstrapTrace && runtimeOptions.traceUserId != 0)
+	{
+		runtimeOptions.tracedSessionId = std::make_shared<std::atomic<std::uint64_t>>(0);
+		contentRuntimeConfig.tracedSessionId = runtimeOptions.tracedSessionId;
+	}
+
 	serverConfig.enablePageBufferReuse = runtimeOptions.enablePagePool;
 	serverConfig.pageBufferSize = runtimeOptions.pageSize;
 
@@ -365,6 +550,18 @@ int main(int argc, char* argv[])
 	compositeLogger->AddSink(std::make_shared<Foundation::FConsoleLogger>(serverConfig.logConfig));
 	compositeLogger->AddSink(std::make_shared<Foundation::FFileLogger>(serverConfig.logConfig));
 	serverConfig.logger = compositeLogger;
+
+	if (runtimeOptions.bootstrapTrace)
+	{
+		contentRuntimeConfig.enableTraceLogging = true;
+		contentRuntimeConfig.traceLogger = [logger = compositeLogger](const std::string& message)
+		{
+			if (logger != nullptr)
+			{
+				logger->Log(Foundation::ELogLevel::Info, "ContentsRuntime", message);
+			}
+		};
+	}
 
 	Foundation::SCrashDumpConfig crashDumpConfig{};
 	crashDumpConfig.outputDirectory = (executableDirectory / "dumps" / "EchoServer").string();
@@ -424,10 +621,12 @@ int main(int argc, char* argv[])
 				currentContentStats.enqueueFailureCount >= previousContentStats.enqueueFailureCount
 					? currentContentStats.enqueueFailureCount - previousContentStats.enqueueFailureCount
 					: 0;
-			const auto* currentAuthStats = FindContentStats(currentContentStats, EchoServer::Contents::kAuthContentId);
-			const auto* previousAuthStats = FindContentStats(previousContentStats, EchoServer::Contents::kAuthContentId);
-			const auto* currentEchoStats = FindContentStats(currentContentStats, EchoServer::Contents::kEchoContentId);
-			const auto* previousEchoStats = FindContentStats(previousContentStats, EchoServer::Contents::kEchoContentId);
+			const auto currentAuthStats = AggregateContentStats(currentContentStats, EchoServer::Contents::kAuthContentId);
+			const auto previousAuthStats = AggregateContentStats(previousContentStats, EchoServer::Contents::kAuthContentId);
+			const auto currentLobbyStats = AggregateContentStats(currentContentStats, EchoServer::Contents::kLobbyContentId);
+			const auto previousLobbyStats = AggregateContentStats(previousContentStats, EchoServer::Contents::kLobbyContentId);
+			const auto currentRoomStats = AggregateContentStats(currentContentStats, EchoServer::Contents::kRoomContentId);
+			const auto previousRoomStats = AggregateContentStats(previousContentStats, EchoServer::Contents::kRoomContentId);
 			std::cout
 				<< "[EchoStats] sessions=" << currentStats.activeSessionCount
 				<< " acceptTPS=" << acceptTps
@@ -456,31 +655,35 @@ int main(int argc, char* argv[])
 				<< " enqueueCalls=" << currentContentStats.enqueuePacketCallCount
 				<< " moveTPS=" << moveTps
 				<< " enqueueFailTPS=" << enqueueFailTps
+				<< " roomCount=" << runtimeOptions.roomCount
+				<< " roomCapacity=" << runtimeOptions.roomCapacity
 				<< " runtimeEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.enqueuePacketLockWaitNs)
 				<< " runtimeEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.maxEnqueuePacketLockWaitNs)
 				<< " runtimeMoveLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.moveSessionLockWaitNs)
 				<< " runtimeMoveMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentContentStats.maxMoveSessionLockWaitNs)
-				<< " authSessions=" << (currentAuthStats != nullptr ? currentAuthStats->activeSessionCount : 0)
+				<< " authSessions=" << currentAuthStats.activeSessionCount
 				<< " authEnterTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::enterCount)
 				<< " authLeaveTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::leaveCount)
 				<< " authPacketTPS=" << DeltaThreadCount(currentAuthStats, previousAuthStats, &ContentsRuntime::Core::SContentThreadStats::packetCount)
-				<< " authQueue=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.packetQueueDepth : 0)
-				<< " authMaxQueue=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.maxPacketQueueDepth : 0)
-				<< " authPacketEnqueueCalls=" << (currentAuthStats != nullptr ? currentAuthStats->threadStats.enqueuePacketCallCount : 0)
-				<< " authPacketEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentAuthStats != nullptr ? currentAuthStats->threadStats.enqueuePacketLockWaitNs : 0)
-				<< " authPacketEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentAuthStats != nullptr ? currentAuthStats->threadStats.maxEnqueuePacketLockWaitNs : 0)
-				<< " echoSessions=" << (currentEchoStats != nullptr ? currentEchoStats->activeSessionCount : 0)
-				<< " echoEnterTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::enterCount)
-				<< " echoLeaveTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::leaveCount)
-				<< " echoPacketTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::packetCount)
-				<< " echoFrameTPS=" << DeltaThreadCount(currentEchoStats, previousEchoStats, &ContentsRuntime::Core::SContentThreadStats::frameCount)
-				<< " echoQueue=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.packetQueueDepth : 0)
-				<< " echoMaxQueue=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.maxPacketQueueDepth : 0)
-				<< " echoPacketEnqueueCalls=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.enqueuePacketCallCount : 0)
-				<< " echoPacketEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentEchoStats != nullptr ? currentEchoStats->threadStats.enqueuePacketLockWaitNs : 0)
-				<< " echoPacketEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentEchoStats != nullptr ? currentEchoStats->threadStats.maxEnqueuePacketLockWaitNs : 0)
-				<< " echoLastDelayFrame=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.lastDelayFrame : 0)
-				<< " echoMaxDelayFrame=" << (currentEchoStats != nullptr ? currentEchoStats->threadStats.maxDelayFrame : 0)
+				<< " authQueue=" << currentAuthStats.threadStats.packetQueueDepth
+				<< " authMaxQueue=" << currentAuthStats.threadStats.maxPacketQueueDepth
+				<< " authPacketEnqueueCalls=" << currentAuthStats.threadStats.enqueuePacketCallCount
+				<< " authPacketEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentAuthStats.threadStats.enqueuePacketLockWaitNs)
+				<< " authPacketEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentAuthStats.threadStats.maxEnqueuePacketLockWaitNs)
+				<< " lobbySessions=" << currentLobbyStats.activeSessionCount
+				<< " lobbyPacketTPS=" << DeltaThreadCount(currentLobbyStats, previousLobbyStats, &ContentsRuntime::Core::SContentThreadStats::packetCount)
+				<< " roomSessions=" << currentRoomStats.activeSessionCount
+				<< " roomEnterTPS=" << DeltaThreadCount(currentRoomStats, previousRoomStats, &ContentsRuntime::Core::SContentThreadStats::enterCount)
+				<< " roomLeaveTPS=" << DeltaThreadCount(currentRoomStats, previousRoomStats, &ContentsRuntime::Core::SContentThreadStats::leaveCount)
+				<< " roomPacketTPS=" << DeltaThreadCount(currentRoomStats, previousRoomStats, &ContentsRuntime::Core::SContentThreadStats::packetCount)
+				<< " roomFrameTPS=" << DeltaThreadCount(currentRoomStats, previousRoomStats, &ContentsRuntime::Core::SContentThreadStats::frameCount)
+				<< " roomQueue=" << currentRoomStats.threadStats.packetQueueDepth
+				<< " roomMaxQueue=" << currentRoomStats.threadStats.maxPacketQueueDepth
+				<< " roomPacketEnqueueCalls=" << currentRoomStats.threadStats.enqueuePacketCallCount
+				<< " roomPacketEnqueueLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentRoomStats.threadStats.enqueuePacketLockWaitNs)
+				<< " roomPacketEnqueueMaxLockUs=" << std::fixed << std::setprecision(2) << ToMicroseconds(currentRoomStats.threadStats.maxEnqueuePacketLockWaitNs)
+				<< " roomLastDelayFrame=" << currentRoomStats.threadStats.lastDelayFrame
+				<< " roomMaxDelayFrame=" << currentRoomStats.threadStats.maxDelayFrame
 				<< std::endl;
 			previousStats = currentStats;
 			previousContentStats = currentContentStats;

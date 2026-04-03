@@ -94,13 +94,18 @@
     </ClCompile>
     <ClCompile Include="Contents\Auth\FAuthContent.cpp" />
     <ClCompile Include="Contents\Echo\FEchoContent.cpp" />
+    <ClCompile Include="Contents\Lobby\FLobbyContent.cpp" />
+    <ClCompile Include="Contents\Room\FRoomRegistry.cpp" />
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Contents\Auth\FAuthContent.h" />
     <ClInclude Include="Contents\ContentTypes.h" />
     <ClInclude Include="Contents\Echo\FEchoContent.h" />
+    <ClInclude Include="Contents\Lobby\FLobbyContent.h" />
     <ClInclude Include="Pch.h" />
+    <ClInclude Include="Contents\Room\FRoomRegistry.h" />
+    <ClInclude Include="Contents\Room\RoomFlowTypes.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ContentsRuntime\ContentsRuntime.vcxproj">

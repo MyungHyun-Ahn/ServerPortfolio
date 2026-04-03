@@ -15,15 +15,20 @@ namespace ContentsRuntime::Core
 		virtual ~IContent() = default;
 
 		virtual FContentId GetContentId() const noexcept = 0;
+		virtual FContentInstanceId GetContentInstanceId() const noexcept
+		{
+			return static_cast<FContentInstanceId>(GetContentId());
+		}
 		virtual std::uint32_t GetTargetFps() const noexcept
 		{
 			return 30;
 		}
 
-		virtual void OnEnter(std::uint64_t sessionId, Bridge::IContentBridge& bridge) = 0;
-		virtual void OnLeave(std::uint64_t sessionId, Bridge::IContentBridge& bridge) = 0;
+		virtual void OnEnter(std::uint64_t sessionId, std::uint64_t routeGeneration, Bridge::IContentBridge& bridge) = 0;
+		virtual void OnLeave(std::uint64_t sessionId, std::uint64_t routeGeneration, Bridge::IContentBridge& bridge) = 0;
 		virtual void OnPacket(
 			std::uint64_t sessionId,
+			std::uint64_t routeGeneration,
 			std::uint16_t opcode,
 			std::span<const char> payload,
 			Bridge::IContentBridge& bridge) = 0;

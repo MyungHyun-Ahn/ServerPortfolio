@@ -15,10 +15,91 @@
 
 namespace Generated::Chat
 {
-	class FRoomSnapshotRq final : public NetworkLib::Packet::Serialization::IContentPacket
+	class FRoomListRq final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
 		static constexpr std::uint16_t kOpcode = 3000;
+
+	public:
+		std::uint16_t GetOpcode() const noexcept override
+		{
+			return kOpcode;
+		}
+
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return false;
+		}
+
+		std::size_t GetEstimatedBodySize() const noexcept override
+		{
+			return 0;
+		}
+
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
+		{
+		}
+
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
+		{
+			return true;
+		}
+	};
+
+	class FRoomListRp final : public NetworkLib::Packet::Serialization::IContentPacket
+	{
+	public:
+		static constexpr std::uint16_t kOpcode = 3001;
+
+		std::vector<std::uint32_t> roomIds;
+		std::vector<std::string> roomNames;
+		std::vector<std::uint32_t> participantCounts;
+		std::vector<std::uint32_t> capacities;
+		std::vector<std::uint8_t> joinableFlags;
+
+	public:
+		std::uint16_t GetOpcode() const noexcept override
+		{
+			return kOpcode;
+		}
+
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return false;
+		}
+
+		std::size_t GetEstimatedBodySize() const noexcept override
+		{
+			return NetworkLib::Packet::Serialization::GetSerializedSize(roomIds)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(roomNames)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(participantCounts)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(capacities)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(joinableFlags);
+		}
+
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
+		{
+			writer.Write(roomIds);
+			writer.Write(roomNames);
+			writer.Write(participantCounts);
+			writer.Write(capacities);
+			writer.Write(joinableFlags);
+		}
+
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
+		{
+			return reader.Read(roomIds)
+				&& reader.Read(roomNames)
+				&& reader.Read(participantCounts)
+				&& reader.Read(capacities)
+				&& reader.Read(joinableFlags);
+		}
+	};
+
+	class FRoomEnterRq final : public NetworkLib::Packet::Serialization::IContentPacket
+	{
+	public:
+		static constexpr std::uint16_t kOpcode = 3002;
 
 		std::uint32_t roomId;
 
@@ -49,15 +130,14 @@ namespace Generated::Chat
 		}
 	};
 
-	class FRoomSnapshotRp final : public NetworkLib::Packet::Serialization::IContentPacket
+	class FRoomEnterRp final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
-		static constexpr std::uint16_t kOpcode = 3001;
+		static constexpr std::uint16_t kOpcode = 3003;
 
 		std::uint32_t roomId;
-		std::vector<std::string> participants;
-		std::map<std::string, std::uint32_t> unreadCounts;
-		std::unordered_map<std::string, std::string> metadata;
+		bool success;
+		std::uint16_t resultCode;
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -73,50 +153,31 @@ namespace Generated::Chat
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
 			return NetworkLib::Packet::Serialization::GetSerializedSize(roomId)
-				+ NetworkLib::Packet::Serialization::GetSerializedSize(participants)
-				+ NetworkLib::Packet::Serialization::GetSerializedSize(unreadCounts)
-				+ NetworkLib::Packet::Serialization::GetSerializedSize(metadata);
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(success)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(resultCode);
 		}
 
 		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
 		{
 			writer.Write(roomId);
-			writer.Write(participants);
-			writer.Write(unreadCounts);
-			writer.Write(metadata);
+			writer.Write(success);
+			writer.Write(resultCode);
 		}
 
 		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
 		{
 			return reader.Read(roomId)
-				&& reader.Read(participants)
-				&& reader.Read(unreadCounts)
-				&& reader.Read(metadata);
+				&& reader.Read(success)
+				&& reader.Read(resultCode);
 		}
 	};
 
-	class FRoomBinarySnapshotNoti final : public NetworkLib::Packet::Serialization::IContentPacket
+	class FRoomChangeRq final : public NetworkLib::Packet::Serialization::IContentPacket
 	{
 	public:
-		static constexpr std::uint16_t kOpcode = 3002;
+		static constexpr std::uint16_t kOpcode = 3004;
 
-		std::uint32_t roomId;
-		void SetPayloadValue(std::span<const std::uint8_t> value) noexcept
-		{
-			m_payload = value;
-		}
-
-		std::span<const std::uint8_t> GetPayloadValue() const noexcept
-		{
-			NetworkLib::Packet::View::ValidateBorrowedViewAccess(m_borrowedViewScope);
-			return m_payload;
-		}
-
-
-		void BindBorrowedViewScope(const std::shared_ptr<NetworkLib::Packet::View::FBorrowedViewScopeState>& scope) noexcept override
-		{
-			m_borrowedViewScope = scope;
-		}
+		std::uint32_t targetRoomId;
 
 	public:
 		std::uint16_t GetOpcode() const noexcept override
@@ -126,30 +187,69 @@ namespace Generated::Chat
 
 		bool ContainsBorrowedViews() const noexcept override
 		{
-			return true;
+			return false;
 		}
 
 		std::size_t GetEstimatedBodySize() const noexcept override
 		{
-			return NetworkLib::Packet::Serialization::GetSerializedSize(roomId)
-				+ NetworkLib::Packet::Serialization::GetSerializedSize(m_payload);
+			return NetworkLib::Packet::Serialization::GetSerializedSize(targetRoomId);
 		}
 
 		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
 		{
-			writer.Write(roomId);
-			writer.Write(m_payload);
+			writer.Write(targetRoomId);
 		}
 
 		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
 		{
-			return reader.Read(roomId)
-				&& reader.Read(m_payload);
+			return reader.Read(targetRoomId);
+		}
+	};
+
+	class FRoomChangeRp final : public NetworkLib::Packet::Serialization::IContentPacket
+	{
+	public:
+		static constexpr std::uint16_t kOpcode = 3005;
+
+		std::uint32_t previousRoomId;
+		std::uint32_t currentRoomId;
+		bool success;
+		std::uint16_t resultCode;
+
+	public:
+		std::uint16_t GetOpcode() const noexcept override
+		{
+			return kOpcode;
 		}
 
-	private:
-		std::shared_ptr<NetworkLib::Packet::View::FBorrowedViewScopeState> m_borrowedViewScope;
-		std::span<const std::uint8_t> m_payload;
+		bool ContainsBorrowedViews() const noexcept override
+		{
+			return false;
+		}
+
+		std::size_t GetEstimatedBodySize() const noexcept override
+		{
+			return NetworkLib::Packet::Serialization::GetSerializedSize(previousRoomId)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(currentRoomId)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(success)
+				+ NetworkLib::Packet::Serialization::GetSerializedSize(resultCode);
+		}
+
+		void Serialize(NetworkLib::Packet::Serialization::FPacketWriter& writer) const override
+		{
+			writer.Write(previousRoomId);
+			writer.Write(currentRoomId);
+			writer.Write(success);
+			writer.Write(resultCode);
+		}
+
+		bool Deserialize(NetworkLib::Packet::Serialization::FPacketReader& reader) override
+		{
+			return reader.Read(previousRoomId)
+				&& reader.Read(currentRoomId)
+				&& reader.Read(success)
+				&& reader.Read(resultCode);
+		}
 	};
 
 }

@@ -83,6 +83,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Diagnostics\FCrashDump.cpp" />
+    <ClCompile Include="Diagnostics\Rtt\FRttCsvLogger.cpp" />
+    <ClCompile Include="Diagnostics\Rtt\FRttMetricsRuntime.cpp" />
+    <ClCompile Include="Diagnostics\Rtt\FRttThreadLocalCollector.cpp" />
     <ClCompile Include="Logging\FCompositeLogger.cpp" />
     <ClCompile Include="Logging\FConsoleLogger.cpp" />
     <ClCompile Include="Logging\FFileLogger.cpp" />
@@ -91,6 +94,10 @@
   <ItemGroup>
     <ClInclude Include="Diagnostics\CrashDumpTypes.h" />
     <ClInclude Include="Diagnostics\FCrashDump.h" />
+    <ClInclude Include="Diagnostics\Rtt\FRttCsvLogger.h" />
+    <ClInclude Include="Diagnostics\Rtt\FRttMetricsRuntime.h" />
+    <ClInclude Include="Diagnostics\Rtt\FRttThreadLocalCollector.h" />
+    <ClInclude Include="Diagnostics\Rtt\RttTypes.h" />
     <ClInclude Include="Pch.h" />
     <ClInclude Include="Logging\FCompositeLogger.h" />
     <ClInclude Include="Logging\FConsoleLogger.h" />

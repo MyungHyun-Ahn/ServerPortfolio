@@ -1,6 +1,10 @@
 #include "Pch.h"
 
+#include "Foundation/Diagnostics/Rtt/FRttCsvLogger.h"
+#include "Foundation/Diagnostics/Rtt/FRttMetricsRuntime.h"
+#include "Foundation/Diagnostics/Rtt/FRttThreadLocalCollector.h"
 #include "Crypto/FDefaultPacketCipher.h"
+#include "EchoServer/Contents/Room/RoomFlowTypes.h"
 #include "Generated/Packets/Chat/ChatPackets.h"
 #include "Generated/Packets/Echo/EchoPackets.h"
 #include "Generated/Packets/Login/LoginPackets.h"
@@ -11,12 +15,13 @@
 #include "Packet/View/FPacketView.h"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <memory>
+#include <optional>
 #include <random>
-#include <unordered_map>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -44,6 +49,14 @@ namespace
 		int reconnectProbabilityPercent = 0;
 		int reconnectDelayMs = 100;
 		int recvTimeoutMs = 0;
+		int roomListRecvTimeoutMs = -1;
+		int echoRecvTimeoutMs = -1;
+		std::string rttCsvPath;
+		int rttFlushIntervalSeconds = 60;
+		int roomChangeProbabilityPercent = 25;
+		int maxRoomEnterRetryCount = 5;
+		int maxRoomChangeRetryCount = 3;
+		int traceSessionIndex = 0;
 		bool enablePagePool = true;
 		int pageSize = 4096;
 		bool bootstrapTrace = false;
@@ -55,6 +68,26 @@ namespace
 		bool succeeded = false;
 		int receivedResponseCount = 0;
 		std::string errorMessage;
+	};
+
+	struct SRoomCandidate
+	{
+		std::uint32_t roomId = 0;
+		std::string roomName;
+		std::uint32_t participantCount = 0;
+		std::uint32_t capacity = 0;
+		bool joinable = false;
+	};
+
+	enum class ERttStage : std::uint8_t
+	{
+		LoginResponse = 0,
+		RoomList,
+		RoomEnter,
+		EchoResponse,
+		RoomChangeList,
+		RoomChange,
+		Count
 	};
 
 	bool TryParseInt(const char* valueText, int& outValue)
@@ -183,7 +216,9 @@ namespace
 			}
 			else if (argument == "--reconnect-probability-percent" && argumentIndex + 1 < argc)
 			{
-				if (!TryParseInt(argv[++argumentIndex], outOptions.reconnectProbabilityPercent) || outOptions.reconnectProbabilityPercent < 0 || outOptions.reconnectProbabilityPercent > 100)
+				if (!TryParseInt(argv[++argumentIndex], outOptions.reconnectProbabilityPercent) ||
+					outOptions.reconnectProbabilityPercent < 0 ||
+					outOptions.reconnectProbabilityPercent > 100)
 				{
 					return false;
 				}
@@ -198,6 +233,65 @@ namespace
 			else if (argument == "--recv-timeout-ms" && argumentIndex + 1 < argc)
 			{
 				if (!TryParseInt(argv[++argumentIndex], outOptions.recvTimeoutMs) || outOptions.recvTimeoutMs < 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--room-list-recv-timeout-ms" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.roomListRecvTimeoutMs) || outOptions.roomListRecvTimeoutMs < 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--echo-recv-timeout-ms" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.echoRecvTimeoutMs) || outOptions.echoRecvTimeoutMs < 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--rtt-csv-path" && argumentIndex + 1 < argc)
+			{
+				outOptions.rttCsvPath = argv[++argumentIndex];
+			}
+			else if (argument == "--rtt-flush-interval-seconds" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.rttFlushIntervalSeconds) ||
+					outOptions.rttFlushIntervalSeconds <= 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--room-change-probability-percent" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.roomChangeProbabilityPercent) ||
+					outOptions.roomChangeProbabilityPercent < 0 ||
+					outOptions.roomChangeProbabilityPercent > 100)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--max-room-enter-retries" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.maxRoomEnterRetryCount) ||
+					outOptions.maxRoomEnterRetryCount <= 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--max-room-change-retries" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.maxRoomChangeRetryCount) ||
+					outOptions.maxRoomChangeRetryCount <= 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--trace-session-index" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.traceSessionIndex) ||
+					outOptions.traceSessionIndex < 0)
 				{
 					return false;
 				}
@@ -230,13 +324,86 @@ namespace
 		return true;
 	}
 
+	int ResolveStageRecvTimeoutMs(const SClientOptions& options, const char* stageName)
+	{
+		if (stageName != nullptr)
+		{
+			const std::string_view stage(stageName);
+			if ((stage == "room-list" || stage == "room-change-list") && options.roomListRecvTimeoutMs >= 0)
+			{
+				return options.roomListRecvTimeoutMs;
+			}
+
+			if (stage == "echo-response" && options.echoRecvTimeoutMs >= 0)
+			{
+				return options.echoRecvTimeoutMs;
+			}
+		}
+
+		return options.recvTimeoutMs;
+	}
+
+	Foundation::Diagnostics::FRttStageIndex ToRttStageIndex(const ERttStage stage)
+	{
+		return static_cast<Foundation::Diagnostics::FRttStageIndex>(stage);
+	}
+
+	Foundation::Diagnostics::SRttMetricsConfig BuildRttMetricsConfig(const SClientOptions& options)
+	{
+		Foundation::Diagnostics::SRttMetricsConfig config{};
+		config.flushIntervalSeconds = options.rttFlushIntervalSeconds;
+		config.stageNames =
+		{
+			"login-response",
+			"room-list",
+			"room-enter",
+			"echo-response",
+			"room-change-list",
+			"room-change"
+		};
+		return config;
+	}
+
+	using FRttMetricsRuntime = Foundation::Diagnostics::FRttMetricsRuntime;
+	using FRttThreadLocalCollector = Foundation::Diagnostics::FRttThreadLocalCollector;
+	using FRttCsvLogger = Foundation::Diagnostics::FRttCsvLogger;
+	using SRttPendingRequest = Foundation::Diagnostics::SRttPendingRequest;
+
+	bool WaitUntilSocketReadable(SOCKET clientSocket, int timeoutMs)
+	{
+		if (timeoutMs <= 0)
+		{
+			return true;
+		}
+
+		fd_set readSet;
+		FD_ZERO(&readSet);
+		FD_SET(clientSocket, &readSet);
+
+		timeval timeout{};
+		timeout.tv_sec = timeoutMs / 1000;
+		timeout.tv_usec = static_cast<long>((timeoutMs % 1000) * 1000);
+		const int selectResult = select(0, &readSet, nullptr, nullptr, &timeout);
+		return selectResult > 0 && FD_ISSET(clientSocket, &readSet);
+	}
+
 	std::string BuildRequestMessage(int sessionIndex, int requestIndex, int payloadSize)
 	{
-		std::string message =
-			"echo-s" + std::to_string(sessionIndex) + "-r" + std::to_string(requestIndex);
+		std::ostringstream messageBuilder;
+		messageBuilder << "echo-s" << sessionIndex << "-r" << requestIndex;
+		std::string message = messageBuilder.str();
 		if (payloadSize <= static_cast<int>(message.size()))
 		{
-			message.resize(static_cast<std::size_t>(payloadSize));
+			// Even with a small payload budget, keep the per-session request key unique.
+			std::ostringstream compactBuilder;
+			compactBuilder << 'e'
+				<< std::uppercase << std::hex << std::setw(std::max(1, payloadSize - 1)) << std::setfill('0')
+				<< static_cast<std::uint32_t>(requestIndex);
+			message = compactBuilder.str();
+			if (static_cast<int>(message.size()) > payloadSize)
+			{
+				message = message.substr(static_cast<std::size_t>(message.size() - payloadSize));
+			}
 			return message;
 		}
 
@@ -289,8 +456,8 @@ namespace
 			}
 		}
 
-	return true;
-}
+		return true;
+	}
 
 	std::vector<std::string> BuildExpectedResponseMessages(const std::string& requestMessage, const SClientOptions& options)
 	{
@@ -368,9 +535,133 @@ namespace
 		return distribution(randomEngine) <= options.reconnectProbabilityPercent;
 	}
 
-	SSessionResult RunSingleSession(int sessionIndex, const SClientOptions& options)
+	bool ShouldAttemptRoomChange(const SClientOptions& options, std::mt19937& randomEngine)
+	{
+		if (options.roomChangeProbabilityPercent <= 0)
+		{
+			return false;
+		}
+
+		std::uniform_int_distribution<int> distribution(1, 100);
+		return distribution(randomEngine) <= options.roomChangeProbabilityPercent;
+	}
+
+	void TraceSession(const SClientOptions& options, int sessionIndex, const std::string& message)
+	{
+		if (!options.bootstrapTrace || sessionIndex != options.traceSessionIndex)
+		{
+			return;
+		}
+
+		std::cerr << "[trace][session " << sessionIndex << "] " << message << "\n";
+	}
+
+	bool SendContentPacketRequest(
+		SOCKET clientSocket,
+		NetworkLib::Crypto::FDefaultPacketCipher& packetCipher,
+		NetworkLib::Packet::Framing::FDefaultPacketFramer& packetFramer,
+		const NetworkLib::Packet::Serialization::IContentPacket& packet,
+		const std::uint8_t randomKey,
+		const SClientOptions& options,
+		std::string& outErrorMessage)
+	{
+		std::vector<char> serializedPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(packet);
+		packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), randomKey);
+
+		NetworkLib::Packet::Framing::SOutgoingPacket outgoingPacket{};
+		outgoingPacket.randomKey = randomKey;
+		outgoingPacket.checkSum =
+			NetworkLib::Packet::Framing::CalculatePacketChecksum(
+				serializedPayload.data(),
+				static_cast<std::int32_t>(serializedPayload.size()));
+		outgoingPacket.payload = serializedPayload.data();
+		outgoingPacket.payloadLength = static_cast<std::int32_t>(serializedPayload.size());
+
+		std::vector<char> outboundPacket;
+		if (!packetFramer.BuildPacket(outgoingPacket, outboundPacket))
+		{
+			outErrorMessage = "BuildPacket failed.";
+			return false;
+		}
+
+		if (!SendPacketWithOptionalChunking(clientSocket, outboundPacket, options.sendChunkSize, options.sendChunkDelayMs))
+		{
+			std::ostringstream oss;
+			oss << "send failed. error=" << WSAGetLastError();
+			outErrorMessage = oss.str();
+			return false;
+		}
+
+		return true;
+	}
+
+	bool TryBuildRoomCandidates(const Generated::Chat::FRoomListRp& responsePacket, std::vector<SRoomCandidate>& outCandidates)
+	{
+		const std::size_t roomCount = responsePacket.roomIds.size();
+		if (responsePacket.roomNames.size() != roomCount ||
+			responsePacket.participantCounts.size() != roomCount ||
+			responsePacket.capacities.size() != roomCount ||
+			responsePacket.joinableFlags.size() != roomCount)
+		{
+			return false;
+		}
+
+		outCandidates.clear();
+		outCandidates.reserve(roomCount);
+		for (std::size_t index = 0; index < roomCount; ++index)
+		{
+			outCandidates.push_back({
+				responsePacket.roomIds[index],
+				responsePacket.roomNames[index],
+				responsePacket.participantCounts[index],
+				responsePacket.capacities[index],
+				responsePacket.joinableFlags[index] != 0
+			});
+		}
+
+		return true;
+	}
+
+	std::vector<SRoomCandidate> BuildJoinableRoomCandidates(
+		const std::vector<SRoomCandidate>& roomCandidates,
+		const std::optional<std::uint32_t> excludedRoomId = std::nullopt)
+	{
+		std::vector<SRoomCandidate> joinableRooms;
+		for (const SRoomCandidate& roomCandidate : roomCandidates)
+		{
+			if (!roomCandidate.joinable)
+			{
+				continue;
+			}
+
+			if (excludedRoomId.has_value() && roomCandidate.roomId == excludedRoomId.value())
+			{
+				continue;
+			}
+
+			joinableRooms.push_back(roomCandidate);
+		}
+
+		return joinableRooms;
+	}
+
+	std::optional<SRoomCandidate> PickRandomRoomCandidate(
+		const std::vector<SRoomCandidate>& roomCandidates,
+		std::mt19937& randomEngine)
+	{
+		if (roomCandidates.empty())
+		{
+			return std::nullopt;
+		}
+
+		std::uniform_int_distribution<std::size_t> distribution(0, roomCandidates.size() - 1);
+		return roomCandidates[distribution(randomEngine)];
+	}
+
+	SSessionResult RunSingleSession(int sessionIndex, const SClientOptions& options, FRttMetricsRuntime* rttMetricsRuntime)
 	{
 		SSessionResult sessionResult{};
+		FRttThreadLocalCollector rttCollector(rttMetricsRuntime);
 		NetworkLib::Crypto::SDefaultPacketCipherConfig cipherConfig{};
 		cipherConfig.packetKey = kPacketKey;
 		NetworkLib::Crypto::FDefaultPacketCipher packetCipher(cipherConfig);
@@ -382,6 +673,7 @@ namespace
 		std::mt19937 randomEngine(static_cast<std::uint32_t>(GetTickCount64()) ^ static_cast<std::uint32_t>(sessionIndex * 2654435761u));
 		SOCKET clientSocket = INVALID_SOCKET;
 		bool requiresBootstrapAfterConnect = true;
+		std::optional<std::uint32_t> currentRoomId;
 
 		while (true)
 		{
@@ -393,19 +685,24 @@ namespace
 				}
 
 				requiresBootstrapAfterConnect = true;
+				currentRoomId.reset();
 			}
 
 			std::vector<char> inboundBuffer;
 			inboundBuffer.reserve(static_cast<std::size_t>(options.recvBufferSize) * 2);
 			std::vector<char> recvChunk(static_cast<std::size_t>(options.recvBufferSize));
 			std::unordered_map<std::string, int> expectedResponseCounts;
+			std::unordered_map<std::string, SRttPendingRequest> expectedResponseMetrics;
 			std::vector<char> sendBatchBuffer;
 			auto tryReceiveNextContentPacket =
 				[&](
 					const char* stageName,
 					NetworkLib::Packet::Framing::SFramedPacket& outFramedPacket,
-					NetworkLib::Packet::View::FPacketView& outContentPacketView) -> bool
+					NetworkLib::Packet::View::FPacketView& outContentPacketView,
+					const std::optional<ERttStage> timeoutStage = std::nullopt,
+					const SRttPendingRequest* successPendingRequest = nullptr) -> bool
 				{
+					const int effectiveRecvTimeoutMs = ResolveStageRecvTimeoutMs(options, stageName);
 					while (true)
 					{
 						if (packetFramer.TryExtractPacket(inboundBuffer, outFramedPacket))
@@ -420,7 +717,10 @@ namespace
 								return false;
 							}
 
-							packetCipher.Decode(outFramedPacket.payload.data(), static_cast<int>(outFramedPacket.payload.size()), outFramedPacket.randomKey);
+							packetCipher.Decode(
+								outFramedPacket.payload.data(),
+								static_cast<int>(outFramedPacket.payload.size()),
+								outFramedPacket.randomKey);
 
 							NetworkLib::Packet::View::FPacketView transportPacketView{};
 							transportPacketView.randomKey = outFramedPacket.randomKey;
@@ -434,13 +734,39 @@ namespace
 								return false;
 							}
 
+							if (successPendingRequest != nullptr)
+							{
+								rttCollector.RecordSample(*successPendingRequest, std::chrono::system_clock::now());
+							}
+
 							return true;
+						}
+
+						if (!WaitUntilSocketReadable(clientSocket, effectiveRecvTimeoutMs))
+						{
+							if (timeoutStage.has_value())
+							{
+								rttCollector.RecordTimeout(ToRttStageIndex(*timeoutStage), std::chrono::system_clock::now());
+							}
+
+							std::ostringstream oss;
+							oss << "recv failed at stage="
+								<< (stageName != nullptr ? stageName : "unknown")
+								<< " sessionIndex=" << sessionIndex
+								<< " error=" << WSAETIMEDOUT
+								<< " (timeout)";
+							sessionResult.errorMessage = oss.str();
+							return false;
 						}
 
 						const int recvBytes = recv(clientSocket, recvChunk.data(), static_cast<int>(recvChunk.size()), 0);
 						if (recvBytes <= 0)
 						{
 							const int errorCode = WSAGetLastError();
+							if (errorCode == WSAETIMEDOUT && timeoutStage.has_value())
+							{
+								rttCollector.RecordTimeout(ToRttStageIndex(*timeoutStage), std::chrono::system_clock::now());
+							}
 							std::ostringstream oss;
 							oss << "recv failed at stage="
 								<< (stageName != nullptr ? stageName : "unknown")
@@ -462,40 +788,30 @@ namespace
 			{
 				Generated::Login::FLoginRq loginRequest;
 				loginRequest.userId = options.loginUserIdBase + static_cast<std::uint32_t>(sessionIndex);
-
-				std::vector<char> loginPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(loginRequest);
-				const std::uint8_t loginRandomKey = static_cast<std::uint8_t>((0x21 + sessionIndex) & 0xFF);
-				packetCipher.Encode(loginPayload.data(), static_cast<int>(loginPayload.size()), loginRandomKey);
-
-				NetworkLib::Packet::Framing::SOutgoingPacket loginOutgoingPacket{};
-				loginOutgoingPacket.randomKey = loginRandomKey;
-				loginOutgoingPacket.checkSum =
-					NetworkLib::Packet::Framing::CalculatePacketChecksum(
-						loginPayload.data(),
-						static_cast<std::int32_t>(loginPayload.size()));
-				loginOutgoingPacket.payload = loginPayload.data();
-				loginOutgoingPacket.payloadLength = static_cast<std::int32_t>(loginPayload.size());
-
-				std::vector<char> loginWirePacket;
-				if (!packetFramer.BuildPacket(loginOutgoingPacket, loginWirePacket))
+				if (!SendContentPacketRequest(
+					clientSocket,
+					packetCipher,
+					packetFramer,
+					loginRequest,
+					static_cast<std::uint8_t>((0x21 + sessionIndex) & 0xFF),
+					options,
+					sessionResult.errorMessage))
 				{
-					sessionResult.errorMessage = "BuildPacket failed for login request.";
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
 					return sessionResult;
 				}
 
-				if (!SendPacketWithOptionalChunking(clientSocket, loginWirePacket, options.sendChunkSize, options.sendChunkDelayMs))
-				{
-					sessionResult.errorMessage = "send failed for login request.";
-					closesocket(clientSocket);
-					clientSocket = INVALID_SOCKET;
-					return sessionResult;
-				}
-
+				const SRttPendingRequest loginPendingRequest =
+					rttCollector.BeginRequest(ToRttStageIndex(ERttStage::LoginResponse), sessionIndex);
 				NetworkLib::Packet::Framing::SFramedPacket loginResponseFramedPacket{};
 				NetworkLib::Packet::View::FPacketView loginResponsePacketView{};
-				if (!tryReceiveNextContentPacket("login-response", loginResponseFramedPacket, loginResponsePacketView))
+				if (!tryReceiveNextContentPacket(
+					"login-response",
+					loginResponseFramedPacket,
+					loginResponsePacketView,
+					ERttStage::LoginResponse,
+					&loginPendingRequest))
 				{
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
@@ -535,144 +851,159 @@ namespace
 						<< " userId=" << loginResponse.userId << "\n";
 				}
 
-				const std::uint32_t roomId = 77u + static_cast<std::uint32_t>(sessionIndex);
-				Generated::Chat::FRoomSnapshotRq snapshotRequest;
-				snapshotRequest.roomId = roomId;
-
-				std::vector<char> serializedPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(snapshotRequest);
-				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x61 + sessionIndex) & 0xFF);
-				packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), requestRandomKey);
-
-				NetworkLib::Packet::Framing::SOutgoingPacket outgoingPacket{};
-				outgoingPacket.randomKey = requestRandomKey;
-				outgoingPacket.checkSum =
-					NetworkLib::Packet::Framing::CalculatePacketChecksum(
-						serializedPayload.data(),
-						static_cast<std::int32_t>(serializedPayload.size()));
-				outgoingPacket.payload = serializedPayload.data();
-				outgoingPacket.payloadLength = static_cast<std::int32_t>(serializedPayload.size());
-
-				std::vector<char> outboundPacket;
-				if (!packetFramer.BuildPacket(outgoingPacket, outboundPacket))
+				bool roomEntered = false;
+				for (int attemptIndex = 0; attemptIndex < options.maxRoomEnterRetryCount && !roomEntered; ++attemptIndex)
 				{
-					sessionResult.errorMessage = "BuildPacket failed for chat snapshot request.";
-					closesocket(clientSocket);
-					clientSocket = INVALID_SOCKET;
-					return sessionResult;
-				}
-
-				if (!SendPacketWithOptionalChunking(clientSocket, outboundPacket, options.sendChunkSize, options.sendChunkDelayMs))
-				{
-					sessionResult.errorMessage = "send failed for chat snapshot request.";
-					closesocket(clientSocket);
-					clientSocket = INVALID_SOCKET;
-					return sessionResult;
-				}
-
-				if (options.bootstrapTrace)
-				{
-					std::cerr << "bootstrap trace: snapshot request sent. sessionIndex=" << sessionIndex
-						<< " roomId=" << roomId << "\n";
-				}
-
-				bool receivedSnapshotResponse = false;
-				bool receivedBinarySnapshot = false;
-				while (!receivedSnapshotResponse || !receivedBinarySnapshot)
-				{
-					NetworkLib::Packet::Framing::SFramedPacket framedPacket{};
-					NetworkLib::Packet::View::FPacketView contentPacketView{};
-					if (!tryReceiveNextContentPacket("chat-bootstrap", framedPacket, contentPacketView))
+					Generated::Chat::FRoomListRq roomListRequest;
+					if (!SendContentPacketRequest(
+						clientSocket,
+						packetCipher,
+						packetFramer,
+						roomListRequest,
+						static_cast<std::uint8_t>((0x41 + sessionIndex + attemptIndex) & 0xFF),
+						options,
+						sessionResult.errorMessage))
 					{
 						closesocket(clientSocket);
 						clientSocket = INVALID_SOCKET;
 						return sessionResult;
 					}
 
-					if (contentPacketView.opcode == Generated::Chat::FRoomSnapshotRp::kOpcode)
+					const SRttPendingRequest roomListPendingRequest =
+						rttCollector.BeginRequest(ToRttStageIndex(ERttStage::RoomList), sessionIndex);
+					NetworkLib::Packet::Framing::SFramedPacket roomListFramedPacket{};
+					NetworkLib::Packet::View::FPacketView roomListPacketView{};
+					if (!tryReceiveNextContentPacket(
+						"room-list",
+						roomListFramedPacket,
+						roomListPacketView,
+						ERttStage::RoomList,
+						&roomListPendingRequest))
 					{
-						Generated::Chat::FRoomSnapshotRp snapshotResponse;
-						if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(contentPacketView, snapshotResponse))
-						{
-							sessionResult.errorMessage = "chat snapshot response deserialize failed.";
-							closesocket(clientSocket);
-							clientSocket = INVALID_SOCKET;
-							return sessionResult;
-						}
-
-						if (snapshotResponse.roomId != roomId || snapshotResponse.participants.size() != 3)
-						{
-							sessionResult.errorMessage = "chat snapshot response validation failed.";
-							closesocket(clientSocket);
-							clientSocket = INVALID_SOCKET;
-							return sessionResult;
-						}
-
-						receivedSnapshotResponse = true;
-						if (options.bootstrapTrace)
-						{
-							std::cerr << "bootstrap trace: snapshot response ok. sessionIndex=" << sessionIndex
-								<< " roomId=" << roomId << "\n";
-						}
-						continue;
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
 					}
 
-					if (contentPacketView.opcode == Generated::Chat::FRoomBinarySnapshotNoti::kOpcode)
+					if (roomListPacketView.opcode != Generated::Chat::FRoomListRp::kOpcode)
 					{
-						Generated::Chat::FRoomBinarySnapshotNoti binarySnapshot;
-						if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(contentPacketView, binarySnapshot))
-						{
-							sessionResult.errorMessage = "chat binary snapshot deserialize failed.";
-							closesocket(clientSocket);
-							clientSocket = INVALID_SOCKET;
-							return sessionResult;
-						}
-
-						if (!binarySnapshot.ContainsBorrowedViews())
-						{
-							sessionResult.errorMessage = "chat binary snapshot should report borrowed view payload.";
-							closesocket(clientSocket);
-							clientSocket = INVALID_SOCKET;
-							return sessionResult;
-						}
-
-						const std::array<std::uint8_t, 8> expectedPayload = {
-							static_cast<std::uint8_t>(roomId & 0xFF),
-							static_cast<std::uint8_t>((roomId >> 8) & 0xFF),
-							0x10, 0x20, 0x30, 0x40, 0x50, 0x60
-						};
-
-						const std::span<const std::uint8_t> binaryPayload = binarySnapshot.GetPayloadValue();
-						if (binarySnapshot.roomId != roomId || binaryPayload.size() != expectedPayload.size())
-						{
-							sessionResult.errorMessage = "chat binary snapshot validation failed.";
-							closesocket(clientSocket);
-							clientSocket = INVALID_SOCKET;
-							return sessionResult;
-						}
-
-						for (std::size_t payloadIndex = 0; payloadIndex < expectedPayload.size(); ++payloadIndex)
-						{
-							if (binaryPayload[payloadIndex] != expectedPayload[payloadIndex])
-							{
-								sessionResult.errorMessage = "chat binary snapshot payload mismatch.";
-								closesocket(clientSocket);
-								clientSocket = INVALID_SOCKET;
-								return sessionResult;
-							}
-						}
-
-						receivedBinarySnapshot = true;
-						if (options.bootstrapTrace)
-						{
-							std::cerr << "bootstrap trace: binary snapshot ok. sessionIndex=" << sessionIndex
-								<< " roomId=" << roomId << "\n";
-						}
-						continue;
+						std::ostringstream oss;
+						oss << "unexpected room list response opcode: " << roomListPacketView.opcode;
+						sessionResult.errorMessage = oss.str();
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
 					}
 
-					std::ostringstream oss;
-					oss << "unexpected pre-echo opcode: " << contentPacketView.opcode;
-					sessionResult.errorMessage = oss.str();
+					Generated::Chat::FRoomListRp roomListResponse;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(roomListPacketView, roomListResponse))
+					{
+						sessionResult.errorMessage = "room list response deserialize failed.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					std::vector<SRoomCandidate> roomCandidates;
+					if (!TryBuildRoomCandidates(roomListResponse, roomCandidates))
+					{
+						sessionResult.errorMessage = "room list response validation failed.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					const auto joinableRooms = BuildJoinableRoomCandidates(roomCandidates);
+					const auto targetRoomCandidate = PickRandomRoomCandidate(joinableRooms, randomEngine);
+					if (!targetRoomCandidate.has_value())
+					{
+						sessionResult.errorMessage = "no joinable room available.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					Generated::Chat::FRoomEnterRq roomEnterRequest;
+					roomEnterRequest.roomId = targetRoomCandidate->roomId;
+					TraceSession(options, sessionIndex, "send RoomEnterRq roomId=" + std::to_string(roomEnterRequest.roomId));
+					if (!SendContentPacketRequest(
+						clientSocket,
+						packetCipher,
+						packetFramer,
+						roomEnterRequest,
+						static_cast<std::uint8_t>((0x51 + sessionIndex + attemptIndex) & 0xFF),
+						options,
+						sessionResult.errorMessage))
+					{
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					const SRttPendingRequest roomEnterPendingRequest =
+						rttCollector.BeginRequest(ToRttStageIndex(ERttStage::RoomEnter), sessionIndex);
+					NetworkLib::Packet::Framing::SFramedPacket roomEnterFramedPacket{};
+					NetworkLib::Packet::View::FPacketView roomEnterPacketView{};
+					if (!tryReceiveNextContentPacket(
+						"room-enter",
+						roomEnterFramedPacket,
+						roomEnterPacketView,
+						ERttStage::RoomEnter,
+						&roomEnterPendingRequest))
+					{
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					if (roomEnterPacketView.opcode != Generated::Chat::FRoomEnterRp::kOpcode)
+					{
+						std::ostringstream oss;
+						oss << "unexpected room enter response opcode: " << roomEnterPacketView.opcode;
+						sessionResult.errorMessage = oss.str();
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					Generated::Chat::FRoomEnterRp roomEnterResponse;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(roomEnterPacketView, roomEnterResponse))
+					{
+						sessionResult.errorMessage = "room enter response deserialize failed.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					if (roomEnterResponse.success)
+					{
+						currentRoomId = roomEnterResponse.roomId;
+						TraceSession(options, sessionIndex, "recv RoomEnterRp success roomId=" + std::to_string(roomEnterResponse.roomId));
+						roomEntered = true;
+						if (options.bootstrapTrace)
+						{
+							std::cerr << "bootstrap trace: room enter ok. sessionIndex=" << sessionIndex
+								<< " roomId=" << roomEnterResponse.roomId << "\n";
+						}
+						break;
+					}
+
+					const auto resultCode = static_cast<EchoServer::Contents::ERoomFlowResultCode>(roomEnterResponse.resultCode);
+					if (!EchoServer::Contents::IsNormalRoomFlowFailure(resultCode))
+					{
+						std::ostringstream oss;
+						oss << "room enter failed with abnormal resultCode="
+							<< EchoServer::Contents::ToString(resultCode);
+						sessionResult.errorMessage = oss.str();
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+				}
+
+				if (!roomEntered)
+				{
+					sessionResult.errorMessage = "room enter retry exhausted.";
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
 					return sessionResult;
@@ -681,18 +1012,27 @@ namespace
 				requiresBootstrapAfterConnect = false;
 			}
 
+			std::vector<std::string> pendingBatchResponseMetrics;
 			for (int requestIndex = 0; requestIndex < options.requestCount; ++requestIndex)
-			{
+				{
 				const std::string requestMessage = BuildRequestMessage(sessionIndex, requestSequence++, options.payloadSize);
-				for (const std::string& expectedResponse : BuildExpectedResponseMessages(requestMessage, options))
+				const std::vector<std::string> expectedResponses = BuildExpectedResponseMessages(requestMessage, options);
+				for (const std::string& expectedResponse : expectedResponses)
 				{
 					++expectedResponseCounts[expectedResponse];
+					pendingBatchResponseMetrics.push_back(expectedResponse);
 				}
+
+				TraceSession(
+					options,
+					sessionIndex,
+					"sent echo batch requestCount=" + std::to_string(options.requestCount) +
+						" currentRoomId=" + (currentRoomId.has_value() ? std::to_string(*currentRoomId) : std::string("none")));
 
 				Generated::Echo::FEchoRq requestPacket;
 				requestPacket.SetMessageValue(requestMessage);
 				std::vector<char> serializedPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(requestPacket);
-				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x31 + requestSequence + sessionIndex) & 0xFF);
+				const std::uint8_t requestRandomKey = static_cast<std::uint8_t>((0x61 + requestSequence + sessionIndex) & 0xFF);
 				packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), requestRandomKey);
 
 				NetworkLib::Packet::Framing::SOutgoingPacket outgoingPacket{};
@@ -734,6 +1074,19 @@ namespace
 					return sessionResult;
 				}
 				sendBatchBuffer.clear();
+
+				const auto batchSentSteady = std::chrono::steady_clock::now();
+				const auto batchSentSystem = std::chrono::system_clock::now();
+				for (const std::string& expectedResponse : pendingBatchResponseMetrics)
+				{
+					SRttPendingRequest pendingRequest{};
+					pendingRequest.stageIndex = ToRttStageIndex(ERttStage::EchoResponse);
+					pendingRequest.sessionIndex = sessionIndex;
+					pendingRequest.sentSteady = batchSentSteady;
+					pendingRequest.sentSystem = batchSentSystem;
+					expectedResponseMetrics.insert_or_assign(expectedResponse, pendingRequest);
+				}
+				pendingBatchResponseMetrics.clear();
 			}
 
 			const int expectedResponseCount = options.requestCount * options.responseThreadCount * options.responsesPerThread;
@@ -743,7 +1096,11 @@ namespace
 			{
 				NetworkLib::Packet::Framing::SFramedPacket framedPacket{};
 				NetworkLib::Packet::View::FPacketView contentPacketView{};
-				if (!tryReceiveNextContentPacket("echo-response", framedPacket, contentPacketView))
+				if (!tryReceiveNextContentPacket(
+					"echo-response",
+					framedPacket,
+					contentPacketView,
+					ERttStage::EchoResponse))
 				{
 					closesocket(clientSocket);
 					clientSocket = INVALID_SOCKET;
@@ -778,7 +1135,11 @@ namespace
 				}
 
 				const std::string responseMessage(responsePacket.GetMessageValue());
-
+				TraceSession(
+					options,
+					sessionIndex,
+					"recv EchoRp message=" + responseMessage +
+						" currentRoomId=" + (currentRoomId.has_value() ? std::to_string(*currentRoomId) : std::string("none")));
 				auto expectedIt = expectedResponseCounts.find(responseMessage);
 				if (expectedIt == expectedResponseCounts.end() || expectedIt->second <= 0)
 				{
@@ -790,6 +1151,13 @@ namespace
 					return sessionResult;
 				}
 				--expectedIt->second;
+
+				auto pendingMetricIt = expectedResponseMetrics.find(responseMessage);
+				if (pendingMetricIt != expectedResponseMetrics.end())
+				{
+					rttCollector.RecordSample(pendingMetricIt->second, std::chrono::system_clock::now());
+					expectedResponseMetrics.erase(pendingMetricIt);
+				}
 
 				if (options.verbose)
 				{
@@ -814,6 +1182,161 @@ namespace
 				}
 			}
 
+			if (currentRoomId.has_value() && ShouldAttemptRoomChange(options, randomEngine))
+			{
+				for (int attemptIndex = 0; attemptIndex < options.maxRoomChangeRetryCount; ++attemptIndex)
+				{
+					Generated::Chat::FRoomListRq roomListRequest;
+					if (!SendContentPacketRequest(
+						clientSocket,
+						packetCipher,
+						packetFramer,
+						roomListRequest,
+						static_cast<std::uint8_t>((0x71 + sessionIndex + attemptIndex) & 0xFF),
+						options,
+						sessionResult.errorMessage))
+					{
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					const SRttPendingRequest roomChangeListPendingRequest =
+						rttCollector.BeginRequest(ToRttStageIndex(ERttStage::RoomChangeList), sessionIndex);
+					NetworkLib::Packet::Framing::SFramedPacket roomListFramedPacket{};
+					NetworkLib::Packet::View::FPacketView roomListPacketView{};
+					if (!tryReceiveNextContentPacket(
+						"room-change-list",
+						roomListFramedPacket,
+						roomListPacketView,
+						ERttStage::RoomChangeList,
+						&roomChangeListPendingRequest))
+					{
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					if (roomListPacketView.opcode != Generated::Chat::FRoomListRp::kOpcode)
+					{
+						std::ostringstream oss;
+						oss << "unexpected room list response opcode during change: " << roomListPacketView.opcode;
+						sessionResult.errorMessage = oss.str();
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					Generated::Chat::FRoomListRp roomListResponse;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(roomListPacketView, roomListResponse))
+					{
+						sessionResult.errorMessage = "room list response deserialize failed during change.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					std::vector<SRoomCandidate> roomCandidates;
+					if (!TryBuildRoomCandidates(roomListResponse, roomCandidates))
+					{
+						sessionResult.errorMessage = "room list response validation failed during change.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					const auto joinableRooms = BuildJoinableRoomCandidates(roomCandidates, currentRoomId);
+					const auto targetRoomCandidate = PickRandomRoomCandidate(joinableRooms, randomEngine);
+					if (!targetRoomCandidate.has_value())
+					{
+						break;
+					}
+
+					Generated::Chat::FRoomChangeRq roomChangeRequest;
+					roomChangeRequest.targetRoomId = targetRoomCandidate->roomId;
+					TraceSession(
+						options,
+						sessionIndex,
+						"send RoomChangeRq fromRoomId=" + (currentRoomId.has_value() ? std::to_string(*currentRoomId) : std::string("none")) +
+							" targetRoomId=" + std::to_string(roomChangeRequest.targetRoomId));
+					if (!SendContentPacketRequest(
+						clientSocket,
+						packetCipher,
+						packetFramer,
+						roomChangeRequest,
+						static_cast<std::uint8_t>((0x81 + sessionIndex + attemptIndex) & 0xFF),
+						options,
+						sessionResult.errorMessage))
+					{
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					const SRttPendingRequest roomChangePendingRequest =
+						rttCollector.BeginRequest(ToRttStageIndex(ERttStage::RoomChange), sessionIndex);
+					NetworkLib::Packet::Framing::SFramedPacket roomChangeFramedPacket{};
+					NetworkLib::Packet::View::FPacketView roomChangePacketView{};
+					if (!tryReceiveNextContentPacket(
+						"room-change",
+						roomChangeFramedPacket,
+						roomChangePacketView,
+						ERttStage::RoomChange,
+						&roomChangePendingRequest))
+					{
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					if (roomChangePacketView.opcode != Generated::Chat::FRoomChangeRp::kOpcode)
+					{
+						std::ostringstream oss;
+						oss << "unexpected room change response opcode: " << roomChangePacketView.opcode;
+						sessionResult.errorMessage = oss.str();
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					Generated::Chat::FRoomChangeRp roomChangeResponse;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(roomChangePacketView, roomChangeResponse))
+					{
+						sessionResult.errorMessage = "room change response deserialize failed.";
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+
+					if (roomChangeResponse.success)
+					{
+						TraceSession(
+							options,
+							sessionIndex,
+							"recv RoomChangeRp success previousRoomId=" + std::to_string(roomChangeResponse.previousRoomId) +
+								" currentRoomId=" + std::to_string(roomChangeResponse.currentRoomId));
+						currentRoomId = roomChangeResponse.currentRoomId;
+						break;
+					}
+
+					const auto resultCode = static_cast<EchoServer::Contents::ERoomFlowResultCode>(roomChangeResponse.resultCode);
+					TraceSession(
+						options,
+						sessionIndex,
+						"recv RoomChangeRp failure resultCode=" + std::string(EchoServer::Contents::ToString(resultCode)));
+					if (!EchoServer::Contents::IsNormalRoomFlowFailure(resultCode))
+					{
+						std::ostringstream oss;
+						oss << "room change failed with abnormal resultCode="
+							<< EchoServer::Contents::ToString(resultCode);
+						sessionResult.errorMessage = oss.str();
+						closesocket(clientSocket);
+						clientSocket = INVALID_SOCKET;
+						return sessionResult;
+					}
+				}
+			}
+
 			if (options.holdSeconds <= 0)
 			{
 				break;
@@ -825,6 +1348,7 @@ namespace
 				closesocket(clientSocket);
 				clientSocket = INVALID_SOCKET;
 				requiresBootstrapAfterConnect = true;
+				currentRoomId.reset();
 				if (options.reconnectDelayMs > 0)
 				{
 					std::this_thread::sleep_for(std::chrono::milliseconds(options.reconnectDelayMs));
@@ -847,6 +1371,7 @@ namespace
 			shutdown(clientSocket, SD_BOTH);
 			closesocket(clientSocket);
 		}
+
 		sessionResult.succeeded = true;
 		return sessionResult;
 	}
@@ -857,7 +1382,15 @@ int main(int argc, char* argv[])
 	SClientOptions options{};
 	if (!ParseArguments(argc, argv, options))
 	{
-		std::cerr << "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] [--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] [--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] [--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] [--recv-timeout-ms 0] [--disable-page-pool] [--page-size 4096] [--bootstrap-trace] [--quiet]\n";
+		std::cerr
+			<< "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] "
+			<< "[--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] "
+			<< "[--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] "
+			<< "[--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] "
+			<< "[--recv-timeout-ms 0] [--room-list-recv-timeout-ms -1] [--echo-recv-timeout-ms -1] "
+			<< "[--rtt-csv-path path] [--rtt-flush-interval-seconds 60] "
+			<< "[--room-change-probability-percent 25] [--max-room-enter-retries 5] "
+			<< "[--max-room-change-retries 3] [--disable-page-pool] [--page-size 4096] [--bootstrap-trace] [--quiet]\n";
 		return 1;
 	}
 
@@ -872,6 +1405,15 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	std::unique_ptr<FRttMetricsRuntime> rttMetricsRuntime;
+	std::unique_ptr<FRttCsvLogger> rttCsvLogger;
+	if (!options.rttCsvPath.empty())
+	{
+		rttMetricsRuntime = std::make_unique<FRttMetricsRuntime>(BuildRttMetricsConfig(options));
+		rttCsvLogger = std::make_unique<FRttCsvLogger>(*rttMetricsRuntime, options.rttCsvPath);
+		rttCsvLogger->Start();
+	}
+
 	std::vector<SSessionResult> sessionResults(static_cast<std::size_t>(options.sessionCount));
 	std::vector<std::thread> sessionThreads;
 	sessionThreads.reserve(static_cast<std::size_t>(options.sessionCount));
@@ -880,13 +1422,19 @@ int main(int argc, char* argv[])
 	{
 		sessionThreads.emplace_back([&, sessionIndex]()
 		{
-			sessionResults[static_cast<std::size_t>(sessionIndex)] = RunSingleSession(sessionIndex, options);
+			sessionResults[static_cast<std::size_t>(sessionIndex)] =
+				RunSingleSession(sessionIndex, options, rttMetricsRuntime.get());
 		});
 	}
 
 	for (std::thread& sessionThread : sessionThreads)
 	{
 		sessionThread.join();
+	}
+
+	if (rttCsvLogger)
+	{
+		rttCsvLogger->Stop();
 	}
 
 	WSACleanup();
@@ -916,6 +1464,7 @@ int main(int argc, char* argv[])
 		<< " intervalMs=" << options.intervalMs
 		<< " packetsPerSend=" << options.packetsPerSend
 		<< " reconnectProbabilityPercent=" << options.reconnectProbabilityPercent
+		<< " roomChangeProbabilityPercent=" << options.roomChangeProbabilityPercent
 		<< " holdSeconds=" << options.holdSeconds << "\n";
 	return 0;
 }

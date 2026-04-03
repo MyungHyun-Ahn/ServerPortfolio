@@ -649,44 +649,43 @@ namespace
 
 	STestResult RunGeneratedChatContainerPacketRoundTripTest()
 	{
-		Generated::Chat::FRoomSnapshotRp responsePacket;
-		responsePacket.roomId = 77;
-		responsePacket.participants = { "alpha", "bravo", "charlie" };
-		responsePacket.unreadCounts = {
-			{ "alpha", 1 },
-			{ "bravo", 3 },
-			{ "charlie", 5 }
-		};
-		responsePacket.metadata = {
-			{ "topic", "general" },
-			{ "owner", "alpha" }
-		};
+		Generated::Chat::FRoomListRp responsePacket;
+		responsePacket.roomIds = { 77, 78, 79 };
+		responsePacket.roomNames = { "Room-1", "Room-2", "Room-3" };
+		responsePacket.participantCounts = { 1, 2, 0 };
+		responsePacket.capacities = { 2, 2, 2 };
+		responsePacket.joinableFlags = { 1, 0, 1 };
 
 		std::vector<char> payload = NetworkLib::Packet::Serialization::SerializeContentBody(responsePacket);
-		Generated::Chat::FRoomSnapshotRp decodedPacket;
+		Generated::Chat::FRoomListRp decodedPacket;
 		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
 		{
 			return { false, "Generated chat container packet round trip", "DeserializeContentPacket failed" };
 		}
 
-		if (decodedPacket.roomId != responsePacket.roomId)
+		if (decodedPacket.roomIds != responsePacket.roomIds)
 		{
-			return { false, "Generated chat container packet round trip", "roomId mismatch" };
+			return { false, "Generated chat container packet round trip", "roomIds mismatch" };
 		}
 
-		if (decodedPacket.participants != responsePacket.participants)
+		if (decodedPacket.roomNames != responsePacket.roomNames)
 		{
-			return { false, "Generated chat container packet round trip", "participants mismatch" };
+			return { false, "Generated chat container packet round trip", "roomNames mismatch" };
 		}
 
-		if (decodedPacket.unreadCounts != responsePacket.unreadCounts)
+		if (decodedPacket.participantCounts != responsePacket.participantCounts)
 		{
-			return { false, "Generated chat container packet round trip", "unreadCounts mismatch" };
+			return { false, "Generated chat container packet round trip", "participantCounts mismatch" };
 		}
 
-		if (decodedPacket.metadata != responsePacket.metadata)
+		if (decodedPacket.capacities != responsePacket.capacities)
 		{
-			return { false, "Generated chat container packet round trip", "metadata mismatch" };
+			return { false, "Generated chat container packet round trip", "capacities mismatch" };
+		}
+
+		if (decodedPacket.joinableFlags != responsePacket.joinableFlags)
+		{
+			return { false, "Generated chat container packet round trip", "joinableFlags mismatch" };
 		}
 
 		return { true, "Generated chat container packet round trip", "passed" };
@@ -739,18 +738,12 @@ namespace
 			return { false, "Generated packet estimated size", "echo packet estimated size mismatch" };
 		}
 
-		Chat::FRoomSnapshotRp chatPacket;
-		chatPacket.roomId = 77;
-		chatPacket.participants = { "alpha", "bravo", "charlie" };
-		chatPacket.unreadCounts = {
-			{ "alpha", 1 },
-			{ "bravo", 3 },
-			{ "charlie", 5 }
-		};
-		chatPacket.metadata = {
-			{ "topic", "general" },
-			{ "owner", "alpha" }
-		};
+		Chat::FRoomListRp chatPacket;
+		chatPacket.roomIds = { 77, 78 };
+		chatPacket.roomNames = { "Room-1", "Room-2" };
+		chatPacket.participantCounts = { 1, 2 };
+		chatPacket.capacities = { 2, 2 };
+		chatPacket.joinableFlags = { 1, 0 };
 
 		const std::vector<char> chatPayload = SerializeContentBody(chatPacket);
 		if (chatPacket.GetEstimatedBodySize() != chatPayload.size())
@@ -792,48 +785,33 @@ namespace
 		return { true, "Packet bytes_view round trip", "passed" };
 	}
 
-	STestResult RunGeneratedChatBytesViewPacketRoundTripTest()
+	STestResult RunGeneratedRoomFlowPacketRoundTripTest()
 	{
 		using namespace Generated::Chat;
 		using namespace NetworkLib::Packet::Serialization;
 
-		const std::vector<std::uint8_t> originalPayload = { 10, 20, 30, 40, 50, 60 };
-		FRoomBinarySnapshotNoti packet;
-		packet.roomId = 88;
-		packet.SetPayloadValue(std::span<const std::uint8_t>(originalPayload.data(), originalPayload.size()));
+		FRoomChangeRp packet;
+		packet.previousRoomId = 77;
+		packet.currentRoomId = 78;
+		packet.success = true;
+		packet.resultCode = 0;
 
 		std::vector<char> payload = SerializeContentBody(packet);
-		FRoomBinarySnapshotNoti decodedPacket;
+		FRoomChangeRp decodedPacket;
 		if (!DeserializeContentPacket(payload.data(), payload.size(), decodedPacket))
 		{
-			return { false, "Generated chat bytes_view packet round trip", "DeserializeContentPacket failed" };
+			return { false, "Generated room flow packet round trip", "DeserializeContentPacket failed" };
 		}
 
-		if (!decodedPacket.ContainsBorrowedViews())
+		if (decodedPacket.previousRoomId != packet.previousRoomId ||
+			decodedPacket.currentRoomId != packet.currentRoomId ||
+			decodedPacket.success != packet.success ||
+			decodedPacket.resultCode != packet.resultCode)
 		{
-			return { false, "Generated chat bytes_view packet round trip", "packet should report borrowed view payload" };
+			return { false, "Generated room flow packet round trip", "packet mismatch" };
 		}
 
-		if (decodedPacket.roomId != packet.roomId)
-		{
-			return { false, "Generated chat bytes_view packet round trip", "roomId mismatch" };
-		}
-
-		const std::span<const std::uint8_t> decodedPayload = decodedPacket.GetPayloadValue();
-		if (decodedPayload.size() != originalPayload.size())
-		{
-			return { false, "Generated chat bytes_view packet round trip", "payload size mismatch" };
-		}
-
-		for (std::size_t index = 0; index < originalPayload.size(); ++index)
-		{
-			if (decodedPayload[index] != originalPayload[index])
-			{
-				return { false, "Generated chat bytes_view packet round trip", "payload mismatch" };
-			}
-		}
-
-		return { true, "Generated chat bytes_view packet round trip", "passed" };
+		return { true, "Generated room flow packet round trip", "passed" };
 	}
 
 	template <>
@@ -939,7 +917,7 @@ int main()
 	results.push_back(RunGeneratedChatContainerPacketRoundTripTest());
 	results.push_back(RunPacketScalarContainerBulkRoundTripTest());
 	results.push_back(RunPacketBytesViewRoundTripTest());
-	results.push_back(RunGeneratedChatBytesViewPacketRoundTripTest());
+	results.push_back(RunGeneratedRoomFlowPacketRoundTripTest());
 	results.push_back(RunGeneratedPacketEstimatedSizeTest());
 
 	bool allPassed = true;

@@ -24,8 +24,8 @@ namespace ContentsRuntime::Threading
 		void Stop();
 		Core::SContentThreadStats GetStatsSnapshot();
 
-		void EnqueueEnter(std::uint64_t sessionId);
-		void EnqueueLeave(std::uint64_t sessionId);
+		void EnqueueEnter(Core::SContentLifecycleEvent event);
+		void EnqueueLeave(Core::SContentLifecycleEvent event);
 		void EnqueuePacket(Core::FOwnedPacketEnvelope&& packet);
 
 	private:

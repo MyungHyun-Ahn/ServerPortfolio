@@ -9,8 +9,9 @@
 
 namespace EchoServer::Contents
 {
-	FAuthContent::FAuthContent(std::shared_ptr<Foundation::ILogger> logger)
+	FAuthContent::FAuthContent(std::shared_ptr<Foundation::ILogger> logger, SRuntimeOptions runtimeOptions)
 		: m_logger(std::move(logger))
+		, m_runtimeOptions(std::move(runtimeOptions))
 	{
 	}
 
@@ -19,38 +20,58 @@ namespace EchoServer::Contents
 		return kAuthContentId;
 	}
 
-	void FAuthContent::OnEnter(std::uint64_t sessionId, ContentsRuntime::Bridge::IContentBridge&)
+	ContentsRuntime::Core::FContentInstanceId FAuthContent::GetContentInstanceId() const noexcept
 	{
+		return kAuthContentInstanceId;
+	}
+
+	void FAuthContent::OnEnter(std::uint64_t sessionId, std::uint64_t routeGeneration, ContentsRuntime::Bridge::IContentBridge&)
+	{
+		m_sessionGenerations[sessionId] = routeGeneration;
 		std::ostringstream oss;
-		oss << "auth content enter. sessionId=" << sessionId;
+		oss << "auth content enter. sessionId=" << sessionId
+			<< " routeGeneration=" << routeGeneration;
 		Log(Foundation::ELogLevel::Info, oss.str());
 	}
 
-	void FAuthContent::OnLeave(std::uint64_t sessionId, ContentsRuntime::Bridge::IContentBridge&)
+	void FAuthContent::OnLeave(std::uint64_t sessionId, std::uint64_t routeGeneration, ContentsRuntime::Bridge::IContentBridge&)
 	{
+		const auto generationIt = m_sessionGenerations.find(sessionId);
+		const bool isCurrentGeneration =
+			generationIt != m_sessionGenerations.end() &&
+			generationIt->second == routeGeneration;
 		std::ostringstream oss;
-		oss << "auth content leave. sessionId=" << sessionId;
+		oss << "auth content leave. sessionId=" << sessionId
+			<< " routeGeneration=" << routeGeneration
+			<< " stale=" << (isCurrentGeneration ? 0 : 1);
 		Log(Foundation::ELogLevel::Info, oss.str());
+		if (isCurrentGeneration)
+		{
+			m_sessionGenerations.erase(sessionId);
+		}
 	}
 
 	void FAuthContent::OnPacket(
 		std::uint64_t sessionId,
+		std::uint64_t routeGeneration,
 		std::uint16_t opcode,
 		std::span<const char> payload,
 		ContentsRuntime::Bridge::IContentBridge& bridge)
 	{
-		if (opcode != Generated::Login::FLoginRq::kOpcode)
+		const auto currentContentInstanceId = bridge.GetCurrentContentInstanceId(sessionId);
+		if (!currentContentInstanceId.has_value() || *currentContentInstanceId != kAuthContentInstanceId)
 		{
-			if (opcode == Generated::Chat::FRoomSnapshotRq::kOpcode)
-			{
-				std::ostringstream oss;
-				oss << "bootstrap trace: snapshot request reached auth content before move completed. sessionId="
-					<< sessionId
-					<< " payloadBytes=" << payload.size();
-				Log(Foundation::ELogLevel::Warn, oss.str());
-			}
 			return;
 		}
+
+		const auto generationIt = m_sessionGenerations.find(sessionId);
+		if (generationIt == m_sessionGenerations.end() || generationIt->second != routeGeneration)
+		{
+			return;
+		}
+
+		if (opcode != Generated::Login::FLoginRq::kOpcode)
+			return;
 
 		Generated::Login::FLoginRq packet;
 		if (!ContentsRuntime::Bridge::DeserializeOwnedPacket(opcode, payload, packet))
@@ -68,15 +89,29 @@ namespace EchoServer::Contents
 			Log(success ? Foundation::ELogLevel::Info : Foundation::ELogLevel::Warn, oss.str());
 		}
 
+		if (success &&
+			m_runtimeOptions.bootstrapTrace &&
+			m_runtimeOptions.traceUserId != 0 &&
+			packet.userId == m_runtimeOptions.traceUserId &&
+			m_runtimeOptions.tracedSessionId != nullptr)
+		{
+			m_runtimeOptions.tracedSessionId->store(sessionId, std::memory_order_relaxed);
+			std::ostringstream oss;
+			oss << "bootstrap trace target mapped. userId=" << packet.userId
+				<< " sessionId=" << sessionId;
+			Log(Foundation::ELogLevel::Info, oss.str());
+		}
+
 		Generated::Login::FLoginRp responsePacket;
 		responsePacket.userId = packet.userId;
 		responsePacket.success = success;
 		if (success)
 		{
-			if (!bridge.MoveSession(sessionId, kEchoContentId))
+			const bool moveSucceeded = bridge.MoveSession(sessionId, kLobbyContentId);
+			if (!moveSucceeded)
 			{
 				std::ostringstream oss;
-				oss << "move to echo content failed. sessionId=" << sessionId
+				oss << "move to lobby content failed. sessionId=" << sessionId
 					<< " userId=" << packet.userId;
 				Log(Foundation::ELogLevel::Error, oss.str());
 				return;

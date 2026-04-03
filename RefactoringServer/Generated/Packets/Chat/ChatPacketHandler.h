@@ -14,9 +14,12 @@ namespace Generated::Chat
 	public:
 		virtual ~IChatPacketHandler() = default;
 
-		virtual bool HandleRoomSnapshotRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRq& packet) = 0;
-		virtual bool HandleRoomSnapshotRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomSnapshotRp& packet) = 0;
-		virtual bool HandleRoomBinarySnapshotNoti(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomBinarySnapshotNoti& packet) = 0;
+		virtual bool HandleRoomListRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomListRq& packet) = 0;
+		virtual bool HandleRoomListRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomListRp& packet) = 0;
+		virtual bool HandleRoomEnterRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomEnterRq& packet) = 0;
+		virtual bool HandleRoomEnterRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomEnterRp& packet) = 0;
+		virtual bool HandleRoomChangeRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomChangeRq& packet) = 0;
+		virtual bool HandleRoomChangeRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FRoomChangeRp& packet) = 0;
 	};
 
 	class IChatPacketDispatcher
@@ -33,54 +36,97 @@ namespace Generated::Chat
 		{
 			switch (packetView.opcode)
 			{
-			case FRoomSnapshotRq::kOpcode:
+			case FRoomListRq::kOpcode:
 				{
-					FRoomSnapshotRq packet;
+					FRoomListRq packet;
 					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
 
-					return HandleRoomSnapshotRq(server, sessionId, packet);
+					return HandleRoomListRq(server, sessionId, packet);
 				}
-			case FRoomSnapshotRp::kOpcode:
+			case FRoomListRp::kOpcode:
 				{
-					FRoomSnapshotRp packet;
+					FRoomListRp packet;
 					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
 
-					return HandleRoomSnapshotRp(server, sessionId, packet);
+					return HandleRoomListRp(server, sessionId, packet);
 				}
-			case FRoomBinarySnapshotNoti::kOpcode:
+			case FRoomEnterRq::kOpcode:
 				{
-					FRoomBinarySnapshotNoti packet;
-					NetworkLib::Packet::View::FBorrowedViewScope borrowedViewScope;
-					packet.BindBorrowedViewScope(borrowedViewScope.GetState());
+					FRoomEnterRq packet;
 					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
 					{
 						return false;
 					}
 
-					return HandleRoomBinarySnapshotNoti(server, sessionId, packet);
+					return HandleRoomEnterRq(server, sessionId, packet);
+				}
+			case FRoomEnterRp::kOpcode:
+				{
+					FRoomEnterRp packet;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
+					{
+						return false;
+					}
+
+					return HandleRoomEnterRp(server, sessionId, packet);
+				}
+			case FRoomChangeRq::kOpcode:
+				{
+					FRoomChangeRq packet;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
+					{
+						return false;
+					}
+
+					return HandleRoomChangeRq(server, sessionId, packet);
+				}
+			case FRoomChangeRp::kOpcode:
+				{
+					FRoomChangeRp packet;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
+					{
+						return false;
+					}
+
+					return HandleRoomChangeRp(server, sessionId, packet);
 				}
 			default:
 				return OnUnhandledPacket(server, sessionId, packetView);
 			}
 		}
 
-		bool HandleRoomSnapshotRq(NetworkLib::IServer&, std::uint64_t, const FRoomSnapshotRq&) override
+		bool HandleRoomListRq(NetworkLib::IServer&, std::uint64_t, const FRoomListRq&) override
 		{
 			return false;
 		}
 
-		bool HandleRoomSnapshotRp(NetworkLib::IServer&, std::uint64_t, const FRoomSnapshotRp&) override
+		bool HandleRoomListRp(NetworkLib::IServer&, std::uint64_t, const FRoomListRp&) override
 		{
 			return false;
 		}
 
-		bool HandleRoomBinarySnapshotNoti(NetworkLib::IServer&, std::uint64_t, const FRoomBinarySnapshotNoti&) override
+		bool HandleRoomEnterRq(NetworkLib::IServer&, std::uint64_t, const FRoomEnterRq&) override
+		{
+			return false;
+		}
+
+		bool HandleRoomEnterRp(NetworkLib::IServer&, std::uint64_t, const FRoomEnterRp&) override
+		{
+			return false;
+		}
+
+		bool HandleRoomChangeRq(NetworkLib::IServer&, std::uint64_t, const FRoomChangeRq&) override
+		{
+			return false;
+		}
+
+		bool HandleRoomChangeRp(NetworkLib::IServer&, std::uint64_t, const FRoomChangeRp&) override
 		{
 			return false;
 		}

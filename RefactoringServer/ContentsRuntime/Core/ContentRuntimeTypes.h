@@ -1,9 +1,11 @@
 #pragma once
 
-namespace ContentsRuntime::Core
-{
-	using FContentId = std::uint16_t;
-	inline constexpr FContentId kInvalidContentId = 0;
+	namespace ContentsRuntime::Core
+	{
+		using FContentId = std::uint16_t;
+		using FContentInstanceId = std::uint32_t;
+		inline constexpr FContentId kInvalidContentId = 0;
+	inline constexpr FContentInstanceId kInvalidContentInstanceId = 0;
 
 	enum class ERaceInjectionMode : std::uint8_t
 	{
@@ -17,20 +19,33 @@ namespace ContentsRuntime::Core
 	{
 		bool enableRaceInjection = false;
 		bool failFastOnRuntimeError = false;
+		bool enableTraceLogging = false;
 		std::uint32_t raceInjectionPeriod = 0;
 		ERaceInjectionMode raceInjectionMode = ERaceInjectionMode::SwitchToThread;
+		std::shared_ptr<std::atomic<std::uint64_t>> tracedSessionId;
+		std::function<void(const std::string&)> traceLogger;
 	};
 
 	struct FOwnedPacketEnvelope
 	{
 		std::uint64_t sessionId = 0;
+		std::uint64_t routeGeneration = 0;
 		std::uint16_t opcode = 0;
 		std::vector<char> payload;
+	};
+
+	struct SContentLifecycleEvent
+	{
+		std::uint64_t sessionId = 0;
+		std::uint64_t routeGeneration = 0;
+		std::shared_ptr<std::atomic<bool>> completionFlag;
+		std::function<void()> completionCallback;
 	};
 
 	struct SContentThreadStats
 	{
 		FContentId contentId = kInvalidContentId;
+		FContentInstanceId contentInstanceId = kInvalidContentInstanceId;
 		bool running = false;
 		std::uint64_t enqueueEnterCallCount = 0;
 		std::uint64_t enqueueLeaveCallCount = 0;
@@ -58,6 +73,7 @@ namespace ContentsRuntime::Core
 	struct SContentRuntimeContentStats
 	{
 		FContentId contentId = kInvalidContentId;
+		FContentInstanceId contentInstanceId = kInvalidContentInstanceId;
 		std::uint64_t activeSessionCount = 0;
 		SContentThreadStats threadStats;
 	};
