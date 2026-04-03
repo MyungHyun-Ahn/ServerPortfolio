@@ -17,6 +17,7 @@
 - `ContentsRuntime` lock-free 토글 정책은 [006_contents-runtime-lockfree-toggle-policy.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\006_contents-runtime-lockfree-toggle-policy.md)를 본다.
 - `ContentsRuntime` 관측 지표 설명은 [007_contents-runtime-observability-metrics.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\007_contents-runtime-observability-metrics.md)를 본다.
 - `ContentsRuntime` 디렉터리/브리지 정리 리뷰는 [008_contents-runtime-directory-and-bridge-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\008_contents-runtime-directory-and-bridge-review.md)를 본다.
+- `ContentsRuntime` lock-free inbox 6시간 검증 결과는 [009_contents-runtime-lockfree-validation-result.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\009_contents-runtime-lockfree-validation-result.md)를 본다.
 - 진단 모듈 리뷰는 [001_crash-dump-module-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\005_diagnostics\001_crash-dump-module-review.md)를 본다.
 - 로깅 모듈 리뷰는 [001_logger-module-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\006_logging\001_logger-module-review.md)를 본다.
 - 메모리풀 리뷰는 [001_memory-pool-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\003_memory\001_memory-pool-review.md)를 본다.

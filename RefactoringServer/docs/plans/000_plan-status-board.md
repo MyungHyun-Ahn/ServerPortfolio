@@ -18,7 +18,7 @@
 | `005` | NetworkLib Packet View | 완료 | zero-copy packet view 기반 정리 완료 |
 | `006` | Packet Schema Tooling | 완료 | `PacketGenerator`, generated packet/handler/router, `Login + Echo + Chat` 샘플까지 완료 |
 | `007` | NetworkLib Performance | 추가 확인 필요 | 최적화는 적용됐지만 장시간/고부하 검증과 최종 성능 결론 재확인 필요 |
-| `008` | ContentsRuntime | 진행 중 | 구조, 계측, enqueue 경량화, lock-free inbox 프로토타입 진행. 디렉터리 세분화와 `IContentBridge` 확장 반영, 안정성 검증 계속 필요 |
+| `008` | ContentsRuntime | 진행 중 | 구조, 계측, enqueue 경량화, lock-free inbox 프로토타입, 6시간 안정성 검증까지 완료. 추가 stress 조건과 실제 콘텐츠 확장은 계속 필요 |
 
 ## 3. 현재 우선순위
 1. `008_contents-runtime`
