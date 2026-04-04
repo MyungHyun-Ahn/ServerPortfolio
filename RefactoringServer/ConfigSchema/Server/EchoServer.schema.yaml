@@ -3,6 +3,10 @@ EchoServer:
     type: enum
     default: Iocp
     values: [Iocp, Rio, BoostAsio]
+  RioSendDispatchMode:
+    type: enum
+    default: Direct
+    values: [Direct, OwnerThread]
   BindIp: { type: string, default: 127.0.0.1, required: true }
   Port: { type: uint16, default: 19000, required: true }
   WorkerThreadCount: { type: int32, default: 2 }

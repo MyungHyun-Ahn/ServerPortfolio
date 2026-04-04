@@ -13,6 +13,12 @@ namespace Generated::Config::EchoServer
 		BoostAsio
 	};
 
+	enum class ERioSendDispatchMode
+	{
+		Direct,
+		OwnerThread
+	};
+
 	enum class ELogMinimumLevel
 	{
 		Debug,
@@ -56,6 +62,7 @@ namespace Generated::Config::EchoServer
 	struct SEchoServerConfig
 	{
 		EBackend Backend = EBackend::Iocp;
+		ERioSendDispatchMode RioSendDispatchMode = ERioSendDispatchMode::Direct;
 		std::string BindIp = "127.0.0.1";
 		std::uint16_t Port = static_cast<std::uint16_t>(19000);
 		std::int32_t WorkerThreadCount = static_cast<std::int32_t>(2);

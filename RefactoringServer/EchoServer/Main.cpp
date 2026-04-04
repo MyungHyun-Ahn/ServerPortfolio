@@ -279,6 +279,20 @@ namespace
 		return NetworkLib::Core::EBackendKind::Iocp;
 	}
 
+	NetworkLib::Core::ERioSendDispatchMode ToRioSendDispatchMode(
+		const Generated::Config::EchoServer::ERioSendDispatchMode sendDispatchMode) noexcept
+	{
+		switch (sendDispatchMode)
+		{
+		case Generated::Config::EchoServer::ERioSendDispatchMode::Direct:
+			return NetworkLib::Core::ERioSendDispatchMode::Direct;
+		case Generated::Config::EchoServer::ERioSendDispatchMode::OwnerThread:
+			return NetworkLib::Core::ERioSendDispatchMode::OwnerThread;
+		}
+
+		return NetworkLib::Core::ERioSendDispatchMode::Direct;
+	}
+
 	Foundation::ELogLevel ToLogLevel(const Generated::Config::EchoServer::ELogMinimumLevel logLevel) noexcept
 	{
 		switch (logLevel)
@@ -386,6 +400,7 @@ namespace
 		}
 
 		serverConfig.backendKind = ToBackendKind(configDocument.EchoServer.Backend);
+		serverConfig.rioSendDispatchMode = ToRioSendDispatchMode(configDocument.EchoServer.RioSendDispatchMode);
 		serverConfig.bindIp = configDocument.EchoServer.BindIp;
 		serverConfig.port = configDocument.EchoServer.Port;
 		serverConfig.workerThreadCount = std::max(1, configDocument.EchoServer.WorkerThreadCount);
@@ -638,6 +653,18 @@ int main(int argc, char* argv[])
 			else if (argument == "--config" && argumentIndex + 1 < argc)
 			{
 				++argumentIndex;
+			}
+			else if (argument == "--rio-send-dispatch-mode" && argumentIndex + 1 < argc)
+			{
+				const std::string mode = ToLowerAscii(argv[++argumentIndex]);
+				if (mode == "ownerthread" || mode == "owner")
+				{
+					serverConfig.rioSendDispatchMode = NetworkLib::Core::ERioSendDispatchMode::OwnerThread;
+				}
+				else
+				{
+					serverConfig.rioSendDispatchMode = NetworkLib::Core::ERioSendDispatchMode::Direct;
+				}
 			}
 			else if (argument == "--headless")
 			{

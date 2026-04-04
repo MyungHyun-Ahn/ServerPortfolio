@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <functional>

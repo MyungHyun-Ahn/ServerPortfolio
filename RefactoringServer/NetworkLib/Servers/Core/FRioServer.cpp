@@ -242,73 +242,16 @@ namespace NetworkLib::Core
 			return false;
 		}
 
-		auto* sendRequestContext = new FRioSession::SSendRequestContext{};
-		sendRequestContext->requestKind = FRioSession::ERequestKind::Send;
-		sendRequestContext->ownerSession = sessionContext;
-		sendRequestContext->packetBuffer = packetBuffer;
-		sendRequestContext->bufferId =
-			m_rioFunctionTable.RIORegisterBuffer(
-				packetBuffer->GetBuffer().data(),
-				static_cast<DWORD>(packetBuffer->GetBuffer().size()));
-		if (sendRequestContext->bufferId == RIO_INVALID_BUFFERID)
-		{
-			const int errorCode = WSAGetLastError();
-			std::ostringstream oss;
-			oss << "RIORegisterBuffer failed during send path. sessionId=" << sessionId
-				<< " error=" << errorCode;
-			Log(Foundation::ELogLevel::Error, oss.str());
-			FPacketBuffer::Release(packetBuffer);
-			delete sendRequestContext;
-			ReleaseSession(sessionContext);
-			return false;
-		}
-
-		sendRequestContext->buffer.BufferId = sendRequestContext->bufferId;
-		sendRequestContext->buffer.Offset = 0;
-		sendRequestContext->buffer.Length = static_cast<ULONG>(packetBuffer->GetBuffer().size());
-
-		bool sendResult = false;
-		sessionContext->OnSendQueued();
-		{
-			std::scoped_lock<std::mutex> requestQueueLock(sessionContext->GetRequestQueueMutex());
-			if (!sessionContext->IsClosing() && sessionContext->GetRequestQueue() != RIO_INVALID_RQ)
-			{
-				sessionContext->AcquireRef();
-				sendResult = m_rioFunctionTable.RIOSend(
-					sessionContext->GetRequestQueue(),
-					&sendRequestContext->buffer,
-					1,
-					0,
-					sendRequestContext) == TRUE;
-				if (!sendResult)
-				{
-					ReleaseSession(sessionContext);
-				}
-			}
-		}
-
-		if (!sendResult)
-		{
-			const int errorCode = WSAGetLastError();
-			std::ostringstream oss;
-			oss << "RIOSend failed. sessionId=" << sessionId << " error=" << errorCode;
-			Log(Foundation::ELogLevel::Warn, oss.str());
-			sessionContext->OnSendCompleted();
-			m_rioFunctionTable.RIODeregisterBuffer(sendRequestContext->bufferId);
-			FPacketBuffer::Release(packetBuffer);
-			delete sendRequestContext;
-			if (!sessionContext->IsClosing())
-			{
-				CloseSession(*sessionContext);
-			}
-			ReleaseSession(sessionContext);
-			return false;
-		}
-
-		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
-		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(length > 0 ? length : 0), std::memory_order_relaxed);
+		const bool sendResult =
+			m_serverConfig.rioSendDispatchMode == ERioSendDispatchMode::OwnerThread
+				? EnqueueOwnerThreadSend(
+					sessionId,
+					sessionContext->GetOwnerWorkerIndex(),
+					packetBuffer,
+					length)
+				: SubmitSendDirect(*sessionContext, sessionId, packetBuffer, length);
 		ReleaseSession(sessionContext);
-		return true;
+		return sendResult;
 	}
 
 	bool FRioServer::Disconnect(std::uint64_t sessionId)
@@ -586,6 +529,29 @@ namespace NetworkLib::Core
 				continue;
 			}
 
+			std::deque<SSendCommand> pendingCommands;
+			{
+				std::scoped_lock<std::mutex> sendCommandLock(worker->sendCommandMutex);
+				pendingCommands.swap(worker->sendCommands);
+			}
+
+			for (SSendCommand& command : pendingCommands)
+			{
+				if (command.packetBuffer != nullptr)
+				{
+					FPacketBuffer::Release(command.packetBuffer);
+					command.packetBuffer = nullptr;
+				}
+			}
+		}
+
+		for (const auto& worker : m_workers)
+		{
+			if (worker == nullptr)
+			{
+				continue;
+			}
+
 			if (worker->completionQueue != RIO_INVALID_CQ)
 			{
 				m_rioFunctionTable.RIOCloseCompletionQueue(worker->completionQueue);
@@ -727,6 +693,7 @@ namespace NetworkLib::Core
 
 		while (true)
 		{
+			DrainSendCommands(workerIndex);
 			if (!notificationArmed)
 			{
 				if (m_rioFunctionTable.RIONotify(worker.completionQueue) != SOCKET_ERROR)
@@ -765,13 +732,191 @@ namespace NetworkLib::Core
 				Log(Foundation::ELogLevel::Warn, oss.str());
 			}
 
+			DrainSendCommands(workerIndex);
 			if (!m_isRunning.load(std::memory_order_acquire) &&
 				m_activeSessionCount.load(std::memory_order_acquire) == 0 &&
-				FRioSession::GetPoolUsage() == 0)
+				FRioSession::GetPoolUsage() == 0 &&
+				!HasPendingSendCommands(workerIndex))
 			{
 				break;
 			}
 		}
+	}
+
+	void FRioServer::DrainSendCommands(std::uint32_t workerIndex)
+	{
+		if (workerIndex >= m_workers.size())
+		{
+			return;
+		}
+
+		std::deque<SSendCommand> pendingCommands;
+		{
+			std::scoped_lock<std::mutex> sendCommandLock(m_workers[workerIndex]->sendCommandMutex);
+			pendingCommands.swap(m_workers[workerIndex]->sendCommands);
+		}
+
+		for (SSendCommand& command : pendingCommands)
+		{
+			if (command.packetBuffer == nullptr)
+			{
+				continue;
+			}
+
+			FRioSession* sessionContext = AcquireSession(command.sessionId);
+			if (sessionContext == nullptr)
+			{
+				FPacketBuffer::Release(command.packetBuffer);
+				command.packetBuffer = nullptr;
+				continue;
+			}
+
+			if (sessionContext->GetOwnerWorkerIndex() != workerIndex)
+			{
+				std::ostringstream oss;
+				oss << "RIO owner-thread send command rejected because worker ownership mismatched. sessionId="
+					<< command.sessionId
+					<< " expectedWorkerIndex=" << sessionContext->GetOwnerWorkerIndex()
+					<< " actualWorkerIndex=" << workerIndex;
+				Log(Foundation::ELogLevel::Warn, oss.str());
+				FPacketBuffer::Release(command.packetBuffer);
+				command.packetBuffer = nullptr;
+				ReleaseSession(sessionContext);
+				continue;
+			}
+
+			SubmitSendDirect(*sessionContext, command.sessionId, command.packetBuffer, command.payloadLength);
+			command.packetBuffer = nullptr;
+			ReleaseSession(sessionContext);
+		}
+	}
+
+	bool FRioServer::SubmitSendDirect(
+		FRioSession& sessionContext,
+		const std::uint64_t sessionId,
+		FPacketBuffer* packetBuffer,
+		const std::int32_t payloadLength)
+	{
+		if (packetBuffer == nullptr)
+		{
+			Log(Foundation::ELogLevel::Warn, "RIO direct send rejected because packet buffer was null.");
+			return false;
+		}
+
+		auto* sendRequestContext = new FRioSession::SSendRequestContext{};
+		sendRequestContext->requestKind = FRioSession::ERequestKind::Send;
+		sendRequestContext->ownerSession = &sessionContext;
+		sendRequestContext->packetBuffer = packetBuffer;
+		sendRequestContext->bufferId =
+			m_rioFunctionTable.RIORegisterBuffer(
+				packetBuffer->GetBuffer().data(),
+				static_cast<DWORD>(packetBuffer->GetBuffer().size()));
+		if (sendRequestContext->bufferId == RIO_INVALID_BUFFERID)
+		{
+			const int errorCode = WSAGetLastError();
+			std::ostringstream oss;
+			oss << "RIORegisterBuffer failed during send path. sessionId=" << sessionId
+				<< " error=" << errorCode;
+			Log(Foundation::ELogLevel::Error, oss.str());
+			FPacketBuffer::Release(packetBuffer);
+			delete sendRequestContext;
+			return false;
+		}
+
+		sendRequestContext->buffer.BufferId = sendRequestContext->bufferId;
+		sendRequestContext->buffer.Offset = 0;
+		sendRequestContext->buffer.Length = static_cast<ULONG>(packetBuffer->GetBuffer().size());
+
+		bool sendResult = false;
+		sessionContext.OnSendQueued();
+		{
+			std::scoped_lock<std::mutex> requestQueueLock(sessionContext.GetRequestQueueMutex());
+			if (!sessionContext.IsClosing() && sessionContext.GetRequestQueue() != RIO_INVALID_RQ)
+			{
+				sessionContext.AcquireRef();
+				sendResult = m_rioFunctionTable.RIOSend(
+					sessionContext.GetRequestQueue(),
+					&sendRequestContext->buffer,
+					1,
+					0,
+					sendRequestContext) == TRUE;
+				if (!sendResult)
+				{
+					ReleaseSession(&sessionContext);
+				}
+			}
+		}
+
+		if (!sendResult)
+		{
+			const int errorCode = WSAGetLastError();
+			std::ostringstream oss;
+			oss << "RIOSend failed. sessionId=" << sessionId << " error=" << errorCode;
+			Log(Foundation::ELogLevel::Warn, oss.str());
+			sessionContext.OnSendCompleted();
+			m_rioFunctionTable.RIODeregisterBuffer(sendRequestContext->bufferId);
+			FPacketBuffer::Release(packetBuffer);
+			delete sendRequestContext;
+			if (!sessionContext.IsClosing())
+			{
+				CloseSession(sessionContext);
+			}
+			return false;
+		}
+
+		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
+		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(payloadLength > 0 ? payloadLength : 0), std::memory_order_relaxed);
+		return true;
+	}
+
+	bool FRioServer::EnqueueOwnerThreadSend(
+		const std::uint64_t sessionId,
+		const std::uint32_t ownerWorkerIndex,
+		FPacketBuffer* packetBuffer,
+		const std::int32_t payloadLength)
+	{
+		if (packetBuffer == nullptr)
+		{
+			Log(Foundation::ELogLevel::Warn, "RIO owner-thread send rejected because packet buffer was null.");
+			return false;
+		}
+
+		if (ownerWorkerIndex >= m_workers.size())
+		{
+			std::ostringstream oss;
+			oss << "RIO owner-thread send rejected because worker index was invalid. sessionId=" << sessionId
+				<< " workerIndex=" << ownerWorkerIndex;
+			Log(Foundation::ELogLevel::Warn, oss.str());
+			FPacketBuffer::Release(packetBuffer);
+			return false;
+		}
+
+		{
+			std::scoped_lock<std::mutex> sendCommandLock(m_workers[ownerWorkerIndex]->sendCommandMutex);
+			SSendCommand command{};
+			command.sessionId = sessionId;
+			command.packetBuffer = packetBuffer;
+			command.payloadLength = payloadLength;
+			m_workers[ownerWorkerIndex]->sendCommands.push_back(command);
+		}
+
+		if (m_workers[ownerWorkerIndex]->completionEvent != nullptr)
+		{
+			SetEvent(m_workers[ownerWorkerIndex]->completionEvent);
+		}
+
+		return true;
+	}
+
+	bool FRioServer::HasPendingSendCommands(const std::uint32_t workerIndex) const
+	{
+		if (workerIndex >= m_workers.size())
+		{
+			return false;
+		}
+
+		std::scoped_lock<std::mutex> sendCommandLock(m_workers[workerIndex]->sendCommandMutex);
+		return !m_workers[workerIndex]->sendCommands.empty();
 	}
 
 	bool FRioServer::AttachAcceptedSocket(SOCKET clientSocket)

@@ -26,9 +26,16 @@ namespace NetworkLib::Core
 		BoostAsio = 2
 	};
 
+	enum class ERioSendDispatchMode : std::uint32_t
+	{
+		Direct = 0,
+		OwnerThread = 1
+	};
+
 	struct SServerConfig
 	{
 		EBackendKind backendKind = EBackendKind::Iocp;
+		ERioSendDispatchMode rioSendDispatchMode = ERioSendDispatchMode::Direct;
 		std::string bindIp = "127.0.0.1";
 		std::uint16_t port = 19000;
 		std::uint32_t workerThreadCount = 2;

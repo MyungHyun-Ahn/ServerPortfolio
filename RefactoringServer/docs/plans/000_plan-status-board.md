@@ -25,6 +25,7 @@
    - 서버 OS 기준 장시간 성능 검증
    - 추가 병목 분석과 벤치마크
    - `RIO` 장시간 soak과 `IOCP` / `RIO` 비교
+   - `Rio` baseline vs owner-thread send 구조 A/B 비교
    - send/recv hot path 최적화와 등록 비용 개선
 2. `001_foundation`
    - Logging / Diagnostics / Config 경계 문서화

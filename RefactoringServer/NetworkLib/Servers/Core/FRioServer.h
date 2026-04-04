@@ -5,6 +5,11 @@ namespace NetworkLib
 	class IApplicationHandler;
 }
 
+namespace NetworkLib::Packet::Buffer
+{
+	class FPacketBuffer;
+}
+
 namespace NetworkLib::Session
 {
 	class FRioSession;
@@ -26,12 +31,21 @@ namespace NetworkLib::Core
 		SServerStats GetStatsSnapshot() const override;
 
 	private:
+		struct SSendCommand
+		{
+			std::uint64_t sessionId = 0;
+			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer = nullptr;
+			std::int32_t payloadLength = 0;
+		};
+
 		struct SRioWorker
 		{
 			HANDLE completionEvent = nullptr;
 			RIO_CQ completionQueue = RIO_INVALID_CQ;
 			std::thread thread;
 			std::atomic<std::uint32_t> activeSessionCount = 0;
+			std::mutex sendCommandMutex;
+			std::deque<SSendCommand> sendCommands;
 		};
 
 	private:
@@ -44,6 +58,18 @@ namespace NetworkLib::Core
 		void StopWorkers();
 		void AcceptLoop();
 		void WorkerLoop(std::uint32_t workerIndex);
+		void DrainSendCommands(std::uint32_t workerIndex);
+		bool SubmitSendDirect(
+			NetworkLib::Session::FRioSession& sessionContext,
+			std::uint64_t sessionId,
+			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer,
+			std::int32_t payloadLength);
+		bool EnqueueOwnerThreadSend(
+			std::uint64_t sessionId,
+			std::uint32_t ownerWorkerIndex,
+			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer,
+			std::int32_t payloadLength);
+		bool HasPendingSendCommands(std::uint32_t workerIndex) const;
 		bool AttachAcceptedSocket(SOCKET clientSocket);
 		bool PostRecv(NetworkLib::Session::FRioSession& sessionContext);
 		void HandleRioCompletion(const RIORESULT& completionResult);

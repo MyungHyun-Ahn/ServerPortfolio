@@ -18,6 +18,14 @@ namespace Generated::Config::EchoServer
 		}
 	};
 
+	constexpr std::array<Foundation::Config::SConfigEnumValue<ERioSendDispatchMode>, 2> kEchoServerRioSendDispatchModeEnumValues =
+	{
+		{
+			{ "Direct", ERioSendDispatchMode::Direct },
+			{ "OwnerThread", ERioSendDispatchMode::OwnerThread }
+		}
+	};
+
 	constexpr std::array<Foundation::Config::SConfigEnumValue<ELogMinimumLevel>, 4> kEchoServerLogMinimumLevelEnumValues =
 	{
 		{
@@ -89,9 +97,10 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		constexpr std::array<std::string_view, 18> kEchoServerKnownKeys =
+		constexpr std::array<std::string_view, 19> kEchoServerKnownKeys =
 		{
 			"Backend",
+			"RioSendDispatchMode",
 			"BindIp",
 			"Port",
 			"WorkerThreadCount",
@@ -141,6 +150,11 @@ namespace Generated::Config::EchoServer
 		}
 
 		if (!reader.ReadOptionalEnum("EchoServer", "Backend", kEchoServerBackendEnumValues, outConfig.EchoServer.Backend, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalEnum("EchoServer", "RioSendDispatchMode", kEchoServerRioSendDispatchModeEnumValues, outConfig.EchoServer.RioSendDispatchMode, outError))
 		{
 			return false;
 		}

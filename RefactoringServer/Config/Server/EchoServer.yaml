@@ -4,6 +4,8 @@
 EchoServer:
   # Allowed: Iocp, Rio, BoostAsio
   Backend: Iocp
+  # Allowed: Direct, OwnerThread
+  RioSendDispatchMode: Direct
   BindIp: 127.0.0.1
   Port: 19000
   WorkerThreadCount: 2
