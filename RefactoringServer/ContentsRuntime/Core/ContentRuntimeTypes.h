@@ -1,11 +1,66 @@
 #pragma once
 
-	namespace ContentsRuntime::Core
-	{
-		using FContentId = std::uint16_t;
-		using FContentInstanceId = std::uint32_t;
-		inline constexpr FContentId kInvalidContentId = 0;
+namespace ContentsRuntime::Core
+{
+	using FContentId = std::uint16_t;
+	using FContentInstanceId = std::uint64_t;
+	inline constexpr FContentId kInvalidContentId = 0;
 	inline constexpr FContentInstanceId kInvalidContentInstanceId = 0;
+	inline constexpr std::uint32_t kContentInstanceIdContentBitCount = 16;
+	inline constexpr std::uint32_t kContentInstanceIdReserveBitCount = 4;
+	inline constexpr std::uint32_t kContentInstanceIdSequenceBitCount =
+		64 - kContentInstanceIdContentBitCount - kContentInstanceIdReserveBitCount;
+	inline constexpr std::uint64_t kContentInstanceIdContentMask =
+		(std::uint64_t{ 1 } << kContentInstanceIdContentBitCount) - 1;
+	inline constexpr std::uint64_t kContentInstanceIdReserveMask =
+		(std::uint64_t{ 1 } << kContentInstanceIdReserveBitCount) - 1;
+	inline constexpr std::uint64_t kContentInstanceIdSequenceMask =
+		(std::uint64_t{ 1 } << kContentInstanceIdSequenceBitCount) - 1;
+	inline constexpr std::uint32_t kContentInstanceIdReserveShift = kContentInstanceIdSequenceBitCount;
+	inline constexpr std::uint32_t kContentInstanceIdContentShift =
+		kContentInstanceIdSequenceBitCount + kContentInstanceIdReserveBitCount;
+	inline constexpr std::uint8_t kDefaultContentInstanceReserveBits = 0;
+
+	inline constexpr bool IsValidContentInstanceId(const FContentInstanceId contentInstanceId) noexcept
+	{
+		return contentInstanceId != kInvalidContentInstanceId;
+	}
+
+	inline constexpr FContentInstanceId MakeContentInstanceId(
+		const FContentId contentId,
+		const std::uint8_t reserveBits,
+		const std::uint64_t sequence) noexcept
+	{
+		if (contentId == kInvalidContentId ||
+			(static_cast<std::uint64_t>(contentId) & ~kContentInstanceIdContentMask) != 0 ||
+			(static_cast<std::uint64_t>(reserveBits) & ~kContentInstanceIdReserveMask) != 0 ||
+			(sequence & ~kContentInstanceIdSequenceMask) != 0)
+		{
+			return kInvalidContentInstanceId;
+		}
+
+		return
+			(static_cast<FContentInstanceId>(contentId) << kContentInstanceIdContentShift) |
+			(static_cast<FContentInstanceId>(reserveBits) << kContentInstanceIdReserveShift) |
+			static_cast<FContentInstanceId>(sequence);
+	}
+
+	inline constexpr FContentId ExtractContentId(const FContentInstanceId contentInstanceId) noexcept
+	{
+		return static_cast<FContentId>(
+			(contentInstanceId >> kContentInstanceIdContentShift) & kContentInstanceIdContentMask);
+	}
+
+	inline constexpr std::uint8_t ExtractContentInstanceReserveBits(const FContentInstanceId contentInstanceId) noexcept
+	{
+		return static_cast<std::uint8_t>(
+			(contentInstanceId >> kContentInstanceIdReserveShift) & kContentInstanceIdReserveMask);
+	}
+
+	inline constexpr std::uint64_t ExtractContentInstanceSequence(const FContentInstanceId contentInstanceId) noexcept
+	{
+		return contentInstanceId & kContentInstanceIdSequenceMask;
+	}
 
 	enum class ERaceInjectionMode : std::uint8_t
 	{

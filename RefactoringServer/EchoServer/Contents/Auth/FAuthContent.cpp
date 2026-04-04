@@ -9,8 +9,12 @@
 
 namespace EchoServer::Contents
 {
-	FAuthContent::FAuthContent(std::shared_ptr<Foundation::ILogger> logger, SRuntimeOptions runtimeOptions)
+	FAuthContent::FAuthContent(
+		std::shared_ptr<Foundation::ILogger> logger,
+		const ContentsRuntime::Core::FContentInstanceId contentInstanceId,
+		SRuntimeOptions runtimeOptions)
 		: m_logger(std::move(logger))
+		, m_contentInstanceId(contentInstanceId)
 		, m_runtimeOptions(std::move(runtimeOptions))
 	{
 	}
@@ -22,7 +26,7 @@ namespace EchoServer::Contents
 
 	ContentsRuntime::Core::FContentInstanceId FAuthContent::GetContentInstanceId() const noexcept
 	{
-		return kAuthContentInstanceId;
+		return m_contentInstanceId;
 	}
 
 	void FAuthContent::OnEnter(std::uint64_t sessionId, std::uint64_t routeGeneration, ContentsRuntime::Bridge::IContentBridge&)
@@ -59,7 +63,7 @@ namespace EchoServer::Contents
 		ContentsRuntime::Bridge::IContentBridge& bridge)
 	{
 		const auto currentContentInstanceId = bridge.GetCurrentContentInstanceId(sessionId);
-		if (!currentContentInstanceId.has_value() || *currentContentInstanceId != kAuthContentInstanceId)
+		if (!currentContentInstanceId.has_value() || *currentContentInstanceId != m_contentInstanceId)
 		{
 			return;
 		}

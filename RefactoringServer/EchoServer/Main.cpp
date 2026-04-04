@@ -5,6 +5,7 @@
 #include "Foundation/Logging/FConsoleLogger.h"
 #include "Foundation/Logging/FFileLogger.h"
 #include "Foundation/Logging/ILogger.h"
+#include "ContentsRuntime/Core/FContentInstanceIdAllocator.h"
 #include "ContentsRuntime/Routing/FContentRuntime.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "EchoServer/Contents/Auth/FAuthContent.h"
@@ -24,6 +25,7 @@
 #include <chrono>
 #include <filesystem>
 #include <Psapi.h>
+#include <stdexcept>
 #include <thread>
 #include <Windows.h>
 
@@ -217,14 +219,32 @@ namespace
 		{
 			m_contentRuntime.SetConfig(contentRuntimeConfig);
 			m_roomRegistry = std::make_shared<EchoServer::Contents::FRoomRegistry>();
+			ContentsRuntime::Core::FContentInstanceIdAllocator contentInstanceIdAllocator;
+			const ContentsRuntime::Core::FContentInstanceId authContentInstanceId =
+				contentInstanceIdAllocator.Allocate(EchoServer::Contents::kAuthContentId);
+			const ContentsRuntime::Core::FContentInstanceId lobbyContentInstanceId =
+				contentInstanceIdAllocator.Allocate(EchoServer::Contents::kLobbyContentId);
+			if (!ContentsRuntime::Core::IsValidContentInstanceId(authContentInstanceId) ||
+				!ContentsRuntime::Core::IsValidContentInstanceId(lobbyContentInstanceId))
+			{
+				throw std::runtime_error("content instance id allocation failed.");
+			}
+
 			std::vector<EchoServer::Contents::SRoomInfoSnapshot> roomDefinitions;
 			roomDefinitions.reserve(static_cast<std::size_t>(std::max(1, m_runtimeOptions.roomCount)));
 			for (int roomIndex = 0; roomIndex < std::max(1, m_runtimeOptions.roomCount); ++roomIndex)
 			{
 				const std::uint32_t roomOrdinal = static_cast<std::uint32_t>(roomIndex);
+				const ContentsRuntime::Core::FContentInstanceId roomContentInstanceId =
+					contentInstanceIdAllocator.Allocate(EchoServer::Contents::kRoomContentId);
+				if (!ContentsRuntime::Core::IsValidContentInstanceId(roomContentInstanceId))
+				{
+					throw std::runtime_error("room content instance id allocation failed.");
+				}
+
 				roomDefinitions.push_back({
 					EchoServer::Contents::MakeRoomId(roomOrdinal),
-					EchoServer::Contents::MakeRoomContentInstanceId(roomOrdinal),
+					roomContentInstanceId,
 					"Room-" + std::to_string(roomOrdinal + 1),
 					0,
 					static_cast<std::uint32_t>(std::max(1, m_runtimeOptions.roomCapacity)),
@@ -234,9 +254,13 @@ namespace
 			m_roomRegistry->Initialize(roomDefinitions);
 
 			m_contentRuntime.RegisterContent(
-				std::make_unique<EchoServer::Contents::FAuthContent>(m_logger, m_runtimeOptions));
-				m_contentRuntime.RegisterContent(
-					std::make_unique<EchoServer::Contents::FLobbyContent>(m_logger, m_roomRegistry, m_runtimeOptions));
+				std::make_unique<EchoServer::Contents::FAuthContent>(m_logger, authContentInstanceId, m_runtimeOptions));
+			m_contentRuntime.RegisterContent(
+				std::make_unique<EchoServer::Contents::FLobbyContent>(
+					m_logger,
+					lobbyContentInstanceId,
+					m_roomRegistry,
+					m_runtimeOptions));
 			for (const auto& roomDefinition : roomDefinitions)
 			{
 				m_contentRuntime.RegisterContent(

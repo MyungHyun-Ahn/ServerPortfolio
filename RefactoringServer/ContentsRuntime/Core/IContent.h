@@ -17,7 +17,7 @@ namespace ContentsRuntime::Core
 		virtual FContentId GetContentId() const noexcept = 0;
 		virtual FContentInstanceId GetContentInstanceId() const noexcept
 		{
-			return static_cast<FContentInstanceId>(GetContentId());
+			return kInvalidContentInstanceId;
 		}
 		virtual std::uint32_t GetTargetFps() const noexcept
 		{

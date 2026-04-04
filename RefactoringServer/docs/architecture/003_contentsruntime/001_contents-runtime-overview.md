@@ -30,6 +30,11 @@
   - `contentInstanceId -> ownerThread`
   - `contentInstanceId -> contentId`
 - 기본 인스턴스가 필요한 경우에는 `contentId -> default contentInstanceId` 매핑을 사용한다.
+- `contentInstanceId`는 현재 `uint64_t`이며 다음 비트 정책을 사용한다.
+  - `contentId`: 16비트
+  - `reserve`: 4비트
+  - `sequence`: 44비트
+- 증가값 발급은 `Foundation/Ids`의 공용 allocator primitive가 담당하고, `ContentsRuntime`는 `contentId`별 독립 sequence allocator를 관리하며 이를 `contentInstanceId`로 인코딩한다.
 
 ## 5. 패킷 처리 흐름
 1. `NetworkLib`가 패킷을 수신한다.

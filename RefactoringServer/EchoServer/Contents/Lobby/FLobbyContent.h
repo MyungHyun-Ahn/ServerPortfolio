@@ -12,6 +12,7 @@ namespace EchoServer::Contents
 	public:
 		FLobbyContent(
 			std::shared_ptr<Foundation::ILogger> logger,
+			ContentsRuntime::Core::FContentInstanceId contentInstanceId,
 			std::shared_ptr<FRoomRegistry> roomRegistry,
 			SRuntimeOptions runtimeOptions);
 
@@ -38,6 +39,7 @@ namespace EchoServer::Contents
 
 	private:
 		std::shared_ptr<Foundation::ILogger> m_logger;
+		ContentsRuntime::Core::FContentInstanceId m_contentInstanceId = ContentsRuntime::Core::kInvalidContentInstanceId;
 		std::shared_ptr<FRoomRegistry> m_roomRegistry;
 		SRuntimeOptions m_runtimeOptions;
 		std::unordered_map<std::uint64_t, std::uint64_t> m_sessionGenerations;

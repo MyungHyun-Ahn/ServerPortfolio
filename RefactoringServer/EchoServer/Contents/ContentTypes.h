@@ -7,15 +7,7 @@ namespace EchoServer::Contents
 	inline constexpr ContentsRuntime::Core::FContentId kAuthContentId = 1;
 	inline constexpr ContentsRuntime::Core::FContentId kLobbyContentId = 2;
 	inline constexpr ContentsRuntime::Core::FContentId kRoomContentId = 3;
-	inline constexpr ContentsRuntime::Core::FContentInstanceId kAuthContentInstanceId = 1001;
-	inline constexpr ContentsRuntime::Core::FContentInstanceId kLobbyContentInstanceId = 2001;
-	inline constexpr ContentsRuntime::Core::FContentInstanceId kRoomContentInstanceIdBase = 3001;
 	inline constexpr std::uint32_t kRoomIdBase = 77;
-
-	inline constexpr ContentsRuntime::Core::FContentInstanceId MakeRoomContentInstanceId(const std::uint32_t index) noexcept
-	{
-		return kRoomContentInstanceIdBase + index;
-	}
 
 	inline constexpr std::uint32_t MakeRoomId(const std::uint32_t index) noexcept
 	{

@@ -1,9 +1,9 @@
 #pragma once
 
+#include "ContentsRuntime/Core/ContentRuntimeTypes.h"
+
 namespace ContentsRuntime::Core
 {
-	using FContentId = std::uint16_t;
-	using FContentInstanceId = std::uint32_t;
 	using FTransitionCompletionCallback = std::function<void()>;
 }
 

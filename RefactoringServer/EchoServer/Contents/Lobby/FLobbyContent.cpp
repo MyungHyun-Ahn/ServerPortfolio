@@ -74,9 +74,11 @@ namespace EchoServer::Contents
 
 	FLobbyContent::FLobbyContent(
 		std::shared_ptr<Foundation::ILogger> logger,
+		const ContentsRuntime::Core::FContentInstanceId contentInstanceId,
 		std::shared_ptr<FRoomRegistry> roomRegistry,
 		SRuntimeOptions runtimeOptions)
 		: m_logger(std::move(logger))
+		, m_contentInstanceId(contentInstanceId)
 		, m_roomRegistry(std::move(roomRegistry))
 		, m_runtimeOptions(runtimeOptions)
 	{
@@ -89,7 +91,7 @@ namespace EchoServer::Contents
 
 	ContentsRuntime::Core::FContentInstanceId FLobbyContent::GetContentInstanceId() const noexcept
 	{
-		return kLobbyContentInstanceId;
+		return m_contentInstanceId;
 	}
 
 	void FLobbyContent::OnEnter(std::uint64_t sessionId, std::uint64_t routeGeneration, ContentsRuntime::Bridge::IContentBridge&)
@@ -126,7 +128,7 @@ namespace EchoServer::Contents
 		ContentsRuntime::Bridge::IContentBridge& bridge)
 	{
 		const auto currentContentInstanceId = bridge.GetCurrentContentInstanceId(sessionId);
-		if (!currentContentInstanceId.has_value() || *currentContentInstanceId != kLobbyContentInstanceId)
+		if (!currentContentInstanceId.has_value() || *currentContentInstanceId != m_contentInstanceId)
 		{
 			return;
 		}

@@ -55,3 +55,5 @@
 - [002_logger-module.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\002_logger-module.md)
 - [003_crash-dump-redesign.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\003_crash-dump-redesign.md)
 - [004_rtt-observability-diagnostics.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\004_rtt-observability-diagnostics.md)
+- [005_content-instance-id-allocation.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\005_content-instance-id-allocation.md)
+- [006_content-instance-id-reserve-policy.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\006_content-instance-id-reserve-policy.md)

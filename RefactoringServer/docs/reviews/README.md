@@ -28,6 +28,7 @@
 - 현재 room-flow timeout 요약: [011_room-flow-timeout-summary.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\011_room-flow-timeout-summary.md)
 - send-post lost-wakeup 리뷰: [012_send-post-lost-wakeup-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\012_send-post-lost-wakeup-review.md)
 - Content Rq 처리와 Send 흐름 리뷰: [013_content-rq-dispatch-and-send-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\013_content-rq-dispatch-and-send-review.md)
+- contentInstanceId 할당 리뷰: [014_content-instance-id-allocation-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\014_content-instance-id-allocation-review.md)
 
 ## 4. 관리 원칙
 - 상세 로그와 실험 내역은 트러블슈팅 문서에 남긴다.

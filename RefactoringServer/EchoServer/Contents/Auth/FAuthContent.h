@@ -9,7 +9,10 @@ namespace EchoServer::Contents
 	class FAuthContent final : public ContentsRuntime::Core::IContent
 	{
 	public:
-		FAuthContent(std::shared_ptr<Foundation::ILogger> logger, SRuntimeOptions runtimeOptions);
+		FAuthContent(
+			std::shared_ptr<Foundation::ILogger> logger,
+			ContentsRuntime::Core::FContentInstanceId contentInstanceId,
+			SRuntimeOptions runtimeOptions);
 
 		ContentsRuntime::Core::FContentId GetContentId() const noexcept override;
 		ContentsRuntime::Core::FContentInstanceId GetContentInstanceId() const noexcept override;
@@ -27,6 +30,7 @@ namespace EchoServer::Contents
 
 	private:
 		std::shared_ptr<Foundation::ILogger> m_logger;
+		ContentsRuntime::Core::FContentInstanceId m_contentInstanceId = ContentsRuntime::Core::kInvalidContentInstanceId;
 		SRuntimeOptions m_runtimeOptions;
 		std::unordered_map<std::uint64_t, std::uint64_t> m_sessionGenerations;
 	};
