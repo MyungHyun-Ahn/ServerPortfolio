@@ -92,6 +92,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\Generated\Config\EchoServer\EchoServerConfig.cpp" />
     <ClCompile Include="Contents\Auth\FAuthContent.cpp" />
     <ClCompile Include="Contents\Echo\FEchoContent.cpp" />
     <ClCompile Include="Contents\Lobby\FLobbyContent.cpp" />
@@ -99,6 +100,7 @@
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Generated\Config\EchoServer\EchoServerConfig.h" />
     <ClInclude Include="Contents\Auth\FAuthContent.h" />
     <ClInclude Include="Contents\ContentTypes.h" />
     <ClInclude Include="Contents\Echo\FEchoContent.h" />

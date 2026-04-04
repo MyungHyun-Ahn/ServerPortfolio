@@ -13,6 +13,7 @@
 #include "EchoServer/Contents/Echo/FEchoContent.h"
 #include "EchoServer/Contents/Lobby/FLobbyContent.h"
 #include "EchoServer/Contents/Room/FRoomRegistry.h"
+#include "Generated/Config/EchoServer/EchoServerConfig.h"
 #include "Generated/Packets/Chat/ChatPackets.h"
 #include "Generated/Packets/Echo/EchoPackets.h"
 #include "Generated/Packets/Login/LoginPackets.h"
@@ -24,6 +25,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <Psapi.h>
 #include <stdexcept>
 #include <thread>
@@ -207,6 +209,278 @@ namespace
 		return std::filesystem::path(modulePath.data()).parent_path();
 	}
 
+	std::string ToLowerAscii(std::string value)
+	{
+		for (char& character : value)
+		{
+			if (character >= 'A' && character <= 'Z')
+			{
+				character = static_cast<char>(character - 'A' + 'a');
+			}
+		}
+
+		return value;
+	}
+
+	std::optional<std::filesystem::path> TryGetConfigPathOverride(int argc, char* argv[])
+	{
+		for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex)
+		{
+			if (std::string_view(argv[argumentIndex]) == "--config" && argumentIndex + 1 < argc)
+			{
+				return std::filesystem::path(argv[argumentIndex + 1]);
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	std::filesystem::path ResolveDefaultEchoServerConfigPath(const std::filesystem::path& executableDirectory)
+	{
+		const std::filesystem::path localPath = executableDirectory / "Config" / "Server" / "EchoServer.yaml";
+		if (std::filesystem::exists(localPath))
+		{
+			return localPath;
+		}
+
+		return executableDirectory.parent_path() / "Config" / "Server" / "EchoServer.yaml";
+	}
+
+	std::filesystem::path ResolveConfiguredPath(
+		const std::filesystem::path& executableDirectory,
+		const std::string& configuredPath)
+	{
+		if (configuredPath.empty())
+		{
+			return {};
+		}
+
+		const std::filesystem::path path(configuredPath);
+		if (path.is_absolute())
+		{
+			return path;
+		}
+
+		return executableDirectory.parent_path() / path;
+	}
+
+	std::optional<NetworkLib::Core::EBackendKind> TryParseBackendKind(const std::string& text)
+	{
+		const std::string lowerText = ToLowerAscii(text);
+		if (lowerText == "iocp")
+		{
+			return NetworkLib::Core::EBackendKind::Iocp;
+		}
+
+		if (lowerText == "rio")
+		{
+			return NetworkLib::Core::EBackendKind::Rio;
+		}
+
+		if (lowerText == "asio" || lowerText == "boostasio")
+		{
+			return NetworkLib::Core::EBackendKind::BoostAsio;
+		}
+
+		return std::nullopt;
+	}
+
+	std::optional<Foundation::ELogLevel> TryParseLogLevel(const std::string& text)
+	{
+		const std::string lowerText = ToLowerAscii(text);
+		if (lowerText == "trace")
+		{
+			return Foundation::ELogLevel::Debug;
+		}
+
+		if (lowerText == "debug")
+		{
+			return Foundation::ELogLevel::Debug;
+		}
+
+		if (lowerText == "info")
+		{
+			return Foundation::ELogLevel::Info;
+		}
+
+		if (lowerText == "warn" || lowerText == "warning")
+		{
+			return Foundation::ELogLevel::Warn;
+		}
+
+		if (lowerText == "error")
+		{
+			return Foundation::ELogLevel::Error;
+		}
+
+		if (lowerText == "fatal")
+		{
+			return Foundation::ELogLevel::Error;
+		}
+
+		return std::nullopt;
+	}
+
+	std::optional<EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode> TryParseTransitionRaceMode(const std::string& text)
+	{
+		const std::string lowerText = ToLowerAscii(text);
+		if (lowerText == "none")
+		{
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+		}
+
+		if (lowerText == "switch" || lowerText == "switchtothread")
+		{
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::SwitchToThread;
+		}
+
+		if (lowerText == "sleep0")
+		{
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Sleep0;
+		}
+
+		if (lowerText == "yield")
+		{
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Yield;
+		}
+
+		return std::nullopt;
+	}
+
+	std::optional<ContentsRuntime::Core::ERaceInjectionMode> TryParseContentsRaceMode(const std::string& text)
+	{
+		const std::string lowerText = ToLowerAscii(text);
+		if (lowerText == "none")
+		{
+			return ContentsRuntime::Core::ERaceInjectionMode::None;
+		}
+
+		if (lowerText == "switch" || lowerText == "switchtothread")
+		{
+			return ContentsRuntime::Core::ERaceInjectionMode::SwitchToThread;
+		}
+
+		if (lowerText == "sleep0")
+		{
+			return ContentsRuntime::Core::ERaceInjectionMode::Sleep0;
+		}
+
+		if (lowerText == "yield")
+		{
+			return ContentsRuntime::Core::ERaceInjectionMode::Yield;
+		}
+
+		return std::nullopt;
+	}
+
+	bool ApplyEchoServerConfigDocument(
+		const Generated::Config::EchoServer::FEchoServerConfigDocument& configDocument,
+		const std::filesystem::path& executableDirectory,
+		NetworkLib::Core::SServerConfig& serverConfig,
+		std::uint32_t& outPacketKey,
+		bool& outRequestManualDump,
+		bool& outRunHeadless,
+		EchoServer::Contents::SRuntimeOptions& runtimeOptions,
+		ContentsRuntime::Core::SContentRuntimeConfig& contentRuntimeConfig,
+		std::string& outError)
+	{
+		const auto backendKind = TryParseBackendKind(configDocument.EchoServer.Backend);
+		if (!backendKind.has_value())
+		{
+			outError = "invalid EchoServer.Backend: " + configDocument.EchoServer.Backend;
+			return false;
+		}
+
+		const auto logLevel = TryParseLogLevel(configDocument.EchoServer.LogMinimumLevel);
+		if (!logLevel.has_value())
+		{
+			outError = "invalid EchoServer.LogMinimumLevel: " + configDocument.EchoServer.LogMinimumLevel;
+			return false;
+		}
+
+		const auto transitionRaceMode = TryParseTransitionRaceMode(configDocument.Debug.TransitionRaceInjectionMode);
+		if (!transitionRaceMode.has_value())
+		{
+			outError = "invalid Debug.TransitionRaceInjectionMode: " + configDocument.Debug.TransitionRaceInjectionMode;
+			return false;
+		}
+
+		const auto postRoomChangeRaceMode = TryParseTransitionRaceMode(configDocument.Debug.PostRoomChangeRaceInjectionMode);
+		if (!postRoomChangeRaceMode.has_value())
+		{
+			outError = "invalid Debug.PostRoomChangeRaceInjectionMode: " + configDocument.Debug.PostRoomChangeRaceInjectionMode;
+			return false;
+		}
+
+		const auto firstEchoRaceMode = TryParseTransitionRaceMode(configDocument.Debug.FirstEchoRaceInjectionMode);
+		if (!firstEchoRaceMode.has_value())
+		{
+			outError = "invalid Debug.FirstEchoRaceInjectionMode: " + configDocument.Debug.FirstEchoRaceInjectionMode;
+			return false;
+		}
+
+		const auto contentsRaceMode = TryParseContentsRaceMode(configDocument.Debug.ContentsRaceInjectionMode);
+		if (!contentsRaceMode.has_value())
+		{
+			outError = "invalid Debug.ContentsRaceInjectionMode: " + configDocument.Debug.ContentsRaceInjectionMode;
+			return false;
+		}
+
+		if (configDocument.EchoServer.PacketKey > 0xFF)
+		{
+			outError = "EchoServer.PacketKey must be in range 0..255.";
+			return false;
+		}
+
+		serverConfig.backendKind = *backendKind;
+		serverConfig.bindIp = configDocument.EchoServer.BindIp;
+		serverConfig.port = configDocument.EchoServer.Port;
+		serverConfig.workerThreadCount = std::max(1, configDocument.EchoServer.WorkerThreadCount);
+		serverConfig.maxSessionCount = std::max(1, configDocument.EchoServer.MaxSessionCount);
+		serverConfig.recvBufferSize = std::max(1, configDocument.EchoServer.RecvBufferSize);
+		serverConfig.logConfig.minimumLevel = *logLevel;
+		serverConfig.logConfig.consoleEnabled = configDocument.EchoServer.LogConsoleEnabled;
+		serverConfig.logConfig.fileEnabled = configDocument.EchoServer.LogFileEnabled;
+		serverConfig.logConfig.includeThreadId = configDocument.EchoServer.LogIncludeThreadId;
+		outPacketKey = configDocument.EchoServer.PacketKey;
+
+		const std::filesystem::path configuredLogPath =
+			ResolveConfiguredPath(executableDirectory, configDocument.EchoServer.LogOutputDirectory);
+		if (configuredLogPath.empty())
+		{
+			serverConfig.logConfig.outputDirectory = (executableDirectory / "logs" / "EchoServer").string();
+		}
+		else
+		{
+			serverConfig.logConfig.outputDirectory = configuredLogPath.string();
+		}
+
+		runtimeOptions.enablePagePool = configDocument.EchoServer.EnablePagePool;
+		runtimeOptions.pageSize = static_cast<std::uint32_t>(std::max<std::uint32_t>(1u, configDocument.EchoServer.PageSize));
+		runtimeOptions.sendThreadCount = std::max(1, configDocument.EchoServer.SendThreadCount);
+		runtimeOptions.responsesPerThread = std::max(1, configDocument.EchoServer.ResponsesPerThread);
+		runtimeOptions.roomCount = std::max(1, configDocument.EchoServer.RoomCount);
+		runtimeOptions.roomCapacity = std::max(1, configDocument.EchoServer.RoomCapacity);
+		runtimeOptions.bootstrapTrace = configDocument.Debug.BootstrapTrace;
+		runtimeOptions.traceUserId = configDocument.Debug.TraceUserId;
+		runtimeOptions.logPackets = configDocument.Debug.LogPackets;
+		runtimeOptions.enableTransitionResponseRaceInjection = configDocument.Debug.TransitionRaceInjectionEnabled;
+		runtimeOptions.transitionRaceInjectionMode = *transitionRaceMode;
+		runtimeOptions.enablePostRoomChangeResponseRaceInjection = configDocument.Debug.PostRoomChangeRaceInjectionEnabled;
+		runtimeOptions.postRoomChangeResponseRaceInjectionMode = *postRoomChangeRaceMode;
+		runtimeOptions.enableFirstEchoAfterRoomChangeRaceInjection = configDocument.Debug.FirstEchoRaceInjectionEnabled;
+		runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode = *firstEchoRaceMode;
+
+		contentRuntimeConfig.enableRaceInjection = configDocument.Debug.ContentsRaceInjectionEnabled;
+		contentRuntimeConfig.raceInjectionPeriod = std::max<std::uint32_t>(1u, configDocument.Debug.ContentsRaceInjectionPeriod);
+		contentRuntimeConfig.raceInjectionMode = *contentsRaceMode;
+		contentRuntimeConfig.failFastOnRuntimeError = configDocument.Debug.ContentsFailFast;
+
+		outRequestManualDump = configDocument.Debug.ManualDump;
+		outRunHeadless = configDocument.Debug.Headless;
+		return true;
+	}
+
 	class FEchoApplication final : public NetworkLib::IApplicationHandler
 	{
 	public:
@@ -358,26 +632,36 @@ namespace
 int main(int argc, char* argv[])
 {
 	NetworkLib::Core::SServerConfig serverConfig{};
+	std::uint32_t packetKey = 0x37;
 	bool requestManualDump = false;
 	bool runHeadless = false;
 	EchoServer::Contents::SRuntimeOptions runtimeOptions{};
 	ContentsRuntime::Core::SContentRuntimeConfig contentRuntimeConfig{};
 	const std::filesystem::path executableDirectory = GetExecutableDirectory();
-	serverConfig.backendKind = NetworkLib::Core::EBackendKind::Iocp;
-	serverConfig.bindIp = "127.0.0.1";
-	serverConfig.port = 19000;
-	serverConfig.workerThreadCount = 2;
-	serverConfig.maxSessionCount = 512;
-	serverConfig.recvBufferSize = 1024;
-	serverConfig.logConfig.minimumLevel = Foundation::ELogLevel::Info;
-	serverConfig.logConfig.outputDirectory = (executableDirectory / "logs" / "EchoServer").string();
-	serverConfig.logConfig.consoleEnabled = true;
-	serverConfig.logConfig.fileEnabled = true;
-	serverConfig.logConfig.includeThreadId = true;
-	NetworkLib::Crypto::SDefaultPacketCipherConfig packetCipherConfig{};
-	packetCipherConfig.packetKey = 0x37;
-	serverConfig.packetCipher = std::make_shared<NetworkLib::Crypto::FDefaultPacketCipher>(packetCipherConfig);
-	serverConfig.packetFramer = std::make_shared<NetworkLib::Packet::Framing::FDefaultPacketFramer>();
+	Generated::Config::EchoServer::FEchoServerConfigDocument configDocument{};
+	std::string configErrorMessage;
+	const std::filesystem::path configPath =
+		TryGetConfigPathOverride(argc, argv).value_or(ResolveDefaultEchoServerConfigPath(executableDirectory));
+	if (!Generated::Config::EchoServer::FEchoServerConfigLoader::LoadFromFile(configPath, configDocument, configErrorMessage))
+	{
+		std::cerr << "EchoServer config load failed: " << configErrorMessage << "\n";
+		return 1;
+	}
+
+	if (!ApplyEchoServerConfigDocument(
+			configDocument,
+			executableDirectory,
+			serverConfig,
+			packetKey,
+			requestManualDump,
+			runHeadless,
+			runtimeOptions,
+			contentRuntimeConfig,
+			configErrorMessage))
+	{
+		std::cerr << "EchoServer config apply failed: " << configErrorMessage << "\n";
+		return 1;
+	}
 
 	if (argc >= 2)
 	{
@@ -395,6 +679,10 @@ int main(int argc, char* argv[])
 			else if (argument == "--manual-dump")
 			{
 				requestManualDump = true;
+			}
+			else if (argument == "--config" && argumentIndex + 1 < argc)
+			{
+				++argumentIndex;
 			}
 			else if (argument == "--headless")
 			{
@@ -560,6 +848,11 @@ int main(int argc, char* argv[])
 	{
 		contentRuntimeConfig.raceInjectionPeriod = 100;
 	}
+
+	NetworkLib::Crypto::SDefaultPacketCipherConfig packetCipherConfig{};
+	packetCipherConfig.packetKey = static_cast<std::uint8_t>(packetKey);
+	serverConfig.packetCipher = std::make_shared<NetworkLib::Crypto::FDefaultPacketCipher>(packetCipherConfig);
+	serverConfig.packetFramer = std::make_shared<NetworkLib::Packet::Framing::FDefaultPacketFramer>();
 
 	if (runtimeOptions.bootstrapTrace && runtimeOptions.traceUserId != 0)
 	{

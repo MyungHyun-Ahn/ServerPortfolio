@@ -1,0 +1,36 @@
+EchoServer:
+  Backend: { type: string, default: Iocp }
+  BindIp: { type: string, default: 127.0.0.1 }
+  Port: { type: uint16, default: 19000 }
+  WorkerThreadCount: { type: int32, default: 2 }
+  MaxSessionCount: { type: int32, default: 512 }
+  RecvBufferSize: { type: int32, default: 1024 }
+  LogMinimumLevel: { type: string, default: Info }
+  LogOutputDirectory: { type: string, default: "" }
+  LogConsoleEnabled: { type: bool, default: true }
+  LogFileEnabled: { type: bool, default: true }
+  LogIncludeThreadId: { type: bool, default: true }
+  PacketKey: { type: uint32, default: 55 }
+  EnablePagePool: { type: bool, default: true }
+  PageSize: { type: uint32, default: 4096 }
+  SendThreadCount: { type: int32, default: 1 }
+  ResponsesPerThread: { type: int32, default: 1 }
+  RoomCount: { type: int32, default: 50 }
+  RoomCapacity: { type: int32, default: 4 }
+
+Debug:
+  ManualDump: { type: bool, default: false }
+  Headless: { type: bool, default: false }
+  BootstrapTrace: { type: bool, default: false }
+  TraceUserId: { type: uint32, default: 0 }
+  LogPackets: { type: bool, default: false }
+  TransitionRaceInjectionEnabled: { type: bool, default: false }
+  TransitionRaceInjectionMode: { type: string, default: None }
+  PostRoomChangeRaceInjectionEnabled: { type: bool, default: false }
+  PostRoomChangeRaceInjectionMode: { type: string, default: None }
+  FirstEchoRaceInjectionEnabled: { type: bool, default: false }
+  FirstEchoRaceInjectionMode: { type: string, default: None }
+  ContentsRaceInjectionEnabled: { type: bool, default: false }
+  ContentsRaceInjectionPeriod: { type: uint32, default: 100 }
+  ContentsRaceInjectionMode: { type: string, default: None }
+  ContentsFailFast: { type: bool, default: false }

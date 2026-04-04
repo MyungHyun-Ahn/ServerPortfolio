@@ -82,6 +82,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Config\FConfigFileLoader.cpp" />
+    <ClCompile Include="Config\FConfigValueReader.cpp" />
     <ClCompile Include="Diagnostics\FCrashDump.cpp" />
     <ClCompile Include="Diagnostics\Rtt\FRttCsvLogger.cpp" />
     <ClCompile Include="Diagnostics\Rtt\FRttMetricsRuntime.cpp" />
@@ -93,6 +95,9 @@
     <ClCompile Include="Logging\LogFormatting.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Config\ConfigTypes.h" />
+    <ClInclude Include="Config\FConfigFileLoader.h" />
+    <ClInclude Include="Config\FConfigValueReader.h" />
     <ClInclude Include="Diagnostics\CrashDumpTypes.h" />
     <ClInclude Include="Diagnostics\FCrashDump.h" />
     <ClInclude Include="Diagnostics\Rtt\FRttCsvLogger.h" />

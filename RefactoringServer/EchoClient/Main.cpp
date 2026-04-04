@@ -5,6 +5,7 @@
 #include "Foundation/Diagnostics/Rtt/FRttThreadLocalCollector.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "EchoServer/Contents/Room/RoomFlowTypes.h"
+#include "Generated/Config/EchoClient/EchoClientConfig.h"
 #include "Generated/Packets/Chat/ChatPackets.h"
 #include "Generated/Packets/Echo/EchoPackets.h"
 #include "Generated/Packets/Login/LoginPackets.h"
@@ -17,6 +18,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <random>
@@ -89,6 +91,100 @@ namespace
 		RoomChange,
 		Count
 	};
+
+	std::filesystem::path GetExecutableDirectory(const char* argv0)
+	{
+		if (argv0 == nullptr || *argv0 == '\0')
+		{
+			return std::filesystem::current_path();
+		}
+
+		return std::filesystem::absolute(std::filesystem::path(argv0)).parent_path();
+	}
+
+	std::optional<std::filesystem::path> TryGetConfigPathOverride(int argc, char* argv[])
+	{
+		for (int argumentIndex = 1; argumentIndex < argc; ++argumentIndex)
+		{
+			if (std::string_view(argv[argumentIndex]) == "--config" && argumentIndex + 1 < argc)
+			{
+				return std::filesystem::path(argv[argumentIndex + 1]);
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	std::filesystem::path ResolveDefaultEchoClientConfigPath(const std::filesystem::path& executableDirectory)
+	{
+		const std::filesystem::path localPath = executableDirectory / "Config" / "Client" / "EchoClient.yaml";
+		if (std::filesystem::exists(localPath))
+		{
+			return localPath;
+		}
+
+		return executableDirectory.parent_path() / "Config" / "Client" / "EchoClient.yaml";
+	}
+
+	std::filesystem::path ResolveConfiguredPath(
+		const std::filesystem::path& executableDirectory,
+		const std::string& configuredPath)
+	{
+		if (configuredPath.empty())
+		{
+			return {};
+		}
+
+		const std::filesystem::path path(configuredPath);
+		if (path.is_absolute())
+		{
+			return path;
+		}
+
+		return executableDirectory.parent_path() / path;
+	}
+
+	void ApplyEchoClientConfigDocument(
+		const Generated::Config::EchoClient::FEchoClientConfigDocument& configDocument,
+		const std::filesystem::path& executableDirectory,
+		SClientOptions& outOptions)
+	{
+		outOptions.serverIp = configDocument.EchoClient.ServerIp;
+		outOptions.port = configDocument.EchoClient.Port;
+		outOptions.loginUserIdBase = configDocument.EchoClient.LoginUserIdBase;
+		outOptions.sessionCount = std::max(1, configDocument.EchoClient.SessionCount);
+		outOptions.requestCount = std::max(1, configDocument.EchoClient.RequestCount);
+		outOptions.payloadSize = std::max(1, configDocument.EchoClient.PayloadSize);
+		outOptions.sendChunkSize = std::max(0, configDocument.EchoClient.SendChunkSize);
+		outOptions.sendChunkDelayMs = std::max(0, configDocument.EchoClient.SendChunkDelayMs);
+		outOptions.recvBufferSize = std::max(1, configDocument.EchoClient.RecvBufferSize);
+		outOptions.responseThreadCount = std::max(1, configDocument.EchoClient.ResponseThreadCount);
+		outOptions.responsesPerThread = std::max(1, configDocument.EchoClient.ResponsesPerThread);
+		outOptions.holdSeconds = std::max(0, configDocument.EchoClient.HoldSeconds);
+		outOptions.intervalMs = std::max(0, configDocument.EchoClient.IntervalMs);
+		outOptions.packetsPerSend = std::max(1, configDocument.EchoClient.PacketsPerSend);
+		outOptions.reconnectProbabilityPercent =
+			std::clamp(configDocument.EchoClient.ReconnectProbabilityPercent, 0, 100);
+		outOptions.reconnectDelayMs = std::max(0, configDocument.EchoClient.ReconnectDelayMs);
+		outOptions.roomChangeProbabilityPercent =
+			std::clamp(configDocument.EchoClient.RoomChangeProbabilityPercent, 0, 100);
+		outOptions.maxRoomEnterRetryCount = std::max(1, configDocument.EchoClient.MaxRoomEnterRetryCount);
+		outOptions.maxRoomChangeRetryCount = std::max(1, configDocument.EchoClient.MaxRoomChangeRetryCount);
+		outOptions.enablePagePool = configDocument.EchoClient.EnablePagePool;
+		outOptions.pageSize = std::max(1, configDocument.EchoClient.PageSize);
+
+		outOptions.verbose = !configDocument.Debug.Quiet;
+		outOptions.bootstrapTrace = configDocument.Debug.BootstrapTrace;
+		outOptions.traceSessionIndex = std::max(0, configDocument.Debug.TraceSessionIndex);
+		outOptions.recvTimeoutMs = std::max(0, configDocument.Debug.RecvTimeoutMs);
+		outOptions.roomListRecvTimeoutMs = configDocument.Debug.RoomListRecvTimeoutMs;
+		outOptions.echoRecvTimeoutMs = configDocument.Debug.EchoRecvTimeoutMs;
+		outOptions.rttFlushIntervalSeconds = std::max(1, configDocument.Debug.RttFlushIntervalSeconds);
+
+		const std::filesystem::path configuredRttCsvPath =
+			ResolveConfiguredPath(executableDirectory, configDocument.Debug.RttCsvPath);
+		outOptions.rttCsvPath = configuredRttCsvPath.empty() ? std::string() : configuredRttCsvPath.string();
+	}
 
 	bool TryParseInt(const char* valueText, int& outValue)
 	{
@@ -295,6 +391,10 @@ namespace
 				{
 					return false;
 				}
+			}
+			else if (argument == "--config" && argumentIndex + 1 < argc)
+			{
+				++argumentIndex;
 			}
 			else if (argument == "--disable-page-pool")
 			{
@@ -1380,10 +1480,23 @@ namespace
 int main(int argc, char* argv[])
 {
 	SClientOptions options{};
+	const std::filesystem::path executableDirectory = GetExecutableDirectory(argc > 0 ? argv[0] : nullptr);
+	Generated::Config::EchoClient::FEchoClientConfigDocument configDocument{};
+	std::string configErrorMessage;
+	const std::filesystem::path configPath =
+		TryGetConfigPathOverride(argc, argv).value_or(ResolveDefaultEchoClientConfigPath(executableDirectory));
+	if (!Generated::Config::EchoClient::FEchoClientConfigLoader::LoadFromFile(configPath, configDocument, configErrorMessage))
+	{
+		std::cerr << "EchoClient config load failed: " << configErrorMessage << "\n";
+		return 1;
+	}
+
+	ApplyEchoClientConfigDocument(configDocument, executableDirectory, options);
+
 	if (!ParseArguments(argc, argv, options))
 	{
 		std::cerr
-			<< "usage: EchoClient.exe [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] "
+			<< "usage: EchoClient.exe [--config path] [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] "
 			<< "[--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] "
 			<< "[--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] "
 			<< "[--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] "
