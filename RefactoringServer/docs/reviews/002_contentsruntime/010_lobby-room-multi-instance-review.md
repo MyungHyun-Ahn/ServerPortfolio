@@ -54,6 +54,9 @@
 - 짧은 런타임 스모크 성공
   - 서버 로그: [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\roomflow_smoke\server.log)
   - 클라이언트 로그: [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\roomflow_smoke\client.log)
+- send 재기동 보장 수정 후 무timeout 6시간 RTT 런 정상 종료
+  - 클라이언트 로그: [client_20260404_041225.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rtt_no_timeout_6h_sendfix\client_20260404_041225.log)
+  - RTT CSV: [rtt_20260404_041225.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\rtt_no_timeout_6h_sendfix\rtt_20260404_041225.csv)
 
 ## 7. 런타임에서 확인된 점
 - `roomId=77/78/79`, `contentInstanceId=3001/3002/3003`로 실제 분산이 일어났다.
@@ -61,6 +64,5 @@
 - 짧은 스모크에서는 정상 종료까지 포함해 문제가 없었다.
 
 ## 8. 남은 확인 항목
-- 장시간 soak에서 룸 입장/룸 변경 재시도 흐름이 충분히 안정적인지 확인 필요
 - 비정상 실패 코드가 실제로 어떤 운영 로그 패턴을 만드는지 추가 확인 필요
 - `Lobby`, `Room` 외 다른 콘텐츠 타입을 붙였을 때 인스턴스 배치 정책을 더 구체화할 필요가 있다.

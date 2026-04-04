@@ -66,6 +66,8 @@
 
 ## 9. 관측과 후속 과제
 - `FContentRuntime`, `FContentThread`는 queue depth, enter/leave/packet/frame 처리량, lock wait 등을 계측한다.
+- 요청/응답 RTT 계측은 `ContentsRuntime` 내부가 아니라 `Foundation/Diagnostics` 공용 모듈로 분리해 사용한다.
+- 콘텐츠 응답은 `IContentBridge -> NetworkLib::IServer::Send -> session send queue` 경로로 내려가며, send 재기동 보장은 `NetworkLib`가 담당한다.
 - 다음 확장 포인트는
   - 룸 흐름 장시간 검증 확대
   - 멀티 콘텐츠 타입 확장

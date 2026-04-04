@@ -402,3 +402,53 @@
 
 - room-flow에서 보였던 일부 hang/timeout은 콘텐츠 전이 로직이 아니라 `NetworkLib` send 재기동 보장 누락으로 설명된다.
 - 따라서 이후 `echo-response timeout`, `room-change-list timeout`, `room-change timeout`은 이 send fix 적용 이후 기준으로 다시 분리해서 평가해야 한다.
+
+## 11. 무timeout 6시간 RTT 확인
+
+### 11.1 목적
+
+- send fix 이후에도 실제 응답 유실이 남아 있는지, 아니면 기존 `10060 timeout`이 단순 지연인지 확인하기 위해 `recv timeout`을 모두 끄고 장시간 런을 돌렸다.
+
+### 11.2 조건
+
+- 서버
+  - `--headless --room-count 80 --room-capacity 4 --contents-fail-fast`
+- 클라이언트
+  - `--sessions 250`
+  - `--count 1`
+  - `--hold-seconds 21600`
+  - `--interval-ms 0`
+  - `--packets-per-send 1`
+  - `--recv-timeout-ms 0`
+  - `--room-list-recv-timeout-ms 0`
+  - `--echo-recv-timeout-ms 0`
+  - `--room-change-probability-percent 90`
+  - `--max-room-enter-retries 20`
+  - `--max-room-change-retries 10`
+  - `--rtt-csv-path ...`
+  - `--rtt-flush-interval-seconds 60`
+
+### 11.3 결과
+
+- 클라이언트는 `echo validation succeeded.`로 정상 종료했다.
+- `client.err.log`는 비어 있었다.
+- RTT CSV는 6시간 전체 구간을 끝까지 기록했다.
+- `timeout_count`는 모든 stage에서 `0`이었다.
+
+### 11.4 중요한 관찰
+
+- `room-change` RTT는 실제로 `5000ms`를 넘긴 값이 기록됐다.
+  - `5006.861ms`
+- `room-change`의 다음 상위 값도 `4991.590ms`였다.
+- `echo-response`, `room-change-list`도 `3900ms`대 outlier가 있었다.
+
+즉:
+
+- 이전 `10060 timeout`은 반드시 `응답 유실`을 뜻하지 않는다.
+- 적어도 일부는 `응답은 결국 왔지만, 기존 5000ms timeout보다 늦게 왔던 경우`로 해석할 수 있다.
+
+### 11.5 최종 해석
+
+- 이번 이슈에서 확정된 로직 버그는 `send-post lost-wakeup`이었다.
+- 그 수정 이후 무timeout 장시간 런이 정상 종료했고, 5초를 넘는 정상 RTT도 관측됐다.
+- 따라서 현재 남아 있는 `10060 timeout`은 로컬 부하 환경에서의 지연 가능성이 높다고 보는 것이 맞다.
