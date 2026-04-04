@@ -30,7 +30,12 @@
 - Content Rq 처리와 Send 흐름 리뷰: [013_content-rq-dispatch-and-send-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\013_content-rq-dispatch-and-send-review.md)
 - contentInstanceId 할당 리뷰: [014_content-instance-id-allocation-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\002_contentsruntime\014_content-instance-id-allocation-review.md)
 
-## 4. 관리 원칙
+## 4. NetworkLib 주요 문서
+- dual-backend 분리 리뷰: [012_dual-backend-session-server-split-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\012_dual-backend-session-server-split-review.md)
+- pure RIO baseline 리뷰: [013_pure-rio-baseline-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\013_pure-rio-baseline-review.md)
+- RIO EchoServer 흐름 리뷰: [014_rio-echo-server-flow-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\014_rio-echo-server-flow-review.md)
+
+## 5. 관리 원칙
 - 상세 로그와 실험 내역은 트러블슈팅 문서에 남긴다.
 - 핵심 원인, 재현 조건, 시도 결과만 빠르게 봐야 하는 이슈는 별도 요약 문서로 분리한다.
 - 같은 이슈를 다시 분석할 때는 요약 문서를 먼저 보고, 필요하면 상세 트러블슈팅 문서로 내려간다.

@@ -1,92 +1,81 @@
 # Dual Backend RIO Support Plan
 
 ## 1. 목적
-- `NetworkLib`가 `IOCP`와 `RIO`를 모두 backend로 지원하도록 확장한다.
-- 상위 프로젝트는 config의 `Backend` 값만 바꿔 backend를 선택하고, `EchoServer`, `ContentsRuntime`, packet handler는 transport 구현 세부사항을 모르게 유지한다.
-- 이후 `IOCP vs RIO` 비교 벤치마크가 가능한 구조를 만든다.
+- `NetworkLib`가 `IOCP`와 `RIO`를 같은 상위 API에서 병행 지원하도록 확장한다.
+- `EchoServer`, `ContentsRuntime`, packet handler는 transport 구현체를 직접 모르고 `IServer`만 사용한다.
+- `IOCP + RIO` 하이브리드는 이번 단계에서 다루지 않고, 나중에 별도 backend(`FRioIocpServer`)로 분리한다.
 
 ## 2. 현재 결론
-- 방향은 `IOCP 교체`가 아니라 `IOCP 유지 + RIO 추가`다.
-- public API는 [IServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h)를 유지한다.
-- 내부는 backend와 session을 분리한다.
-- `RIO`는 첫 단계에서 stub과 구조 분리만 완료하고, 실제 CQ/RQ 구현은 후속 단계에서 진행한다.
+- 방향은 `IOCP 교체`가 아니라 `IOCP 유지 + 순수 RIO 추가`다.
+- 현재 `RIO`는 `RIO_EVENT_COMPLETION` 기반의 순수 RIO backend로 구현한다.
+- `RIO_IOCP_COMPLETION` 기반 하이브리드는 같은 클래스에 섞지 않고 후속 backend로 분리한다.
 
-## 3. 1차 완료 범위
-- 세션 추상 경계 추가
-  - [ISession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\ISession.h)
-- IOCP 세션 분리
-  - [FIocpSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
-  - [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
-- RIO 세션 뼈대 추가
-  - [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
-  - [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.cpp)
-- RIO 서버 뼈대 추가
-  - [FRioServer.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
-- `FIocpServer`는 새 `FIocpSession`을 사용하도록 정리했다.
-- [FServerFactory.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.cpp)에서 `Backend: Rio`면 `FRioServer`를 선택하도록 연결했다.
-
-## 4. 구조
-### 4.1 Public Layer
+## 3. 현재 구조
+### 3-1. Public Layer
 - [IServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h)
 - [IApplicationHandler](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IApplicationHandler.h)
 
-### 4.2 Backend Layer
+### 3-2. Backend Layer
 - [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
 - [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
 - [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.h)
 
-### 4.3 Session Layer
+### 3-3. Session Layer
 - [ISession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\ISession.h)
 - [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
 - [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
 
-## 5. IOCP 현재 상태
-- `FIocpServer`의 동작 의미는 유지했다.
-- 예전 `FSession`을 `FIocpSession`으로 분리했지만, 아래 흐름은 그대로다.
-  - accept
-  - session attach
-  - `WSARecv` completion
-  - recv buffer / framer / cipher
-  - application dispatch
-  - send queue
-  - `TryBeginSend / EndSend` 기반 send 재기동
-- 중간에 검토했던 `owner-worker least-loaded` 실험은 이번 범위에서 제거했다.
+## 4. 순수 RIO 1차 구현 범위
+- `FRioServer` startup / shutdown 구현
+- RIO function table 로드
+- worker별 `RIO_CQ + event + owner thread` 생성
+- `AcceptEx + WSA_FLAG_REGISTERED_IO` 기반 accept 경로
+- 세션별 `RIO_RQ` 생성
+- recv staging buffer 등록과 `RIOReceive` post
+- send 시 packet buffer 등록 후 `RIOSend`
+- `RIO_EVENT_COMPLETION` 기반 CQ notification / dequeue
+- `session -> owner worker` 배정 정책
+  - 현재 정책은 `activeSessionCount` 기반 least-loaded
 
-## 6. 1차 검증
+## 5. 구현 정책
+### 5-1. CQ ownership
+- 공유 CQ를 여러 스레드가 같이 소비하지 않는다.
+- worker마다 CQ를 하나 두고, 해당 CQ는 owner worker thread만 dequeue한다.
+
+### 5-2. session ownership
+- 세션은 accept 시 worker 하나에 배정된다.
+- 배정 기준은 `activeSessionCount`가 가장 적은 worker다.
+- 세션은 disconnect 전까지 owner worker를 바꾸지 않는다.
+
+### 5-3. 동기화 정책
+- 1차 구현은 정확성 우선이다.
+- session request queue 접근처럼 필요한 곳에는 lock을 허용한다.
+- 이후 병목이 확인된 hot path만 lock-free 또는 near lock-free로 전환한다.
+
+## 6. 구현 중 확인된 핵심 이슈
+- 다중 세션 초기 구현에서 `RIOCreateRequestQueue failed. error=10014`가 발생했다.
+- 원인은 빈 session slot을 확정하기 전에 같은 accepted socket으로 `RIOCreateRequestQueue`를 반복 시도할 수 있었던 구조였다.
+- 수정 후에는
+  - 먼저 빈 slot을 찾고
+  - 그 slot 기준으로 session / registered buffer / request queue를 한 번만 생성
+  - 마지막에 slot에 attach
+  순서로 바꿨다.
+
+## 7. 현재 검증 결과
 - `Debug x64` 솔루션 빌드 성공
-- `IOCP` 스모크 성공
-  - `EchoServer + EchoClient`
-  - `1세션` 기본 스모크 통과
-- `IOCP` 회귀 검증 성공
-  - `100세션`
-  - `3분`
-  - 성공 로그:
-    - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\iocp_regression_100x3m\client.log)
-- `RIO` 선택 경로 확인
-  - 현재는 의도대로 stub 경로에 진입해 `RIO backend is not implemented yet.`를 출력하고 종료한다.
-  - 확인 로그:
-    - [rio_server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_refactor_smoke\rio_server.log)
+- `IOCP 100세션 / 3분` 회귀 성공
+- `RIO 1세션` 스모크 성공
+- `RIO 20세션 / 15초` 스모크 성공
+- `RIO 100세션 / 3분` 회귀 성공
 
-## 7. RIO 구현 다음 단계
-1. `FRioServer` startup/shutdown 실제 구현
-2. RIO function table 초기화와 capability check
-3. registered buffer pool 설계
-4. `FRioSession`에 RQ/CQ 관련 상태 추가
-5. accept 이후 socket을 RIO 경로에 attach
-6. send/recv submit 및 completion dequeue 구현
-7. `EchoServer` smoke
-8. `IOCP vs RIO` 비교 벤치마크
+검증 로그 예시:
+- [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_smoke_20x15s_acceptfix2\client.log)
+- [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_smoke_20x15s_acceptfix2\server.log)
+- [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_regression_100x3m\client.log)
 
-## 8. Lock-Free 판단
-- 목표는 `완전 무락`이 아니라 `hot path near lock-free`다.
-- 첫 구현은 lock을 허용해 정확성을 먼저 확보한다.
-- 이후 효과가 큰 구간만 lock-free로 옮긴다.
-  - send enqueue
-  - completion handoff
-  - buffer free-list
-
-## 9. 현재 결론
-- 지금 구조는 `RIO`를 실제로 넣기 위한 1차 분리 작업까지 끝났다.
-- `IOCP` 기준선은 유지되고 있다.
-- 다음 작업은 `FRioServer / FRioSession` 내부 구현이다.
+## 8. 다음 단계
+1. `RIO` 장시간 soak과 성능 측정
+2. `IOCP` / `RIO` 비교 벤치마크
+3. send/recv buffer 등록 비용 최적화
+4. hot path lock-free 후보 구간 계측
+5. 후속 backend로 `FRioIocpServer` 설계

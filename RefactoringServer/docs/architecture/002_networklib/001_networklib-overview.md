@@ -62,7 +62,7 @@
 - backend 선택은 [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.h)가 맡는다.
 - 현재 backend 상태는 다음과 같다.
   - `Iocp` -> [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
-  - `Rio` -> [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h) stub
+  - `Rio` -> [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h) pure RIO baseline
   - `BoostAsio` -> [FStubServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FStubServer.h)
 
 ## 6. Session 전략
