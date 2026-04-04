@@ -76,3 +76,4 @@
 - [005_content-instance-id-allocation.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\005_content-instance-id-allocation.md)
 - [006_content-instance-id-reserve-policy.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\006_content-instance-id-reserve-policy.md)
 - [007_yaml-config-and-config-generator.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\007_yaml-config-and-config-generator.md)
+- [008_config-generator-enum-required-and-template.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\008_config-generator-enum-required-and-template.md)

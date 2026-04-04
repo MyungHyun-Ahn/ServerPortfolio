@@ -264,113 +264,108 @@ namespace
 		return executableDirectory.parent_path() / path;
 	}
 
-	std::optional<NetworkLib::Core::EBackendKind> TryParseBackendKind(const std::string& text)
+	NetworkLib::Core::EBackendKind ToBackendKind(const Generated::Config::EchoServer::EBackend backend) noexcept
 	{
-		const std::string lowerText = ToLowerAscii(text);
-		if (lowerText == "iocp")
+		switch (backend)
 		{
+		case Generated::Config::EchoServer::EBackend::Iocp:
 			return NetworkLib::Core::EBackendKind::Iocp;
-		}
-
-		if (lowerText == "rio")
-		{
+		case Generated::Config::EchoServer::EBackend::Rio:
 			return NetworkLib::Core::EBackendKind::Rio;
-		}
-
-		if (lowerText == "asio" || lowerText == "boostasio")
-		{
+		case Generated::Config::EchoServer::EBackend::BoostAsio:
 			return NetworkLib::Core::EBackendKind::BoostAsio;
 		}
 
-		return std::nullopt;
+		return NetworkLib::Core::EBackendKind::Iocp;
 	}
 
-	std::optional<Foundation::ELogLevel> TryParseLogLevel(const std::string& text)
+	Foundation::ELogLevel ToLogLevel(const Generated::Config::EchoServer::ELogMinimumLevel logLevel) noexcept
 	{
-		const std::string lowerText = ToLowerAscii(text);
-		if (lowerText == "trace")
+		switch (logLevel)
 		{
+		case Generated::Config::EchoServer::ELogMinimumLevel::Debug:
 			return Foundation::ELogLevel::Debug;
-		}
-
-		if (lowerText == "debug")
-		{
-			return Foundation::ELogLevel::Debug;
-		}
-
-		if (lowerText == "info")
-		{
+		case Generated::Config::EchoServer::ELogMinimumLevel::Info:
 			return Foundation::ELogLevel::Info;
-		}
-
-		if (lowerText == "warn" || lowerText == "warning")
-		{
+		case Generated::Config::EchoServer::ELogMinimumLevel::Warn:
 			return Foundation::ELogLevel::Warn;
-		}
-
-		if (lowerText == "error")
-		{
+		case Generated::Config::EchoServer::ELogMinimumLevel::Error:
 			return Foundation::ELogLevel::Error;
 		}
 
-		if (lowerText == "fatal")
-		{
-			return Foundation::ELogLevel::Error;
-		}
-
-		return std::nullopt;
+		return Foundation::ELogLevel::Info;
 	}
 
-	std::optional<EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode> TryParseTransitionRaceMode(const std::string& text)
+	EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode ToTransitionRaceMode(
+		const Generated::Config::EchoServer::EDebugTransitionRaceInjectionMode raceMode) noexcept
 	{
-		const std::string lowerText = ToLowerAscii(text);
-		if (lowerText == "none")
+		switch (raceMode)
 		{
+		case Generated::Config::EchoServer::EDebugTransitionRaceInjectionMode::None:
 			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
-		}
-
-		if (lowerText == "switch" || lowerText == "switchtothread")
-		{
+		case Generated::Config::EchoServer::EDebugTransitionRaceInjectionMode::SwitchToThread:
 			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::SwitchToThread;
-		}
-
-		if (lowerText == "sleep0")
-		{
+		case Generated::Config::EchoServer::EDebugTransitionRaceInjectionMode::Sleep0:
 			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Sleep0;
-		}
-
-		if (lowerText == "yield")
-		{
+		case Generated::Config::EchoServer::EDebugTransitionRaceInjectionMode::Yield:
 			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Yield;
 		}
 
-		return std::nullopt;
+		return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
 	}
 
-	std::optional<ContentsRuntime::Core::ERaceInjectionMode> TryParseContentsRaceMode(const std::string& text)
+	EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode ToTransitionRaceMode(
+		const Generated::Config::EchoServer::EDebugPostRoomChangeRaceInjectionMode raceMode) noexcept
 	{
-		const std::string lowerText = ToLowerAscii(text);
-		if (lowerText == "none")
+		switch (raceMode)
 		{
+		case Generated::Config::EchoServer::EDebugPostRoomChangeRaceInjectionMode::None:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+		case Generated::Config::EchoServer::EDebugPostRoomChangeRaceInjectionMode::SwitchToThread:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::SwitchToThread;
+		case Generated::Config::EchoServer::EDebugPostRoomChangeRaceInjectionMode::Sleep0:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Sleep0;
+		case Generated::Config::EchoServer::EDebugPostRoomChangeRaceInjectionMode::Yield:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Yield;
+		}
+
+		return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+	}
+
+	EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode ToTransitionRaceMode(
+		const Generated::Config::EchoServer::EDebugFirstEchoRaceInjectionMode raceMode) noexcept
+	{
+		switch (raceMode)
+		{
+		case Generated::Config::EchoServer::EDebugFirstEchoRaceInjectionMode::None:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+		case Generated::Config::EchoServer::EDebugFirstEchoRaceInjectionMode::SwitchToThread:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::SwitchToThread;
+		case Generated::Config::EchoServer::EDebugFirstEchoRaceInjectionMode::Sleep0:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Sleep0;
+		case Generated::Config::EchoServer::EDebugFirstEchoRaceInjectionMode::Yield:
+			return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::Yield;
+		}
+
+		return EchoServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode::None;
+	}
+
+	ContentsRuntime::Core::ERaceInjectionMode ToContentsRaceMode(
+		const Generated::Config::EchoServer::EDebugContentsRaceInjectionMode raceMode) noexcept
+	{
+		switch (raceMode)
+		{
+		case Generated::Config::EchoServer::EDebugContentsRaceInjectionMode::None:
 			return ContentsRuntime::Core::ERaceInjectionMode::None;
-		}
-
-		if (lowerText == "switch" || lowerText == "switchtothread")
-		{
+		case Generated::Config::EchoServer::EDebugContentsRaceInjectionMode::SwitchToThread:
 			return ContentsRuntime::Core::ERaceInjectionMode::SwitchToThread;
-		}
-
-		if (lowerText == "sleep0")
-		{
+		case Generated::Config::EchoServer::EDebugContentsRaceInjectionMode::Sleep0:
 			return ContentsRuntime::Core::ERaceInjectionMode::Sleep0;
-		}
-
-		if (lowerText == "yield")
-		{
+		case Generated::Config::EchoServer::EDebugContentsRaceInjectionMode::Yield:
 			return ContentsRuntime::Core::ERaceInjectionMode::Yield;
 		}
 
-		return std::nullopt;
+		return ContentsRuntime::Core::ERaceInjectionMode::None;
 	}
 
 	bool ApplyEchoServerConfigDocument(
@@ -384,61 +379,19 @@ namespace
 		ContentsRuntime::Core::SContentRuntimeConfig& contentRuntimeConfig,
 		std::string& outError)
 	{
-		const auto backendKind = TryParseBackendKind(configDocument.EchoServer.Backend);
-		if (!backendKind.has_value())
-		{
-			outError = "invalid EchoServer.Backend: " + configDocument.EchoServer.Backend;
-			return false;
-		}
-
-		const auto logLevel = TryParseLogLevel(configDocument.EchoServer.LogMinimumLevel);
-		if (!logLevel.has_value())
-		{
-			outError = "invalid EchoServer.LogMinimumLevel: " + configDocument.EchoServer.LogMinimumLevel;
-			return false;
-		}
-
-		const auto transitionRaceMode = TryParseTransitionRaceMode(configDocument.Debug.TransitionRaceInjectionMode);
-		if (!transitionRaceMode.has_value())
-		{
-			outError = "invalid Debug.TransitionRaceInjectionMode: " + configDocument.Debug.TransitionRaceInjectionMode;
-			return false;
-		}
-
-		const auto postRoomChangeRaceMode = TryParseTransitionRaceMode(configDocument.Debug.PostRoomChangeRaceInjectionMode);
-		if (!postRoomChangeRaceMode.has_value())
-		{
-			outError = "invalid Debug.PostRoomChangeRaceInjectionMode: " + configDocument.Debug.PostRoomChangeRaceInjectionMode;
-			return false;
-		}
-
-		const auto firstEchoRaceMode = TryParseTransitionRaceMode(configDocument.Debug.FirstEchoRaceInjectionMode);
-		if (!firstEchoRaceMode.has_value())
-		{
-			outError = "invalid Debug.FirstEchoRaceInjectionMode: " + configDocument.Debug.FirstEchoRaceInjectionMode;
-			return false;
-		}
-
-		const auto contentsRaceMode = TryParseContentsRaceMode(configDocument.Debug.ContentsRaceInjectionMode);
-		if (!contentsRaceMode.has_value())
-		{
-			outError = "invalid Debug.ContentsRaceInjectionMode: " + configDocument.Debug.ContentsRaceInjectionMode;
-			return false;
-		}
-
 		if (configDocument.EchoServer.PacketKey > 0xFF)
 		{
 			outError = "EchoServer.PacketKey must be in range 0..255.";
 			return false;
 		}
 
-		serverConfig.backendKind = *backendKind;
+		serverConfig.backendKind = ToBackendKind(configDocument.EchoServer.Backend);
 		serverConfig.bindIp = configDocument.EchoServer.BindIp;
 		serverConfig.port = configDocument.EchoServer.Port;
 		serverConfig.workerThreadCount = std::max(1, configDocument.EchoServer.WorkerThreadCount);
 		serverConfig.maxSessionCount = std::max(1, configDocument.EchoServer.MaxSessionCount);
 		serverConfig.recvBufferSize = std::max(1, configDocument.EchoServer.RecvBufferSize);
-		serverConfig.logConfig.minimumLevel = *logLevel;
+		serverConfig.logConfig.minimumLevel = ToLogLevel(configDocument.EchoServer.LogMinimumLevel);
 		serverConfig.logConfig.consoleEnabled = configDocument.EchoServer.LogConsoleEnabled;
 		serverConfig.logConfig.fileEnabled = configDocument.EchoServer.LogFileEnabled;
 		serverConfig.logConfig.includeThreadId = configDocument.EchoServer.LogIncludeThreadId;
@@ -465,15 +418,17 @@ namespace
 		runtimeOptions.traceUserId = configDocument.Debug.TraceUserId;
 		runtimeOptions.logPackets = configDocument.Debug.LogPackets;
 		runtimeOptions.enableTransitionResponseRaceInjection = configDocument.Debug.TransitionRaceInjectionEnabled;
-		runtimeOptions.transitionRaceInjectionMode = *transitionRaceMode;
+		runtimeOptions.transitionRaceInjectionMode = ToTransitionRaceMode(configDocument.Debug.TransitionRaceInjectionMode);
 		runtimeOptions.enablePostRoomChangeResponseRaceInjection = configDocument.Debug.PostRoomChangeRaceInjectionEnabled;
-		runtimeOptions.postRoomChangeResponseRaceInjectionMode = *postRoomChangeRaceMode;
+		runtimeOptions.postRoomChangeResponseRaceInjectionMode =
+			ToTransitionRaceMode(configDocument.Debug.PostRoomChangeRaceInjectionMode);
 		runtimeOptions.enableFirstEchoAfterRoomChangeRaceInjection = configDocument.Debug.FirstEchoRaceInjectionEnabled;
-		runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode = *firstEchoRaceMode;
+		runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode =
+			ToTransitionRaceMode(configDocument.Debug.FirstEchoRaceInjectionMode);
 
 		contentRuntimeConfig.enableRaceInjection = configDocument.Debug.ContentsRaceInjectionEnabled;
 		contentRuntimeConfig.raceInjectionPeriod = std::max<std::uint32_t>(1u, configDocument.Debug.ContentsRaceInjectionPeriod);
-		contentRuntimeConfig.raceInjectionMode = *contentsRaceMode;
+		contentRuntimeConfig.raceInjectionMode = ToContentsRaceMode(configDocument.Debug.ContentsRaceInjectionMode);
 		contentRuntimeConfig.failFastOnRuntimeError = configDocument.Debug.ContentsFailFast;
 
 		outRequestManualDump = configDocument.Debug.ManualDump;

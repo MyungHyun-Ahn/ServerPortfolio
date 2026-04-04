@@ -6,15 +6,62 @@
 
 namespace Generated::Config::EchoServer
 {
+	enum class EBackend
+	{
+		Iocp,
+		Rio,
+		BoostAsio
+	};
+
+	enum class ELogMinimumLevel
+	{
+		Debug,
+		Info,
+		Warn,
+		Error
+	};
+
+	enum class EDebugTransitionRaceInjectionMode
+	{
+		None,
+		SwitchToThread,
+		Sleep0,
+		Yield
+	};
+
+	enum class EDebugPostRoomChangeRaceInjectionMode
+	{
+		None,
+		SwitchToThread,
+		Sleep0,
+		Yield
+	};
+
+	enum class EDebugFirstEchoRaceInjectionMode
+	{
+		None,
+		SwitchToThread,
+		Sleep0,
+		Yield
+	};
+
+	enum class EDebugContentsRaceInjectionMode
+	{
+		None,
+		SwitchToThread,
+		Sleep0,
+		Yield
+	};
+
 	struct SEchoServerConfig
 	{
-		std::string Backend = "Iocp";
+		EBackend Backend = EBackend::Iocp;
 		std::string BindIp = "127.0.0.1";
 		std::uint16_t Port = static_cast<std::uint16_t>(19000);
 		std::int32_t WorkerThreadCount = static_cast<std::int32_t>(2);
 		std::int32_t MaxSessionCount = static_cast<std::int32_t>(512);
 		std::int32_t RecvBufferSize = static_cast<std::int32_t>(1024);
-		std::string LogMinimumLevel = "Info";
+		ELogMinimumLevel LogMinimumLevel = ELogMinimumLevel::Info;
 		std::string LogOutputDirectory = "";
 		bool LogConsoleEnabled = true;
 		bool LogFileEnabled = true;
@@ -36,14 +83,14 @@ namespace Generated::Config::EchoServer
 		std::uint32_t TraceUserId = static_cast<std::uint32_t>(0);
 		bool LogPackets = false;
 		bool TransitionRaceInjectionEnabled = false;
-		std::string TransitionRaceInjectionMode = "None";
+		EDebugTransitionRaceInjectionMode TransitionRaceInjectionMode = EDebugTransitionRaceInjectionMode::None;
 		bool PostRoomChangeRaceInjectionEnabled = false;
-		std::string PostRoomChangeRaceInjectionMode = "None";
+		EDebugPostRoomChangeRaceInjectionMode PostRoomChangeRaceInjectionMode = EDebugPostRoomChangeRaceInjectionMode::None;
 		bool FirstEchoRaceInjectionEnabled = false;
-		std::string FirstEchoRaceInjectionMode = "None";
+		EDebugFirstEchoRaceInjectionMode FirstEchoRaceInjectionMode = EDebugFirstEchoRaceInjectionMode::None;
 		bool ContentsRaceInjectionEnabled = false;
 		std::uint32_t ContentsRaceInjectionPeriod = static_cast<std::uint32_t>(100);
-		std::string ContentsRaceInjectionMode = "None";
+		EDebugContentsRaceInjectionMode ContentsRaceInjectionMode = EDebugContentsRaceInjectionMode::None;
 		bool ContentsFailFast = false;
 	};
 

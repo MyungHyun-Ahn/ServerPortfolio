@@ -2,11 +2,19 @@
 
 #include "Foundation/Config/ConfigTypes.h"
 
+#include <array>
 #include <span>
 #include <string_view>
 
 namespace Foundation::Config
 {
+	template <typename TEnum>
+	struct SConfigEnumValue
+	{
+		std::string_view name;
+		TEnum value;
+	};
+
 	class FConfigValueReader
 	{
 	public:
@@ -42,6 +50,28 @@ namespace Foundation::Config
 		bool ReadRequiredDouble(std::string_view sectionName, std::string_view keyName, double& outValue, std::string& outError) const;
 		bool ReadOptionalDouble(std::string_view sectionName, std::string_view keyName, double& outValue, std::string& outError) const;
 
+		template <typename TEnum, std::size_t TCount>
+		bool ReadRequiredEnum(
+			std::string_view sectionName,
+			std::string_view keyName,
+			const std::array<SConfigEnumValue<TEnum>, TCount>& enumValues,
+			TEnum& outValue,
+			std::string& outError) const
+		{
+			return ReadEnumValue(sectionName, keyName, true, std::span<const SConfigEnumValue<TEnum>>(enumValues), outValue, outError);
+		}
+
+		template <typename TEnum, std::size_t TCount>
+		bool ReadOptionalEnum(
+			std::string_view sectionName,
+			std::string_view keyName,
+			const std::array<SConfigEnumValue<TEnum>, TCount>& enumValues,
+			TEnum& outValue,
+			std::string& outError) const
+		{
+			return ReadEnumValue(sectionName, keyName, false, std::span<const SConfigEnumValue<TEnum>>(enumValues), outValue, outError);
+		}
+
 	private:
 		const SConfigSection* FindSection(std::string_view sectionName) const noexcept;
 		const SConfigScalarValue* FindScalar(std::string_view sectionName, std::string_view keyName, std::string& outError) const;
@@ -53,6 +83,49 @@ namespace Foundation::Config
 			bool required,
 			TValue& outValue,
 			std::string& outError) const;
+
+		template <typename TEnum>
+		bool ReadEnumValue(
+			std::string_view sectionName,
+			std::string_view keyName,
+			bool required,
+			std::span<const SConfigEnumValue<TEnum>> enumValues,
+			TEnum& outValue,
+			std::string& outError) const
+		{
+			const SConfigSection* section = FindSection(sectionName);
+			if (section == nullptr)
+			{
+				outError = "required config section is missing: " + std::string(sectionName);
+				return false;
+			}
+
+			const auto scalarIt = section->scalarValues.find(std::string(keyName));
+			if (scalarIt == section->scalarValues.end())
+			{
+				if (required)
+				{
+					outError = "required config key is missing: " + std::string(sectionName) + "." + std::string(keyName);
+					return false;
+				}
+
+				outError.clear();
+				return true;
+			}
+
+			for (const SConfigEnumValue<TEnum>& enumValue : enumValues)
+			{
+				if (scalarIt->second.value == enumValue.name)
+				{
+					outValue = enumValue.value;
+					return true;
+				}
+			}
+
+			outError = "invalid config enum value. key=" + std::string(sectionName) + "." + std::string(keyName) +
+				" actual='" + scalarIt->second.value + "'";
+			return false;
+		}
 
 	private:
 		const SConfigDocument& m_document;

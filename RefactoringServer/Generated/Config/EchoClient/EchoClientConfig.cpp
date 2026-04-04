@@ -77,12 +77,12 @@ namespace Generated::Config::EchoClient
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("EchoClient", "ServerIp", outConfig.EchoClient.ServerIp, outError))
+		if (!reader.ReadRequiredString("EchoClient", "ServerIp", outConfig.EchoClient.ServerIp, outError))
 		{
 			return false;
 		}
 
-		if (!reader.ReadOptionalUInt16("EchoClient", "Port", outConfig.EchoClient.Port, outError))
+		if (!reader.ReadRequiredUInt16("EchoClient", "Port", outConfig.EchoClient.Port, outError))
 		{
 			return false;
 		}

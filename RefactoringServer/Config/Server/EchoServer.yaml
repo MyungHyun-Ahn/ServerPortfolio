@@ -1,10 +1,15 @@
+# Generated from ConfigSchema/Server/EchoServer.schema.yaml
+# Edit schema defaults and regenerate with Generate-Configs.cmd.
+
 EchoServer:
+  # Allowed: Iocp, Rio, BoostAsio
   Backend: Iocp
   BindIp: 127.0.0.1
   Port: 19000
   WorkerThreadCount: 2
   MaxSessionCount: 512
   RecvBufferSize: 1024
+  # Allowed: Debug, Info, Warn, Error
   LogMinimumLevel: Info
   LogOutputDirectory: ""
   LogConsoleEnabled: true
@@ -25,12 +30,17 @@ Debug:
   TraceUserId: 0
   LogPackets: false
   TransitionRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
   TransitionRaceInjectionMode: None
   PostRoomChangeRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
   PostRoomChangeRaceInjectionMode: None
   FirstEchoRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
   FirstEchoRaceInjectionMode: None
   ContentsRaceInjectionEnabled: false
   ContentsRaceInjectionPeriod: 100
+  # Allowed: None, SwitchToThread, Sleep0, Yield
   ContentsRaceInjectionMode: None
   ContentsFailFast: false
+

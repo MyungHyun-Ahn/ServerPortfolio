@@ -104,7 +104,7 @@ Debug:
 - 에러 메시지 정리
 
 도메인별 의미 해석은 상위 프로젝트가 담당한다.
-- 예: `Backend: Iocp`를 enum으로 변환
+- 예: generated config enum을 런타임 enum으로 변환
 - 예: `Headless`, `BootstrapTrace`를 런타임 옵션에 연결
 
 ## 9. ConfigGenerator 역할
@@ -124,6 +124,7 @@ dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csp
 - `int32`, `uint16`, `uint32`, `int64`, `uint64`
 - `float`, `double`
 - `string`
+- `enum`
 
 ## 11. 검증 기준
 - `ConfigGenerator`가 최상단 섹션 맵 스키마를 정상 생성해야 한다.
@@ -136,3 +137,6 @@ dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csp
 - 스키마는 최상단 섹션 맵 형식이 가장 읽기 쉽다.
 - `target`, `root-class`, `sections`는 파일명과 생성 규칙으로 대체 가능하다.
 - 현재 ConfigGenerator와 runtime은 이 형식에 맞춰 정리한다.
+
+## 13. 후속 작업
+- enum 지원, required 지원, sample YAML 자동 생성은 후속 문서 [008_config-generator-enum-required-and-template.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\008_config-generator-enum-required-and-template.md)로 이어서 관리한다.

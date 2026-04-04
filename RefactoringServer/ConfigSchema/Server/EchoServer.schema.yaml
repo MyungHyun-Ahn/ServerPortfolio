@@ -1,11 +1,17 @@
 EchoServer:
-  Backend: { type: string, default: Iocp }
-  BindIp: { type: string, default: 127.0.0.1 }
-  Port: { type: uint16, default: 19000 }
+  Backend:
+    type: enum
+    default: Iocp
+    values: [Iocp, Rio, BoostAsio]
+  BindIp: { type: string, default: 127.0.0.1, required: true }
+  Port: { type: uint16, default: 19000, required: true }
   WorkerThreadCount: { type: int32, default: 2 }
   MaxSessionCount: { type: int32, default: 512 }
   RecvBufferSize: { type: int32, default: 1024 }
-  LogMinimumLevel: { type: string, default: Info }
+  LogMinimumLevel:
+    type: enum
+    default: Info
+    values: [Debug, Info, Warn, Error]
   LogOutputDirectory: { type: string, default: "" }
   LogConsoleEnabled: { type: bool, default: true }
   LogFileEnabled: { type: bool, default: true }
@@ -25,12 +31,24 @@ Debug:
   TraceUserId: { type: uint32, default: 0 }
   LogPackets: { type: bool, default: false }
   TransitionRaceInjectionEnabled: { type: bool, default: false }
-  TransitionRaceInjectionMode: { type: string, default: None }
+  TransitionRaceInjectionMode:
+    type: enum
+    default: None
+    values: [None, SwitchToThread, Sleep0, Yield]
   PostRoomChangeRaceInjectionEnabled: { type: bool, default: false }
-  PostRoomChangeRaceInjectionMode: { type: string, default: None }
+  PostRoomChangeRaceInjectionMode:
+    type: enum
+    default: None
+    values: [None, SwitchToThread, Sleep0, Yield]
   FirstEchoRaceInjectionEnabled: { type: bool, default: false }
-  FirstEchoRaceInjectionMode: { type: string, default: None }
+  FirstEchoRaceInjectionMode:
+    type: enum
+    default: None
+    values: [None, SwitchToThread, Sleep0, Yield]
   ContentsRaceInjectionEnabled: { type: bool, default: false }
   ContentsRaceInjectionPeriod: { type: uint32, default: 100 }
-  ContentsRaceInjectionMode: { type: string, default: None }
+  ContentsRaceInjectionMode:
+    type: enum
+    default: None
+    values: [None, SwitchToThread, Sleep0, Yield]
   ContentsFailFast: { type: bool, default: false }

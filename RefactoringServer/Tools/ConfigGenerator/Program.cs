@@ -11,8 +11,9 @@ internal static class Program
             string solutionRoot = FindSolutionRoot();
             string schemaRoot = Path.Combine(solutionRoot, "ConfigSchema");
             string outputRoot = Path.Combine(solutionRoot, "Generated", "Config");
+            string configRoot = Path.Combine(solutionRoot, "Config");
 
-            ParseArguments(args, ref schemaRoot, ref outputRoot);
+            ParseArguments(args, ref schemaRoot, ref outputRoot, ref configRoot);
 
             if (!Directory.Exists(schemaRoot))
             {
@@ -34,11 +35,11 @@ internal static class Program
             foreach (string schemaFile in schemaFiles)
             {
                 string yamlText = File.ReadAllText(schemaFile);
-                Dictionary<string, Dictionary<string, ConfigSchemaField>> rawSections =
-                    deserializer.Deserialize<Dictionary<string, Dictionary<string, ConfigSchemaField>>>(yamlText)
+                Dictionary<string, Dictionary<string, ConfigSchemaFieldDefinition>> rawSections =
+                    deserializer.Deserialize<Dictionary<string, Dictionary<string, ConfigSchemaFieldDefinition>>>(yamlText)
                     ?? throw new InvalidOperationException($"Failed to deserialize config schema: {schemaFile}");
 
-                ConfigSchemaDocument document = ConfigSchemaNormalizer.Normalize(rawSections, schemaFile);
+                ConfigSchemaDocument document = ConfigSchemaNormalizer.Normalize(rawSections, schemaRoot, schemaFile);
                 ConfigSchemaValidator.Validate(document, schemaFile);
                 documents.Add(document);
             }
@@ -53,11 +54,17 @@ internal static class Program
                 string headerPath = Path.Combine(targetOutputDirectory, $"{document.Target}Config.h");
                 string cppPath = Path.Combine(targetOutputDirectory, $"{document.Target}Config.cpp");
 
+                string templateOutputDirectory = Path.Combine(configRoot, document.RelativeDirectory);
+                Directory.CreateDirectory(templateOutputDirectory);
+                string templatePath = Path.Combine(templateOutputDirectory, $"{document.Target}.yaml");
+
                 File.WriteAllText(headerPath, CppConfigGenerator.GenerateHeader(document), new UTF8Encoding(false));
                 File.WriteAllText(cppPath, CppConfigGenerator.GenerateCpp(document), new UTF8Encoding(false));
+                File.WriteAllText(templatePath, YamlTemplateGenerator.Generate(document), new UTF8Encoding(false));
 
                 Console.WriteLine($"Generated: {headerPath}");
                 Console.WriteLine($"Generated: {cppPath}");
+                Console.WriteLine($"Generated: {templatePath}");
             }
 
             return 0;
@@ -69,7 +76,7 @@ internal static class Program
         }
     }
 
-    private static void ParseArguments(string[] args, ref string schemaRoot, ref string outputRoot)
+    private static void ParseArguments(string[] args, ref string schemaRoot, ref string outputRoot, ref string configRoot)
     {
         for (int index = 0; index < args.Length; ++index)
         {
@@ -81,6 +88,10 @@ internal static class Program
             else if (argument == "--output-root" && index + 1 < args.Length)
             {
                 outputRoot = Path.GetFullPath(args[++index]);
+            }
+            else if (argument == "--config-root" && index + 1 < args.Length)
+            {
+                configRoot = Path.GetFullPath(args[++index]);
             }
             else
             {
@@ -125,6 +136,10 @@ internal sealed class ConfigSchemaDocument
 {
     public string Target { get; init; } = string.Empty;
 
+    public string RelativeDirectory { get; init; } = string.Empty;
+
+    public string SchemaRelativePath { get; init; } = string.Empty;
+
     public List<ConfigSchemaSection> Sections { get; init; } = [];
 
     public string RootClassName => ConfigSchemaNaming.BuildRootClassName(Target);
@@ -139,10 +154,8 @@ internal sealed class ConfigSchemaSection
     public List<ConfigSchemaField> Fields { get; init; } = [];
 }
 
-internal sealed class ConfigSchemaField
+internal sealed class ConfigSchemaFieldDefinition
 {
-    public string Name { get; set; } = string.Empty;
-
     public string Type { get; set; } = string.Empty;
 
     public string? Default { get; set; }
@@ -150,20 +163,51 @@ internal sealed class ConfigSchemaField
     public bool Required { get; set; }
 
     public string? Description { get; set; }
+
+    public List<string> Values { get; set; } = [];
+}
+
+internal sealed class ConfigSchemaField
+{
+    public string Name { get; init; } = string.Empty;
+
+    public string Type { get; init; } = string.Empty;
+
+    public string? Default { get; init; }
+
+    public bool Required { get; init; }
+
+    public string? Description { get; init; }
+
+    public List<string> EnumValues { get; init; } = [];
+
+    public string EnumTypeName { get; init; } = string.Empty;
+
+    public bool IsEnum => string.Equals(Type, "enum", StringComparison.Ordinal);
 }
 
 internal static class ConfigSchemaNormalizer
 {
-    public static ConfigSchemaDocument Normalize(Dictionary<string, Dictionary<string, ConfigSchemaField>> rawSections, string schemaPath)
+    public static ConfigSchemaDocument Normalize(
+        Dictionary<string, Dictionary<string, ConfigSchemaFieldDefinition>> rawSections,
+        string schemaRoot,
+        string schemaPath)
     {
         string target = ExtractTargetFromSchemaPath(schemaPath);
+        string schemaDirectory = Path.GetDirectoryName(schemaPath) ?? schemaRoot;
+        string relativeDirectory = Path.GetRelativePath(schemaRoot, schemaDirectory);
+        if (relativeDirectory == ".")
+        {
+            relativeDirectory = string.Empty;
+        }
+
         if (rawSections.Count == 0)
         {
             throw new InvalidOperationException($"Config schema has no sections: {schemaPath}");
         }
 
         var sections = new List<ConfigSchemaSection>(rawSections.Count);
-        foreach ((string sectionName, Dictionary<string, ConfigSchemaField> rawFields) in rawSections)
+        foreach ((string sectionName, Dictionary<string, ConfigSchemaFieldDefinition> rawFields) in rawSections)
         {
             if (string.IsNullOrWhiteSpace(sectionName))
             {
@@ -176,7 +220,7 @@ internal static class ConfigSchemaNormalizer
             }
 
             var fields = new List<ConfigSchemaField>(rawFields.Count);
-            foreach ((string fieldName, ConfigSchemaField rawField) in rawFields)
+            foreach ((string fieldName, ConfigSchemaFieldDefinition rawField) in rawFields)
             {
                 if (rawField == null)
                 {
@@ -189,7 +233,9 @@ internal static class ConfigSchemaNormalizer
                     Type = rawField.Type,
                     Default = rawField.Default,
                     Required = rawField.Required,
-                    Description = rawField.Description
+                    Description = rawField.Description,
+                    EnumValues = rawField.Values,
+                    EnumTypeName = ConfigSchemaNaming.BuildFieldEnumName(target, sectionName, fieldName)
                 });
             }
 
@@ -204,6 +250,8 @@ internal static class ConfigSchemaNormalizer
         return new ConfigSchemaDocument
         {
             Target = target,
+            RelativeDirectory = relativeDirectory,
+            SchemaRelativePath = Path.GetRelativePath(schemaRoot, schemaPath).Replace('\\', '/'),
             Sections = sections
         };
     }
@@ -248,7 +296,21 @@ internal static class ConfigSchemaNaming
         return $"S{targetIdentifier}{sectionIdentifier}Config";
     }
 
-    private static string NormalizeIdentifier(string text)
+    public static string BuildFieldEnumName(string target, string sectionName, string fieldName)
+    {
+        string targetIdentifier = NormalizeIdentifier(target);
+        string sectionIdentifier = NormalizeIdentifier(sectionName);
+        string fieldIdentifier = NormalizeIdentifier(fieldName);
+
+        if (string.Equals(targetIdentifier, sectionIdentifier, StringComparison.Ordinal))
+        {
+            return $"E{fieldIdentifier}";
+        }
+
+        return $"E{sectionIdentifier}{fieldIdentifier}";
+    }
+
+    public static string NormalizeIdentifier(string text)
     {
         var builder = new StringBuilder(text.Length);
         bool capitalizeNext = true;
@@ -271,6 +333,30 @@ internal static class ConfigSchemaNaming
         }
 
         return builder.ToString();
+    }
+
+    public static bool IsValidEnumValueName(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        if (!(char.IsLetter(text[0]) || text[0] == '_'))
+        {
+            return false;
+        }
+
+        for (int index = 1; index < text.Length; ++index)
+        {
+            char character = text[index];
+            if (!(char.IsLetterOrDigit(character) || character == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 
@@ -296,11 +382,6 @@ internal static class ConfigSchemaValidator
                 throw new InvalidOperationException($"Config schema section name is empty: {schemaPath}");
             }
 
-            if (string.IsNullOrWhiteSpace(section.ClassName))
-            {
-                throw new InvalidOperationException($"Config schema section class is empty: {schemaPath}");
-            }
-
             if (!usedSectionNames.Add(section.Name))
             {
                 throw new InvalidOperationException($"Duplicate config section '{section.Name}': {schemaPath}");
@@ -324,19 +405,58 @@ internal static class ConfigSchemaValidator
                     throw new InvalidOperationException($"Duplicate config field '{section.Name}.{field.Name}': {schemaPath}");
                 }
 
-                _ = ConfigTypeMapping.RenderCppType(field.Type);
-                _ = ConfigTypeMapping.GetReaderFunctionName(field.Type, field.Required);
-                _ = ConfigTypeMapping.RenderMemberInitializer(field.Type, field.Default);
+                if (field.IsEnum)
+                {
+                    ValidateEnumField(section, field, schemaPath);
+                }
+
+                _ = ConfigTypeMapping.RenderCppType(field);
+                _ = ConfigTypeMapping.RenderMemberInitializer(field);
+                _ = ConfigTypeMapping.RenderSampleValue(field);
             }
+        }
+    }
+
+    private static void ValidateEnumField(ConfigSchemaSection section, ConfigSchemaField field, string schemaPath)
+    {
+        if (field.EnumValues.Count == 0)
+        {
+            throw new InvalidOperationException($"Enum config field has no values: {section.Name}.{field.Name} in {schemaPath}");
+        }
+
+        var usedEnumValues = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string enumValue in field.EnumValues)
+        {
+            if (!usedEnumValues.Add(enumValue))
+            {
+                throw new InvalidOperationException($"Duplicate enum value '{enumValue}' in {section.Name}.{field.Name}: {schemaPath}");
+            }
+
+            if (!ConfigSchemaNaming.IsValidEnumValueName(enumValue))
+            {
+                throw new InvalidOperationException(
+                    $"Enum value '{enumValue}' in {section.Name}.{field.Name} must be a valid C++ identifier: {schemaPath}");
+            }
+        }
+
+        if (field.Default != null && !field.EnumValues.Contains(field.Default, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Enum default '{field.Default}' is not defined in {section.Name}.{field.Name}: {schemaPath}");
         }
     }
 }
 
 internal static class ConfigTypeMapping
 {
-    public static string RenderCppType(string schemaType)
+    public static string RenderCppType(ConfigSchemaField field)
     {
-        return schemaType switch
+        if (field.IsEnum)
+        {
+            return field.EnumTypeName;
+        }
+
+        return field.Type switch
         {
             "bool" => "bool",
             "int32" => "std::int32_t",
@@ -347,14 +467,19 @@ internal static class ConfigTypeMapping
             "float" => "float",
             "double" => "double",
             "string" => "std::string",
-            _ => throw new InvalidOperationException($"Unsupported config field type: {schemaType}")
+            _ => throw new InvalidOperationException($"Unsupported config field type: {field.Type}")
         };
     }
 
-    public static string GetReaderFunctionName(string schemaType, bool required)
+    public static string GetReaderFunctionName(ConfigSchemaField field)
     {
-        string prefix = required ? "ReadRequired" : "ReadOptional";
-        return schemaType switch
+        if (field.IsEnum)
+        {
+            return field.Required ? "ReadRequiredEnum" : "ReadOptionalEnum";
+        }
+
+        string prefix = field.Required ? "ReadRequired" : "ReadOptional";
+        return field.Type switch
         {
             "bool" => prefix + "Bool",
             "int32" => prefix + "Int32",
@@ -365,29 +490,75 @@ internal static class ConfigTypeMapping
             "float" => prefix + "Float",
             "double" => prefix + "Double",
             "string" => prefix + "String",
-            _ => throw new InvalidOperationException($"Unsupported config field type: {schemaType}")
+            _ => throw new InvalidOperationException($"Unsupported config field type: {field.Type}")
         };
     }
 
-    public static string? RenderMemberInitializer(string schemaType, string? defaultText)
+    public static string? RenderMemberInitializer(ConfigSchemaField field)
     {
-        if (defaultText == null)
+        if (field.Default == null)
         {
             return null;
         }
 
-        return schemaType switch
+        if (field.IsEnum)
         {
-            "bool" => RenderBoolLiteral(defaultText),
-            "int32" => $"static_cast<std::int32_t>({defaultText})",
-            "uint16" => $"static_cast<std::uint16_t>({defaultText})",
-            "uint32" => $"static_cast<std::uint32_t>({defaultText})",
-            "int64" => $"static_cast<std::int64_t>({defaultText})",
-            "uint64" => $"static_cast<std::uint64_t>({defaultText})",
-            "float" => defaultText,
-            "double" => defaultText,
-            "string" => $"\"{EscapeCppString(defaultText)}\"",
-            _ => throw new InvalidOperationException($"Unsupported config field type: {schemaType}")
+            return $"{field.EnumTypeName}::{field.Default}";
+        }
+
+        return field.Type switch
+        {
+            "bool" => RenderBoolLiteral(field.Default),
+            "int32" => $"static_cast<std::int32_t>({field.Default})",
+            "uint16" => $"static_cast<std::uint16_t>({field.Default})",
+            "uint32" => $"static_cast<std::uint32_t>({field.Default})",
+            "int64" => $"static_cast<std::int64_t>({field.Default})",
+            "uint64" => $"static_cast<std::uint64_t>({field.Default})",
+            "float" => field.Default,
+            "double" => field.Default,
+            "string" => $"\"{EscapeCppString(field.Default)}\"",
+            _ => throw new InvalidOperationException($"Unsupported config field type: {field.Type}")
+        };
+    }
+
+    public static string RenderSampleValue(ConfigSchemaField field)
+    {
+        string valueText;
+        if (field.Default != null)
+        {
+            valueText = field.Default;
+        }
+        else if (field.IsEnum)
+        {
+            valueText = field.EnumValues[0];
+        }
+        else
+        {
+            valueText = field.Type switch
+            {
+                "bool" => "false",
+                "int32" => "0",
+                "uint16" => "0",
+                "uint32" => "0",
+                "int64" => "0",
+                "uint64" => "0",
+                "float" => "0",
+                "double" => "0",
+                "string" => string.Empty,
+                _ => throw new InvalidOperationException($"Unsupported config field type: {field.Type}")
+            };
+        }
+
+        if (field.IsEnum)
+        {
+            return valueText;
+        }
+
+        return field.Type switch
+        {
+            "bool" => RenderBoolLiteral(valueText),
+            "string" => RenderYamlString(valueText),
+            _ => valueText
         };
     }
 
@@ -405,6 +576,31 @@ internal static class ConfigTypeMapping
             "0" or "no" or "off" => "false",
             _ => throw new InvalidOperationException($"Invalid bool default: {text}")
         };
+    }
+
+    private static string RenderYamlString(string text)
+    {
+        if (text.Length == 0)
+        {
+            return "\"\"";
+        }
+
+        bool requiresQuotes = false;
+        foreach (char character in text)
+        {
+            if (char.IsWhiteSpace(character) || character == ':' || character == '#' || character == '"' || character == '\'')
+            {
+                requiresQuotes = true;
+                break;
+            }
+        }
+
+        if (!requiresQuotes)
+        {
+            return text;
+        }
+
+        return $"\"{EscapeCppString(text)}\"";
     }
 
     private static string EscapeCppString(string text)
@@ -434,12 +630,34 @@ internal static class CppConfigGenerator
 
         foreach (ConfigSchemaSection section in document.Sections)
         {
+            foreach (ConfigSchemaField field in section.Fields)
+            {
+                if (!field.IsEnum)
+                {
+                    continue;
+                }
+
+                builder.AppendLine($"\tenum class {field.EnumTypeName}");
+                builder.AppendLine("\t{");
+                for (int enumIndex = 0; enumIndex < field.EnumValues.Count; ++enumIndex)
+                {
+                    string enumValue = field.EnumValues[enumIndex];
+                    string suffix = enumIndex + 1 == field.EnumValues.Count ? string.Empty : ",";
+                    builder.AppendLine($"\t\t{enumValue}{suffix}");
+                }
+                builder.AppendLine("\t};");
+                builder.AppendLine();
+            }
+        }
+
+        foreach (ConfigSchemaSection section in document.Sections)
+        {
             builder.AppendLine($"\tstruct {section.ClassName}");
             builder.AppendLine("\t{");
             foreach (ConfigSchemaField field in section.Fields)
             {
-                string cppType = ConfigTypeMapping.RenderCppType(field.Type);
-                string? initializer = ConfigTypeMapping.RenderMemberInitializer(field.Type, field.Default);
+                string cppType = ConfigTypeMapping.RenderCppType(field);
+                string? initializer = ConfigTypeMapping.RenderMemberInitializer(field);
                 if (!string.IsNullOrWhiteSpace(field.Description))
                 {
                     builder.AppendLine($"\t\t// {field.Description}");
@@ -490,6 +708,31 @@ internal static class CppConfigGenerator
         builder.AppendLine();
         builder.AppendLine($"namespace Generated::Config::{document.Target}");
         builder.AppendLine("{");
+
+        foreach (ConfigSchemaSection section in document.Sections)
+        {
+            foreach (ConfigSchemaField field in section.Fields)
+            {
+                if (!field.IsEnum)
+                {
+                    continue;
+                }
+
+                builder.AppendLine($"\tconstexpr std::array<Foundation::Config::SConfigEnumValue<{field.EnumTypeName}>, {field.EnumValues.Count}> k{section.Name}{field.Name}EnumValues =");
+                builder.AppendLine("\t{");
+                builder.AppendLine("\t\t{");
+                for (int enumIndex = 0; enumIndex < field.EnumValues.Count; ++enumIndex)
+                {
+                    string enumValue = field.EnumValues[enumIndex];
+                    string suffix = enumIndex + 1 == field.EnumValues.Count ? string.Empty : ",";
+                    builder.AppendLine($"\t\t\t{{ \"{enumValue}\", {field.EnumTypeName}::{enumValue} }}{suffix}");
+                }
+                builder.AppendLine("\t\t}");
+                builder.AppendLine("\t};");
+                builder.AppendLine();
+            }
+        }
+
         builder.AppendLine($"\tbool F{document.Target}ConfigLoader::LoadFromFile(const std::filesystem::path& filePath, {document.RootClassName}& outConfig, std::string& outError)");
         builder.AppendLine("\t{");
         builder.AppendLine("\t\tFoundation::Config::SConfigDocument document{};");
@@ -537,8 +780,18 @@ internal static class CppConfigGenerator
         {
             foreach (ConfigSchemaField field in section.Fields)
             {
-                string readerFunctionName = ConfigTypeMapping.GetReaderFunctionName(field.Type, field.Required);
-                builder.AppendLine($"\t\tif (!reader.{readerFunctionName}(\"{section.Name}\", \"{field.Name}\", outConfig.{section.Name}.{field.Name}, outError))");
+                string readerFunctionName = ConfigTypeMapping.GetReaderFunctionName(field);
+                if (field.IsEnum)
+                {
+                    builder.AppendLine(
+                        $"\t\tif (!reader.{readerFunctionName}(\"{section.Name}\", \"{field.Name}\", k{section.Name}{field.Name}EnumValues, outConfig.{section.Name}.{field.Name}, outError))");
+                }
+                else
+                {
+                    builder.AppendLine(
+                        $"\t\tif (!reader.{readerFunctionName}(\"{section.Name}\", \"{field.Name}\", outConfig.{section.Name}.{field.Name}, outError))");
+                }
+
                 builder.AppendLine("\t\t{");
                 builder.AppendLine("\t\t\treturn false;");
                 builder.AppendLine("\t\t}");
@@ -549,6 +802,45 @@ internal static class CppConfigGenerator
         builder.AppendLine("\t\treturn true;");
         builder.AppendLine("\t}");
         builder.AppendLine("}");
+        return builder.ToString();
+    }
+}
+
+internal static class YamlTemplateGenerator
+{
+    public static string Generate(ConfigSchemaDocument document)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"# Generated from ConfigSchema/{document.SchemaRelativePath}");
+        builder.AppendLine("# Edit schema defaults and regenerate with Generate-Configs.cmd.");
+        builder.AppendLine();
+
+        foreach (ConfigSchemaSection section in document.Sections)
+        {
+            builder.AppendLine($"{section.Name}:");
+            foreach (ConfigSchemaField field in section.Fields)
+            {
+                if (!string.IsNullOrWhiteSpace(field.Description))
+                {
+                    builder.AppendLine($"  # {field.Description}");
+                }
+
+                if (field.Required && field.Default == null)
+                {
+                    builder.AppendLine("  # Required field.");
+                }
+
+                if (field.IsEnum)
+                {
+                    builder.AppendLine($"  # Allowed: {string.Join(", ", field.EnumValues)}");
+                }
+
+                builder.AppendLine($"  {field.Name}: {ConfigTypeMapping.RenderSampleValue(field)}");
+            }
+
+            builder.AppendLine();
+        }
+
         return builder.ToString();
     }
 }

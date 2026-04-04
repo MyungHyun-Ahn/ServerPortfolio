@@ -11,7 +11,7 @@
 ## 2. 작업 상태
 | 번호 | 작업 묶음 | 상태 | 비고 |
 |---|---|---|---|
-| `001` | Foundation | 진행 중 | `Diagnostics` 공용 RTT 계측, `Ids` 공용 allocator, `Config` YAML 로더와 `ConfigGenerator`까지 반영 완료. 다음은 Logging/Diagnostics/Config 경계 정리와 reserve bit 후속 정책 정리다. |
+| `001` | Foundation | 진행 중 | `Diagnostics` 공용 RTT 계측, `Ids` 공용 allocator, `Config` YAML 로더, `ConfigGenerator`, enum/required/sample YAML 자동 생성까지 반영 완료. 다음은 Logging/Diagnostics/Config 경계 정리와 reserve bit 후속 정책 정리다. |
 | `002` | Legacy MhLib 조사/정리 | 완료 | 과거 구조 참고 기준 정리 완료 |
 | `003` | NetworkLib Crypto / Packet Header | 완료 | cipher, framing, content header 기반 정리 완료 |
 | `004` | NetworkLib Session | 완료 | 세션, 송수신, 생명주기 정리 완료 |

@@ -1,6 +1,6 @@
 EchoClient:
-  ServerIp: { type: string, default: 127.0.0.1 }
-  Port: { type: uint16, default: 19000 }
+  ServerIp: { type: string, default: 127.0.0.1, required: true }
+  Port: { type: uint16, default: 19000, required: true }
   LoginUserIdBase: { type: uint32, default: 1000 }
   SessionCount: { type: int32, default: 1 }
   RequestCount: { type: int32, default: 1 }

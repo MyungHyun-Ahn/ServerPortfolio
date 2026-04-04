@@ -9,6 +9,65 @@
 
 namespace Generated::Config::EchoServer
 {
+	constexpr std::array<Foundation::Config::SConfigEnumValue<EBackend>, 3> kEchoServerBackendEnumValues =
+	{
+		{
+			{ "Iocp", EBackend::Iocp },
+			{ "Rio", EBackend::Rio },
+			{ "BoostAsio", EBackend::BoostAsio }
+		}
+	};
+
+	constexpr std::array<Foundation::Config::SConfigEnumValue<ELogMinimumLevel>, 4> kEchoServerLogMinimumLevelEnumValues =
+	{
+		{
+			{ "Debug", ELogMinimumLevel::Debug },
+			{ "Info", ELogMinimumLevel::Info },
+			{ "Warn", ELogMinimumLevel::Warn },
+			{ "Error", ELogMinimumLevel::Error }
+		}
+	};
+
+	constexpr std::array<Foundation::Config::SConfigEnumValue<EDebugTransitionRaceInjectionMode>, 4> kDebugTransitionRaceInjectionModeEnumValues =
+	{
+		{
+			{ "None", EDebugTransitionRaceInjectionMode::None },
+			{ "SwitchToThread", EDebugTransitionRaceInjectionMode::SwitchToThread },
+			{ "Sleep0", EDebugTransitionRaceInjectionMode::Sleep0 },
+			{ "Yield", EDebugTransitionRaceInjectionMode::Yield }
+		}
+	};
+
+	constexpr std::array<Foundation::Config::SConfigEnumValue<EDebugPostRoomChangeRaceInjectionMode>, 4> kDebugPostRoomChangeRaceInjectionModeEnumValues =
+	{
+		{
+			{ "None", EDebugPostRoomChangeRaceInjectionMode::None },
+			{ "SwitchToThread", EDebugPostRoomChangeRaceInjectionMode::SwitchToThread },
+			{ "Sleep0", EDebugPostRoomChangeRaceInjectionMode::Sleep0 },
+			{ "Yield", EDebugPostRoomChangeRaceInjectionMode::Yield }
+		}
+	};
+
+	constexpr std::array<Foundation::Config::SConfigEnumValue<EDebugFirstEchoRaceInjectionMode>, 4> kDebugFirstEchoRaceInjectionModeEnumValues =
+	{
+		{
+			{ "None", EDebugFirstEchoRaceInjectionMode::None },
+			{ "SwitchToThread", EDebugFirstEchoRaceInjectionMode::SwitchToThread },
+			{ "Sleep0", EDebugFirstEchoRaceInjectionMode::Sleep0 },
+			{ "Yield", EDebugFirstEchoRaceInjectionMode::Yield }
+		}
+	};
+
+	constexpr std::array<Foundation::Config::SConfigEnumValue<EDebugContentsRaceInjectionMode>, 4> kDebugContentsRaceInjectionModeEnumValues =
+	{
+		{
+			{ "None", EDebugContentsRaceInjectionMode::None },
+			{ "SwitchToThread", EDebugContentsRaceInjectionMode::SwitchToThread },
+			{ "Sleep0", EDebugContentsRaceInjectionMode::Sleep0 },
+			{ "Yield", EDebugContentsRaceInjectionMode::Yield }
+		}
+	};
+
 	bool FEchoServerConfigLoader::LoadFromFile(const std::filesystem::path& filePath, FEchoServerConfigDocument& outConfig, std::string& outError)
 	{
 		Foundation::Config::SConfigDocument document{};
@@ -81,17 +140,17 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("EchoServer", "Backend", outConfig.EchoServer.Backend, outError))
+		if (!reader.ReadOptionalEnum("EchoServer", "Backend", kEchoServerBackendEnumValues, outConfig.EchoServer.Backend, outError))
 		{
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("EchoServer", "BindIp", outConfig.EchoServer.BindIp, outError))
+		if (!reader.ReadRequiredString("EchoServer", "BindIp", outConfig.EchoServer.BindIp, outError))
 		{
 			return false;
 		}
 
-		if (!reader.ReadOptionalUInt16("EchoServer", "Port", outConfig.EchoServer.Port, outError))
+		if (!reader.ReadRequiredUInt16("EchoServer", "Port", outConfig.EchoServer.Port, outError))
 		{
 			return false;
 		}
@@ -111,7 +170,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("EchoServer", "LogMinimumLevel", outConfig.EchoServer.LogMinimumLevel, outError))
+		if (!reader.ReadOptionalEnum("EchoServer", "LogMinimumLevel", kEchoServerLogMinimumLevelEnumValues, outConfig.EchoServer.LogMinimumLevel, outError))
 		{
 			return false;
 		}
@@ -201,7 +260,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("Debug", "TransitionRaceInjectionMode", outConfig.Debug.TransitionRaceInjectionMode, outError))
+		if (!reader.ReadOptionalEnum("Debug", "TransitionRaceInjectionMode", kDebugTransitionRaceInjectionModeEnumValues, outConfig.Debug.TransitionRaceInjectionMode, outError))
 		{
 			return false;
 		}
@@ -211,7 +270,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("Debug", "PostRoomChangeRaceInjectionMode", outConfig.Debug.PostRoomChangeRaceInjectionMode, outError))
+		if (!reader.ReadOptionalEnum("Debug", "PostRoomChangeRaceInjectionMode", kDebugPostRoomChangeRaceInjectionModeEnumValues, outConfig.Debug.PostRoomChangeRaceInjectionMode, outError))
 		{
 			return false;
 		}
@@ -221,7 +280,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("Debug", "FirstEchoRaceInjectionMode", outConfig.Debug.FirstEchoRaceInjectionMode, outError))
+		if (!reader.ReadOptionalEnum("Debug", "FirstEchoRaceInjectionMode", kDebugFirstEchoRaceInjectionModeEnumValues, outConfig.Debug.FirstEchoRaceInjectionMode, outError))
 		{
 			return false;
 		}
@@ -236,7 +295,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		if (!reader.ReadOptionalString("Debug", "ContentsRaceInjectionMode", outConfig.Debug.ContentsRaceInjectionMode, outError))
+		if (!reader.ReadOptionalEnum("Debug", "ContentsRaceInjectionMode", kDebugContentsRaceInjectionModeEnumValues, outConfig.Debug.ContentsRaceInjectionMode, outError))
 		{
 			return false;
 		}

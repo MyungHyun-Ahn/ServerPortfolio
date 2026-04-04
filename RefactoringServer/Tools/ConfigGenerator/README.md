@@ -25,11 +25,13 @@ dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csp
   - 기본값: `RefactoringServer/ConfigSchema`
 - `--output-root <path>`
   - 기본값: `RefactoringServer/Generated/Config`
+- `--config-root <path>`
+  - 기본값: `RefactoringServer/Config`
 
 예:
 
 ```powershell
-dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\ConfigSchema --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Config
+dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\ConfigSchema --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Config --config-root D:\Project\ServerPortfolio\RefactoringServer\Config
 ```
 
 ## 스키마 형식
@@ -42,7 +44,10 @@ dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csp
 
 ```yaml
 EchoServer:
-  Backend: { type: string, default: Iocp }
+  Backend:
+    type: enum
+    default: Iocp
+    values: [Iocp, Rio, BoostAsio]
   Port: { type: uint16, default: 19000 }
 
 Debug:
@@ -55,16 +60,24 @@ Debug:
 - `default`
 - `required`
 - `description`
+- `values`
+
+### `required` 사용 규칙
+- `required: true`면 generated loader가 `ReadRequired*` 경로를 사용한다.
+- `required + default`는 sample YAML에 기본값이 채워지므로 기본 실행을 유지하면서 필수 키 정책을 표현할 때 쓴다.
+- `required + default 없음`은 사람이 직접 값을 채워야 하는 운영 전용 항목에 쓴다.
 
 ## 지원 타입
 - `bool`
 - `int32`, `uint16`, `uint32`, `int64`, `uint64`
 - `float`, `double`
 - `string`
+- `enum`
 
 ## 생성 결과
 - `Generated/Config/<Target>/<Target>Config.h`
 - `Generated/Config/<Target>/<Target>Config.cpp`
+- `Config/<relative-directory>/<Target>.yaml`
 
 예:
 - `Generated/Config/EchoServer/EchoServerConfig.h`
@@ -76,6 +89,17 @@ Debug:
 - 섹션 클래스 이름도 자동 생성한다.
   - `EchoServer` -> `SEchoServerConfig`
   - `Debug` -> `SEchoServerDebugConfig`
+- enum field는 generated enum으로 승격된다.
+- sample YAML은 schema 기본값과 enum 허용값 주석을 함께 생성한다.
+- `required: true`인 field는 generated loader에서 `ReadRequired*` 경로를 사용한다.
+
+예:
+
+```yaml
+EchoServer:
+  BindIp: { type: string, default: 127.0.0.1, required: true }
+  Port: { type: uint16, default: 19000, required: true }
+```
 
 ## 운영 규칙
 1. 스키마를 수정하면 `Generate-Configs.cmd`를 다시 실행한다.
