@@ -7,12 +7,12 @@
 ## 2. 디렉터리와 파일 규칙
 - 작업 디렉터리는 `001_`, `002_` 같은 숫자 prefix로 시작한다.
 - 작업 디렉터리 안의 문서도 `001_`, `002_` 같은 숫자 prefix로 시작한다.
-- 같은 주제의 후속 작업은 가능한 기존 번호 디렉터리 안에 이어서 추가한다.
+- 같은 주제의 후속 작업은 기존 번호 디렉터리 안에 이어서 추가한다.
 - 같은 prefix 정책은 `docs/architecture`, `docs/reviews`에도 동일하게 적용한다.
 
 ## 3. 상태판 갱신 규칙
-- `plans` 문서를 새로 추가하면 [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)를 반드시 같이 갱신한다.
-- 기존 작업의 상태가 바뀌면 같은 커밋 안에서 상태판도 함께 수정한다.
+- `plans` 문서를 새로 추가하면 [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)를 같은 커밋에서 함께 갱신한다.
+- 기존 작업의 상태가 바뀌면 상태판도 같이 수정한다.
 - 상태는 최소한 `완료`, `진행 중`, `추가 확인 필요`로 관리한다.
 
 ## 4. 현재 구조
@@ -26,20 +26,38 @@
 - [007_networklib-performance](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\007_networklib-performance)
 - [008_contents-runtime](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime)
 
-## 5. 작성 지침
+## 5. 작성 원칙
 - 구현 설명보다 먼저 방향과 판단 근거를 적는다.
-- 완료 보고 문서가 아니라 구현 전에 합의되어야 할 내용을 중심으로 적는다.
-- 검증 방식이 중요하면 문서 안에 명시적으로 포함한다.
+- 완료 보고 문서가 아니라 구현 전에 합의되어야 하는 내용을 중심으로 쓴다.
+- 검증 방식이 중요하면 문서 안에 명시한다.
 - TODO, 추가 확인 항목, 장시간 검증 필요 사항은 별도 섹션으로 분리한다.
 
-## 6. PacketGenerator 규칙
+## 6. 코드 생성기 규칙
+### PacketGenerator
 - `PacketGenerator`는 수동 실행 기준이다.
 - 일반 C++ 프로젝트 빌드 중 자동 실행하지 않는다.
-- 실행 진입점
+- 실행 진입점:
   - [Generate-Packets.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Packets.ps1)
   - [Generate-Packets.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Packets.cmd)
 
-## 7. ContentsRuntime 문서 묶음
+### ConfigGenerator
+- `ConfigGenerator`도 수동 실행 기준이다.
+- 일반 C++ 프로젝트 빌드 중 자동 실행하지 않는다.
+- 실행 진입점:
+  - [Generate-Configs.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Configs.ps1)
+  - [Generate-Configs.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Configs.cmd)
+
+### 통합 실행
+- packet/config 스키마를 함께 갱신했다면 아래 스크립트로 한 번에 생성한다.
+  - [Generate-Codegen.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Codegen.ps1)
+  - [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Codegen.cmd)
+
+## 7. 생성 코드 커밋 규칙
+- `Generated/**` 아래의 C++ generated 코드는 커밋 대상이다.
+- `Tools/*/bin`, `Tools/*/obj` 같은 도구 빌드 산출물은 커밋 대상이 아니다.
+- 스키마를 수정한 뒤에는 생성 스크립트를 다시 실행하고 generated 코드를 함께 확인한다.
+
+## 8. ContentsRuntime 문서 묶음
 - [001_contents-runtime-architecture.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime\001_contents-runtime-architecture.md)
 - [002_contents-runtime-instrumentation.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime\002_contents-runtime-instrumentation.md)
 - [003_contents-runtime-lockfree-hot-path.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime\003_contents-runtime-lockfree-hot-path.md)
@@ -50,7 +68,7 @@
 - [008_multi-content-support-architecture.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime\008_multi-content-support-architecture.md)
 - [009_lobby-room-multi-instance-flow.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime\009_lobby-room-multi-instance-flow.md)
 
-## 8. Foundation 문서 묶음
+## 9. Foundation 문서 묶음
 - [001_foundation-module-layout.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\001_foundation-module-layout.md)
 - [002_logger-module.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\002_logger-module.md)
 - [003_crash-dump-redesign.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\001_foundation\003_crash-dump-redesign.md)

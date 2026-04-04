@@ -51,5 +51,5 @@ dumps/
 EchoServer/LogFile/
 RefactoringServer/EchoServer/logs/
 RefactoringServer/EchoServer/dumps/
-RefactoringServer/Tools/PacketGenerator/bin/
-RefactoringServer/Tools/PacketGenerator/obj/
+RefactoringServer/Tools/*/bin/
+RefactoringServer/Tools/*/obj/
