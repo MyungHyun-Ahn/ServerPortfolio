@@ -6,7 +6,7 @@
 #include "Packet/Framing/IPacketFramer.h"
 #include "Servers/Core/FIocpServer.h"
 #include "Servers/IApplicationHandler.h"
-#include "Servers/Session/FSession.h"
+#include "Servers/Session/FIocpSession.h"
 #include "Foundation/Logging/ILogger.h"
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -22,7 +22,7 @@ namespace NetworkLib::Core
 	using NetworkLib::Packet::Framing::SPacketHeader;
 	using NetworkLib::Packet::Serialization::TryParseContentPacketView;
 	using NetworkLib::Packet::View::FPacketView;
-	using NetworkLib::Session::FSession;
+	using NetworkLib::Session::FIocpSession;
 
 	FIocpServer::FIocpServer() = default;
 
@@ -55,7 +55,7 @@ namespace NetworkLib::Core
 			return false;
 		}
 
-		m_sessionSlots = std::make_unique<std::atomic<FSession*>[]>(m_serverConfig.maxSessionCount);
+		m_sessionSlots = std::make_unique<std::atomic<FIocpSession*>[]>(m_serverConfig.maxSessionCount);
 		m_generations = std::make_unique<std::atomic<std::uint32_t>[]>(m_serverConfig.maxSessionCount);
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
@@ -89,11 +89,12 @@ namespace NetworkLib::Core
 
 		StartWorkers();
 		m_acceptThread = std::thread(&FIocpServer::AcceptLoop, this);
+		const std::uint32_t workerCount = std::max(1u, m_serverConfig.workerThreadCount);
 		{
 			std::ostringstream oss;
 			oss << "Server started. ip=" << m_serverConfig.bindIp
 				<< " port=" << m_serverConfig.port
-				<< " workers=" << m_serverConfig.workerThreadCount
+				<< " workers=" << workerCount
 				<< " maxSessions=" << m_serverConfig.maxSessionCount;
 			Log(Foundation::ELogLevel::Info, oss.str());
 		}
@@ -119,7 +120,7 @@ namespace NetworkLib::Core
 
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
-			FSession* sessionContext = m_sessionSlots[slotIndex].exchange(nullptr);
+			FIocpSession* sessionContext = m_sessionSlots[slotIndex].exchange(nullptr);
 			if (sessionContext != nullptr)
 			{
 				CloseSession(*sessionContext);
@@ -160,7 +161,7 @@ namespace NetworkLib::Core
 			return false;
 		}
 
-		FSession* sessionContext = AcquireSession(sessionId);
+		FIocpSession* sessionContext = AcquireSession(sessionId);
 		if (sessionContext == nullptr)
 		{
 			std::ostringstream oss;
@@ -225,7 +226,7 @@ namespace NetworkLib::Core
 
 	bool FIocpServer::Disconnect(std::uint64_t sessionId)
 	{
-		FSession* sessionContext = AcquireSession(sessionId);
+		FIocpSession* sessionContext = AcquireSession(sessionId);
 		if (sessionContext == nullptr)
 		{
 			return false;
@@ -252,8 +253,8 @@ namespace NetworkLib::Core
 		stats.sentByteCount = m_sentByteCount.load(std::memory_order_relaxed);
 		stats.wsaRecvCallCount = m_wsaRecvCallCount.load(std::memory_order_relaxed);
 		stats.wsaSendCallCount = m_wsaSendCallCount.load(std::memory_order_relaxed);
-		stats.sessionPoolCapacity = static_cast<std::uint32_t>(FSession::GetPoolCapacity());
-		stats.sessionPoolUsage = static_cast<std::uint32_t>(FSession::GetPoolUsage());
+		stats.sessionPoolCapacity = static_cast<std::uint32_t>(FIocpSession::GetPoolCapacity());
+		stats.sessionPoolUsage = static_cast<std::uint32_t>(FIocpSession::GetPoolUsage());
 		stats.sendBufferPoolCapacity = static_cast<std::uint32_t>(FSendBuffer::GetPoolCapacity());
 		stats.sendBufferPoolUsage = static_cast<std::uint32_t>(FSendBuffer::GetPoolUsage());
 		stats.packetBufferPoolCapacity = static_cast<std::uint32_t>(FPacketBuffer::GetPoolCapacity());
@@ -263,7 +264,7 @@ namespace NetworkLib::Core
 		std::uint64_t maxObservedQueuedSendBufferCount = 0;
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
-			FSession* sessionContext = m_sessionSlots[slotIndex].load(std::memory_order_relaxed);
+			FIocpSession* sessionContext = m_sessionSlots[slotIndex].load(std::memory_order_relaxed);
 			if (sessionContext == nullptr)
 			{
 				continue;
@@ -415,8 +416,8 @@ namespace NetworkLib::Core
 				break;
 			}
 
-			auto* ioContext = reinterpret_cast<FSession::SIoContext*>(overlapped);
-			FSession* sessionContext = ioContext->ownerSession;
+			auto* ioContext = reinterpret_cast<FIocpSession::SIoContext*>(overlapped);
+			FIocpSession* sessionContext = ioContext->ownerSession;
 			if (sessionContext == nullptr)
 			{
 				continue;
@@ -430,7 +431,7 @@ namespace NetworkLib::Core
 					oss << "I/O completion failed. sessionId=" << sessionContext->GetSessionId() << " error=" << GetLastError();
 					Log(Foundation::ELogLevel::Warn, oss.str());
 				}
-				if (ioContext->ioType == FSession::EIoType::Send)
+				if (ioContext->ioType == FIocpSession::EIoType::Send)
 				{
 					sessionContext->FinishSendIo();
 					sessionContext->ReleaseActiveSendBuffers();
@@ -441,7 +442,7 @@ namespace NetworkLib::Core
 				continue;
 			}
 
-			if (ioContext->ioType == FSession::EIoType::Recv)
+			if (ioContext->ioType == FIocpSession::EIoType::Recv)
 			{
 				m_receivedByteCount.fetch_add(transferredBytes, std::memory_order_relaxed);
 				if (!sessionContext->CommitRecvBytes(transferredBytes))
@@ -536,15 +537,15 @@ namespace NetworkLib::Core
 		}
 	}
 
-	bool FIocpServer::PostRecv(FSession& sessionContext)
+bool FIocpServer::PostRecv(FIocpSession& sessionContext)
 	{
 		DWORD recvFlags = 0;
 		DWORD recvBytes = 0;
 		WSABUF recvBuffers[2]{};
 		DWORD recvBufferCount = 0;
 
-		FSession::SIoContext& recvContext = sessionContext.GetRecvContext();
-		recvContext.Prepare(FSession::EIoType::Recv, &sessionContext);
+		FIocpSession::SIoContext& recvContext = sessionContext.GetRecvContext();
+		recvContext.Prepare(FIocpSession::EIoType::Recv, &sessionContext);
 		sessionContext.BuildRecvWsabufs(recvBuffers, recvBufferCount);
 		if (recvBufferCount == 0)
 		{
@@ -568,7 +569,7 @@ namespace NetworkLib::Core
 		return true;
 	}
 
-	bool FIocpServer::PostSend(FSession& sessionContext)
+bool FIocpServer::PostSend(FIocpSession& sessionContext)
 	{
 		while (true)
 		{
@@ -597,8 +598,8 @@ namespace NetworkLib::Core
 				return false;
 			}
 
-			FSession::SIoContext& sendContext = sessionContext.GetSendContext();
-			sendContext.Prepare(FSession::EIoType::Send, &sessionContext);
+			FIocpSession::SIoContext& sendContext = sessionContext.GetSendContext();
+			sendContext.Prepare(FIocpSession::EIoType::Send, &sessionContext);
 
 			sessionContext.AcquireRef();
 			const int concurrentSendIoCount = sessionContext.BeginSendIo();
@@ -647,7 +648,7 @@ namespace NetworkLib::Core
 		}
 	}
 
-	void FIocpServer::CloseSession(FSession& sessionContext)
+	void FIocpServer::CloseSession(FIocpSession& sessionContext)
 	{
 		if (!sessionContext.TryMarkClosing())
 		{
@@ -668,7 +669,7 @@ namespace NetworkLib::Core
 		m_applicationHandler->OnClientDisconnected(sessionContext.GetSessionId());
 	}
 
-	void FIocpServer::ReleaseSession(FSession* sessionContext)
+	void FIocpServer::ReleaseSession(FIocpSession* sessionContext)
 	{
 		if (sessionContext == nullptr)
 		{
@@ -677,11 +678,11 @@ namespace NetworkLib::Core
 
 		if (sessionContext->ReleaseRef() == 0)
 		{
-			FSession::Destroy(sessionContext);
+			FIocpSession::Destroy(sessionContext);
 		}
 	}
 
-	FSession* FIocpServer::AcquireSession(std::uint64_t sessionId)
+	FIocpSession* FIocpServer::AcquireSession(std::uint64_t sessionId)
 	{
 		const std::uint32_t slotIndex = static_cast<std::uint32_t>(sessionId & 0xFFFFFFFFULL);
 		if (slotIndex >= m_serverConfig.maxSessionCount)
@@ -689,7 +690,7 @@ namespace NetworkLib::Core
 			return nullptr;
 		}
 
-		FSession* sessionContext = m_sessionSlots[slotIndex].load();
+		FIocpSession* sessionContext = m_sessionSlots[slotIndex].load();
 		if (sessionContext == nullptr || sessionContext->GetSessionId() != sessionId || sessionContext->IsClosing())
 		{
 			return nullptr;
@@ -707,17 +708,22 @@ namespace NetworkLib::Core
 
 	bool FIocpServer::AttachAcceptedSocket(SOCKET clientSocket)
 	{
-		FSession* newSessionContext = nullptr;
+		FIocpSession* newSessionContext = nullptr;
 
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
-			FSession* expected = nullptr;
-			FSession* candidateSession = FSession::Create();
+			FIocpSession* expected = nullptr;
+			FIocpSession* candidateSession = FIocpSession::Create();
 			const std::uint32_t generation = m_generations[slotIndex].fetch_add(1);
 			const std::uint64_t sessionId = ComposeSessionId(slotIndex, generation);
 			const std::size_t recvBufferCapacity =
 				static_cast<std::size_t>(std::max<std::uint32_t>(m_serverConfig.recvBufferSize * 8u, 65536u));
-			candidateSession->Initialize(clientSocket, sessionId, slotIndex, generation, recvBufferCapacity);
+			candidateSession->Initialize(
+				clientSocket,
+				sessionId,
+				slotIndex,
+				generation,
+				recvBufferCapacity);
 
 			if (m_sessionSlots[slotIndex].compare_exchange_strong(expected, candidateSession))
 			{
@@ -725,7 +731,7 @@ namespace NetworkLib::Core
 				break;
 			}
 
-			FSession::Destroy(candidateSession);
+			FIocpSession::Destroy(candidateSession);
 		}
 
 		if (newSessionContext == nullptr)
@@ -740,7 +746,7 @@ namespace NetworkLib::Core
 			oss << "CreateIoCompletionPort attach failed. error=" << GetLastError();
 			Log(Foundation::ELogLevel::Error, oss.str());
 			m_sessionSlots[newSessionContext->GetSlotIndex()].store(nullptr);
-			FSession::Destroy(newSessionContext);
+			FIocpSession::Destroy(newSessionContext);
 			return false;
 		}
 

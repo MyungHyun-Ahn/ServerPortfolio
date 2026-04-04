@@ -1,12 +1,14 @@
 #pragma once
 
+#include "Servers/Session/ISession.h"
+
 namespace NetworkLib::Session
 {
-	class FSession
+	class FIocpSession final : public ISession
 	{
 	public:
-		static FSession* Create() noexcept;
-		static void Destroy(FSession* session) noexcept;
+		static FIocpSession* Create() noexcept;
+		static void Destroy(FIocpSession* session) noexcept;
 		static LONG GetPoolCapacity() noexcept;
 		static LONG GetPoolUsage() noexcept;
 
@@ -21,30 +23,35 @@ namespace NetworkLib::Session
 		{
 			OVERLAPPED overlapped{};
 			EIoType ioType = EIoType::Recv;
-			FSession* ownerSession = nullptr;
+			FIocpSession* ownerSession = nullptr;
 
-			void Prepare(EIoType newIoType, FSession* newOwnerSession);
+			void Prepare(EIoType newIoType, FIocpSession* newOwnerSession);
 		};
 
 	public:
-		FSession() = default;
-		~FSession();
+		FIocpSession() = default;
+		~FIocpSession() override;
 
-		void Initialize(SOCKET socket, std::uint64_t sessionId, std::uint32_t slotIndex, std::uint32_t generation, std::size_t recvBufferCapacity);
+		void Initialize(
+			SOCKET socket,
+			std::uint64_t sessionId,
+			std::uint32_t slotIndex,
+			std::uint32_t generation,
+			std::size_t recvBufferCapacity);
 		void Reset() noexcept;
 
 		SOCKET GetSocket() const noexcept;
 		void SetSocket(SOCKET socket) noexcept;
 
-		std::uint64_t GetSessionId() const noexcept;
-		std::uint32_t GetSlotIndex() const noexcept;
-		std::uint32_t GetGeneration() const noexcept;
+		std::uint64_t GetSessionId() const noexcept override;
+		std::uint32_t GetSlotIndex() const noexcept override;
+		std::uint32_t GetGeneration() const noexcept override;
 
-		bool IsClosing() const noexcept;
-		bool TryMarkClosing() noexcept;
+		bool IsClosing() const noexcept override;
+		bool TryMarkClosing() noexcept override;
 
-		long AcquireRef() noexcept;
-		long ReleaseRef() noexcept;
+		long AcquireRef() noexcept override;
+		long ReleaseRef() noexcept override;
 
 		void BuildRecvWsabufs(WSABUF (&outBuffers)[2], DWORD& outBufferCount) noexcept;
 		bool CommitRecvBytes(std::size_t length) noexcept;
@@ -60,8 +67,8 @@ namespace NetworkLib::Session
 		int BeginSendIo() noexcept;
 		int FinishSendIo() noexcept;
 		int GetMaxObservedConcurrentSendIoCount() const noexcept;
-		std::uint32_t GetQueuedSendBufferCount() const noexcept;
-		std::uint32_t GetMaxObservedQueuedSendBufferCount() const noexcept;
+		std::uint32_t GetQueuedSendBufferCount() const noexcept override;
+		std::uint32_t GetMaxObservedQueuedSendBufferCount() const noexcept override;
 		bool FillSendBatch(std::size_t maxSendCount) noexcept;
 		const std::vector<WSABUF>& GetSendWsabufs() const noexcept;
 		void ReleaseActiveSendBuffers() noexcept;
@@ -92,6 +99,7 @@ namespace NetworkLib::Session
 		std::atomic<std::uint32_t> m_maxObservedQueuedSendBufferCount = 0;
 
 	private:
-		inline static NetworkLib::Memory::FTlsMemoryPoolManager<FSession, 128, 2> s_sessionPool{};
+		inline static NetworkLib::Memory::FTlsMemoryPoolManager<FIocpSession, 128, 2> s_sessionPool{};
 	};
 }
+

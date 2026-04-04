@@ -87,9 +87,11 @@
     <ClCompile Include="Crypto\FNullPacketCipher.cpp" />
     <ClCompile Include="Packet\Framing\FDefaultPacketFramer.cpp" />
     <ClCompile Include="Servers\Core\FServerFactory.cpp" />
-    <ClCompile Include="Servers\Session\FSession.cpp" />
     <ClCompile Include="Servers\Core\FIocpServer.cpp" />
+    <ClCompile Include="Servers\Core\FRioServer.cpp" />
     <ClCompile Include="Servers\Core\FStubServer.cpp" />
+    <ClCompile Include="Servers\Session\FIocpSession.cpp" />
+    <ClCompile Include="Servers\Session\FRioSession.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="NetLibPch.h" />
@@ -118,11 +120,14 @@
     <ClInclude Include="Memory\FTlsMemoryPool.h" />
     <ClInclude Include="Servers\Core\BackendTypes.h" />
     <ClInclude Include="Servers\Core\FServerFactory.h" />
-    <ClInclude Include="Servers\Session\FSession.h" />
     <ClInclude Include="Servers\IApplicationHandler.h" />
     <ClInclude Include="Servers\IServer.h" />
     <ClInclude Include="Servers\Core\FIocpServer.h" />
+    <ClInclude Include="Servers\Core\FRioServer.h" />
     <ClInclude Include="Servers\Core\FStubServer.h" />
+    <ClInclude Include="Servers\Session\FIocpSession.h" />
+    <ClInclude Include="Servers\Session\FRioSession.h" />
+    <ClInclude Include="Servers\Session\ISession.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Foundation\Foundation.vcxproj">

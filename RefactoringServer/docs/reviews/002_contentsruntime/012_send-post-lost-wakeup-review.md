@@ -39,7 +39,7 @@
   - 클라이언트는 응답 없이 무한 대기
 
 ## 5. 적용한 수정
-- `FSession`에 단순 bool 대신 send 상태 비트를 두었다.
+- 당시 수정은 `FSession`에 단순 bool 대신 send 상태 비트를 두는 것이었고, 현재 구조 분리 후에는 같은 구현이 [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)로 이동했다.
   - `kSendInFlightFlag`
   - `kSendPendingFlag`
 - enqueue 시 `kSendPendingFlag`를 세운다.
@@ -47,8 +47,8 @@
 - send completion 이후에도 pending 비트 또는 잔여 queue가 있으면 다시 `PostSend()`를 건다.
 
 대상 파일:
-- [FSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.h)
-- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
+- [FIocpSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
+- [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
 - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
 
 ## 6. 결과

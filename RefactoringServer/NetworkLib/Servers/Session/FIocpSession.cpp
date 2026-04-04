@@ -1,17 +1,17 @@
 #include "Pch.h"
 
-#include "Servers/Session/FSession.h"
+#include "Servers/Session/FIocpSession.h"
 
 namespace NetworkLib::Session
 {
-	FSession* FSession::Create() noexcept
+	FIocpSession* FIocpSession::Create() noexcept
 	{
-		FSession* session = s_sessionPool.Alloc();
+		FIocpSession* session = s_sessionPool.Alloc();
 		session->Reset();
 		return session;
 	}
 
-	void FSession::Destroy(FSession* session) noexcept
+	void FIocpSession::Destroy(FIocpSession* session) noexcept
 	{
 		if (session == nullptr)
 		{
@@ -22,29 +22,34 @@ namespace NetworkLib::Session
 		s_sessionPool.Free(session);
 	}
 
-	LONG FSession::GetPoolCapacity() noexcept
+	LONG FIocpSession::GetPoolCapacity() noexcept
 	{
 		return s_sessionPool.GetCapacity();
 	}
 
-	LONG FSession::GetPoolUsage() noexcept
+	LONG FIocpSession::GetPoolUsage() noexcept
 	{
 		return s_sessionPool.GetUseCount();
 	}
 
-	FSession::~FSession()
+	FIocpSession::~FIocpSession()
 	{
 		Reset();
 	}
 
-	void FSession::SIoContext::Prepare(EIoType newIoType, FSession* newOwnerSession)
+	void FIocpSession::SIoContext::Prepare(EIoType newIoType, FIocpSession* newOwnerSession)
 	{
 		ZeroMemory(&overlapped, sizeof(overlapped));
 		ioType = newIoType;
 		ownerSession = newOwnerSession;
 	}
 
-	void FSession::Initialize(SOCKET socket, std::uint64_t sessionId, std::uint32_t slotIndex, std::uint32_t generation, std::size_t recvBufferCapacity)
+	void FIocpSession::Initialize(
+		SOCKET socket,
+		std::uint64_t sessionId,
+		std::uint32_t slotIndex,
+		std::uint32_t generation,
+		std::size_t recvBufferCapacity)
 	{
 		m_socket = socket;
 		m_sessionId = sessionId;
@@ -64,7 +69,7 @@ namespace NetworkLib::Session
 		m_sendContext = {};
 	}
 
-	void FSession::Reset() noexcept
+	void FIocpSession::Reset() noexcept
 	{
 		ReleaseActiveSendBuffers();
 		ReleaseQueuedSendBuffers();
@@ -84,83 +89,83 @@ namespace NetworkLib::Session
 		m_maxObservedQueuedSendBufferCount.store(0);
 	}
 
-	SOCKET FSession::GetSocket() const noexcept
+	SOCKET FIocpSession::GetSocket() const noexcept
 	{
 		return m_socket;
 	}
 
-	void FSession::SetSocket(SOCKET socket) noexcept
+	void FIocpSession::SetSocket(SOCKET socket) noexcept
 	{
 		m_socket = socket;
 	}
 
-	std::uint64_t FSession::GetSessionId() const noexcept
+	std::uint64_t FIocpSession::GetSessionId() const noexcept
 	{
 		return m_sessionId;
 	}
 
-	std::uint32_t FSession::GetSlotIndex() const noexcept
+	std::uint32_t FIocpSession::GetSlotIndex() const noexcept
 	{
 		return m_slotIndex;
 	}
 
-	std::uint32_t FSession::GetGeneration() const noexcept
+	std::uint32_t FIocpSession::GetGeneration() const noexcept
 	{
 		return m_generation;
 	}
 
-	bool FSession::IsClosing() const noexcept
+	bool FIocpSession::IsClosing() const noexcept
 	{
 		return m_closing.load();
 	}
 
-	bool FSession::TryMarkClosing() noexcept
+	bool FIocpSession::TryMarkClosing() noexcept
 	{
 		bool expected = false;
 		return m_closing.compare_exchange_strong(expected, true);
 	}
 
-	long FSession::AcquireRef() noexcept
+	long FIocpSession::AcquireRef() noexcept
 	{
 		return m_refCount.fetch_add(1) + 1;
 	}
 
-	long FSession::ReleaseRef() noexcept
+	long FIocpSession::ReleaseRef() noexcept
 	{
 		return m_refCount.fetch_sub(1) - 1;
 	}
 
-	void FSession::BuildRecvWsabufs(WSABUF (&outBuffers)[2], DWORD& outBufferCount) noexcept
+	void FIocpSession::BuildRecvWsabufs(WSABUF (&outBuffers)[2], DWORD& outBufferCount) noexcept
 	{
 		m_recvBuffer.BuildRecvWsabufs(outBuffers, outBufferCount);
 	}
 
-	bool FSession::CommitRecvBytes(std::size_t length) noexcept
+	bool FIocpSession::CommitRecvBytes(std::size_t length) noexcept
 	{
 		return m_recvBuffer.CommitWrite(length);
 	}
 
-	Packet::Buffer::FRecvBuffer& FSession::GetRecvBuffer() noexcept
+	Packet::Buffer::FRecvBuffer& FIocpSession::GetRecvBuffer() noexcept
 	{
 		return m_recvBuffer;
 	}
 
-	const Packet::Buffer::FRecvBuffer& FSession::GetRecvBuffer() const noexcept
+	const Packet::Buffer::FRecvBuffer& FIocpSession::GetRecvBuffer() const noexcept
 	{
 		return m_recvBuffer;
 	}
 
-	FSession::SIoContext& FSession::GetRecvContext() noexcept
+	FIocpSession::SIoContext& FIocpSession::GetRecvContext() noexcept
 	{
 		return m_recvContext;
 	}
 
-	FSession::SIoContext& FSession::GetSendContext() noexcept
+	FIocpSession::SIoContext& FIocpSession::GetSendContext() noexcept
 	{
 		return m_sendContext;
 	}
 
-	void FSession::EnqueueSendBuffer(NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer) noexcept
+	void FIocpSession::EnqueueSendBuffer(NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer) noexcept
 	{
 		m_sendQueue.Enqueue(sendBuffer);
 		m_sendState.fetch_or(kSendPendingFlag, std::memory_order_release);
@@ -172,7 +177,7 @@ namespace NetworkLib::Session
 		}
 	}
 
-	bool FSession::TryBeginSend() noexcept
+	bool FIocpSession::TryBeginSend() noexcept
 	{
 		std::uint32_t expected = m_sendState.load(std::memory_order_acquire);
 		while (true)
@@ -194,14 +199,14 @@ namespace NetworkLib::Session
 		}
 	}
 
-	bool FSession::EndSend() noexcept
+	bool FIocpSession::EndSend() noexcept
 	{
 		const std::uint32_t previousState =
 			m_sendState.fetch_and(~kSendInFlightFlag, std::memory_order_acq_rel);
 		return (previousState & kSendPendingFlag) != 0;
 	}
 
-	int FSession::BeginSendIo() noexcept
+	int FIocpSession::BeginSendIo() noexcept
 	{
 		const int liveSendIoCount = m_liveSendIoCount.fetch_add(1) + 1;
 		int currentMax = m_maxObservedConcurrentSendIoCount.load();
@@ -213,27 +218,27 @@ namespace NetworkLib::Session
 		return liveSendIoCount;
 	}
 
-	int FSession::FinishSendIo() noexcept
+	int FIocpSession::FinishSendIo() noexcept
 	{
 		return m_liveSendIoCount.fetch_sub(1) - 1;
 	}
 
-	int FSession::GetMaxObservedConcurrentSendIoCount() const noexcept
+	int FIocpSession::GetMaxObservedConcurrentSendIoCount() const noexcept
 	{
 		return m_maxObservedConcurrentSendIoCount.load();
 	}
 
-	std::uint32_t FSession::GetQueuedSendBufferCount() const noexcept
+	std::uint32_t FIocpSession::GetQueuedSendBufferCount() const noexcept
 	{
 		return m_queuedSendBufferCount.load();
 	}
 
-	std::uint32_t FSession::GetMaxObservedQueuedSendBufferCount() const noexcept
+	std::uint32_t FIocpSession::GetMaxObservedQueuedSendBufferCount() const noexcept
 	{
 		return m_maxObservedQueuedSendBufferCount.load();
 	}
 
-	bool FSession::FillSendBatch(std::size_t maxSendCount) noexcept
+	bool FIocpSession::FillSendBatch(std::size_t maxSendCount) noexcept
 	{
 		m_activeSendBuffers.clear();
 		m_sendWsabufs.clear();
@@ -257,12 +262,12 @@ namespace NetworkLib::Session
 		return !m_activeSendBuffers.empty();
 	}
 
-	const std::vector<WSABUF>& FSession::GetSendWsabufs() const noexcept
+	const std::vector<WSABUF>& FIocpSession::GetSendWsabufs() const noexcept
 	{
 		return m_sendWsabufs;
 	}
 
-	void FSession::ReleaseActiveSendBuffers() noexcept
+	void FIocpSession::ReleaseActiveSendBuffers() noexcept
 	{
 		for (NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer : m_activeSendBuffers)
 		{
@@ -273,7 +278,7 @@ namespace NetworkLib::Session
 		m_sendWsabufs.clear();
 	}
 
-	void FSession::ReleaseQueuedSendBuffers() noexcept
+	void FIocpSession::ReleaseQueuedSendBuffers() noexcept
 	{
 		NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer = nullptr;
 		while (m_sendQueue.Dequeue(&sendBuffer))
@@ -284,3 +289,4 @@ namespace NetworkLib::Session
 		}
 	}
 }
+

@@ -118,7 +118,7 @@
 - 동시에 `kSendPendingFlag`를 세운다.
 
 대상 코드:
-- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
+- [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
 
 의미:
 - “이 세션에는 아직 보내야 할 버퍼가 있다”는 사실을 남긴다.
@@ -132,7 +132,7 @@
   - `true`를 반환한다.
 
 대상 코드:
-- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
+- [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
 - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
 
 의미:
@@ -145,7 +145,7 @@
 - 그 다음 `WSASend(...)`를 건다.
 
 대상 코드:
-- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
+- [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
 - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
 
 ### 6.4 `EndSend()`
@@ -154,7 +154,7 @@
 - send 도중 새 enqueue가 있었는지(`kSendPendingFlag`)를 bool로 반환한다.
 
 대상 코드:
-- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
+- [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
 
 의미:
 - “이번 send는 끝났다”
@@ -186,13 +186,13 @@
 9. `ContentsRuntime::Bridge::SendContentPacket(...)`
 10. `FContentRuntime::SendRaw(...)`
 11. `FIocpServer::Send(...)`
-12. `FSession::EnqueueSendBuffer(...)`
+12. `FIocpSession::EnqueueSendBuffer(...)`
 13. `FIocpServer::PostSend(...)`
-14. `FSession::TryBeginSend()`
-15. `FSession::FillSendBatch(...)`
+14. `FIocpSession::TryBeginSend()`
+15. `FIocpSession::FillSendBatch(...)`
 16. `WSASend(...)`
 17. send completion
-18. `FSession::EndSend()`
+18. `FIocpSession::EndSend()`
 19. 필요 시 `PostSend(...)` 재호출
 
 ## 8. 결론
