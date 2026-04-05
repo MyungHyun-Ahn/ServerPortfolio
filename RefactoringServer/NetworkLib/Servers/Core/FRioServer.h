@@ -46,6 +46,7 @@ namespace NetworkLib::Core
 			RIO_CQ completionQueue = RIO_INVALID_CQ;
 			std::thread thread;
 			std::atomic<std::uint32_t> activeSessionCount = 0;
+			std::atomic<std::uint32_t> maxObservedSendCommandCount = 0;
 			std::mutex sendCommandMutex;
 			std::deque<SSendCommand> sendCommands;
 		};

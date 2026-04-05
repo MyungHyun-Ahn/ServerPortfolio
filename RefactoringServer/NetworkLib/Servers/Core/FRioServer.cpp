@@ -38,12 +38,10 @@ namespace NetworkLib::Core
 			const SOCKET clientSocket,
 			std::string& outError) noexcept
 		{
-			if (serverConfig.socketSendBufferBytes < 0)
-			{
-				return true;
-			}
-
-			const int sendBufferBytes = serverConfig.socketSendBufferBytes;
+			const int sendBufferBytes =
+				serverConfig.socketSendBufferBytes < 0
+				? 0
+				: serverConfig.socketSendBufferBytes;
 			if (setsockopt(
 				clientSocket,
 				SOL_SOCKET,
@@ -713,55 +711,75 @@ namespace NetworkLib::Core
 		std::array<RIORESULT, kCompletionBatchSize> completionResults{};
 		bool notificationArmed = false;
 
-		while (true)
+		try
 		{
-			DrainSendCommands(workerIndex);
-			if (!notificationArmed)
+			while (true)
 			{
-				if (m_rioFunctionTable.RIONotify(worker.completionQueue) != SOCKET_ERROR)
+				DrainSendCommands(workerIndex);
+				if (!notificationArmed)
 				{
-					notificationArmed = true;
-				}
-			}
-
-			const DWORD waitResult = WaitForSingleObject(worker.completionEvent, kWorkerWaitTimeoutMs);
-			if (waitResult == WAIT_OBJECT_0)
-			{
-				notificationArmed = false;
-				while (true)
-				{
-					const ULONG completionCount =
-						m_rioFunctionTable.RIODequeueCompletion(
-							worker.completionQueue,
-							completionResults.data(),
-							static_cast<ULONG>(completionResults.size()));
-					if (completionCount == 0)
+					if (m_rioFunctionTable.RIONotify(worker.completionQueue) != SOCKET_ERROR)
 					{
-						break;
-					}
-
-					for (ULONG completionIndex = 0; completionIndex < completionCount; ++completionIndex)
-					{
-						HandleRioCompletion(completionResults[completionIndex]);
+						notificationArmed = true;
 					}
 				}
-			}
-			else if (waitResult != WAIT_TIMEOUT)
-			{
-				std::ostringstream oss;
-				oss << "WaitForSingleObject failed in RIO worker. workerIndex=" << workerIndex
-					<< " error=" << GetLastError();
-				Log(Foundation::ELogLevel::Warn, oss.str());
-			}
 
-			DrainSendCommands(workerIndex);
-			if (!m_isRunning.load(std::memory_order_acquire) &&
-				m_activeSessionCount.load(std::memory_order_acquire) == 0 &&
-				FRioSession::GetPoolUsage() == 0 &&
-				!HasPendingSendCommands(workerIndex))
-			{
-				break;
+				const DWORD waitResult = WaitForSingleObject(worker.completionEvent, kWorkerWaitTimeoutMs);
+				if (waitResult == WAIT_OBJECT_0)
+				{
+					notificationArmed = false;
+					while (true)
+					{
+						const ULONG completionCount =
+							m_rioFunctionTable.RIODequeueCompletion(
+								worker.completionQueue,
+								completionResults.data(),
+								static_cast<ULONG>(completionResults.size()));
+						if (completionCount == 0)
+						{
+							break;
+						}
+
+						for (ULONG completionIndex = 0; completionIndex < completionCount; ++completionIndex)
+						{
+							HandleRioCompletion(completionResults[completionIndex]);
+						}
+					}
+				}
+				else if (waitResult != WAIT_TIMEOUT)
+				{
+					std::ostringstream oss;
+					oss << "WaitForSingleObject failed in RIO worker. workerIndex=" << workerIndex
+						<< " error=" << GetLastError();
+					Log(Foundation::ELogLevel::Warn, oss.str());
+				}
+
+				DrainSendCommands(workerIndex);
+				if (!m_isRunning.load(std::memory_order_acquire) &&
+					m_activeSessionCount.load(std::memory_order_acquire) == 0 &&
+					FRioSession::GetPoolUsage() == 0 &&
+					!HasPendingSendCommands(workerIndex))
+				{
+					break;
+				}
 			}
+		}
+		catch (const std::exception& exception)
+		{
+			std::ostringstream oss;
+			oss << "Unhandled std::exception in RIO worker loop. workerIndex=" << workerIndex
+				<< " message=" << exception.what()
+				<< " maxQueuedSendCommands=" << worker.maxObservedSendCommandCount.load(std::memory_order_relaxed);
+			Log(Foundation::ELogLevel::Error, oss.str());
+			throw;
+		}
+		catch (...)
+		{
+			std::ostringstream oss;
+			oss << "Unhandled unknown exception in RIO worker loop. workerIndex=" << workerIndex
+				<< " maxQueuedSendCommands=" << worker.maxObservedSendCommandCount.load(std::memory_order_relaxed);
+			Log(Foundation::ELogLevel::Error, oss.str());
+			throw;
 		}
 	}
 
@@ -913,13 +931,59 @@ namespace NetworkLib::Core
 			return false;
 		}
 
+		try
 		{
-			std::scoped_lock<std::mutex> sendCommandLock(m_workers[ownerWorkerIndex]->sendCommandMutex);
-			SSendCommand command{};
-			command.sessionId = sessionId;
-			command.packetBuffer = packetBuffer;
-			command.payloadLength = payloadLength;
-			m_workers[ownerWorkerIndex]->sendCommands.push_back(command);
+			std::uint32_t queuedCommandCount = 0;
+			{
+				std::scoped_lock<std::mutex> sendCommandLock(m_workers[ownerWorkerIndex]->sendCommandMutex);
+				SSendCommand command{};
+				command.sessionId = sessionId;
+				command.packetBuffer = packetBuffer;
+				command.payloadLength = payloadLength;
+				m_workers[ownerWorkerIndex]->sendCommands.push_back(command);
+				queuedCommandCount =
+					static_cast<std::uint32_t>(m_workers[ownerWorkerIndex]->sendCommands.size());
+			}
+
+			std::uint32_t observedMax =
+				m_workers[ownerWorkerIndex]->maxObservedSendCommandCount.load(std::memory_order_relaxed);
+			while (queuedCommandCount > observedMax &&
+				!m_workers[ownerWorkerIndex]->maxObservedSendCommandCount.compare_exchange_weak(
+					observedMax,
+					queuedCommandCount,
+					std::memory_order_relaxed))
+			{
+			}
+
+			if (queuedCommandCount >= 8192 && (queuedCommandCount % 8192) == 0)
+			{
+				std::ostringstream oss;
+				oss << "RIO owner-thread send queue is growing. workerIndex=" << ownerWorkerIndex
+					<< " queuedSendCommands=" << queuedCommandCount
+					<< " activeSessions=" << m_workers[ownerWorkerIndex]->activeSessionCount.load(std::memory_order_relaxed);
+				Log(Foundation::ELogLevel::Warn, oss.str());
+			}
+		}
+		catch (const std::exception& exception)
+		{
+			std::ostringstream oss;
+			oss << "RIO owner-thread send enqueue failed. workerIndex=" << ownerWorkerIndex
+				<< " sessionId=" << sessionId
+				<< " message=" << exception.what()
+				<< " maxQueuedSendCommands=" << m_workers[ownerWorkerIndex]->maxObservedSendCommandCount.load(std::memory_order_relaxed);
+			Log(Foundation::ELogLevel::Error, oss.str());
+			FPacketBuffer::Release(packetBuffer);
+			return false;
+		}
+		catch (...)
+		{
+			std::ostringstream oss;
+			oss << "RIO owner-thread send enqueue failed with unknown exception. workerIndex=" << ownerWorkerIndex
+				<< " sessionId=" << sessionId
+				<< " maxQueuedSendCommands=" << m_workers[ownerWorkerIndex]->maxObservedSendCommandCount.load(std::memory_order_relaxed);
+			Log(Foundation::ELogLevel::Error, oss.str());
+			FPacketBuffer::Release(packetBuffer);
+			return false;
 		}
 
 		if (m_workers[ownerWorkerIndex]->completionEvent != nullptr)
