@@ -68,6 +68,7 @@ namespace Generated::Config::EchoServer
 		std::int32_t WorkerThreadCount = static_cast<std::int32_t>(2);
 		std::int32_t MaxSessionCount = static_cast<std::int32_t>(512);
 		std::int32_t RecvBufferSize = static_cast<std::int32_t>(1024);
+		std::int32_t SocketSendBufferBytes = static_cast<std::int32_t>(-1);
 		ELogMinimumLevel LogMinimumLevel = ELogMinimumLevel::Info;
 		std::string LogOutputDirectory = "";
 		bool LogConsoleEnabled = true;

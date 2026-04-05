@@ -26,6 +26,7 @@ namespace NetworkLib::Packet::Serialization
 
 		FPacketWriter(FPacketWriter&& other) noexcept
 			: m_buffer(std::exchange(other.m_buffer, nullptr))
+			, m_frontSize(std::exchange(other.m_frontSize, 0))
 		{
 		}
 
@@ -35,12 +36,31 @@ namespace NetworkLib::Packet::Serialization
 			{
 				NetworkLib::Packet::Buffer::FPacketBuffer::Release(m_buffer);
 				m_buffer = std::exchange(other.m_buffer, nullptr);
+				m_frontSize = std::exchange(other.m_frontSize, 0);
 			}
 
 			return *this;
 		}
 
 	public:
+		void ReserveFront(std::size_t size)
+		{
+			if (size == 0 || m_buffer == nullptr)
+			{
+				return;
+			}
+
+			std::vector<char>& buffer = m_buffer->GetBuffer();
+			assert(buffer.empty());
+			if (!buffer.empty())
+			{
+				return;
+			}
+
+			m_frontSize = size;
+			buffer.resize(size);
+		}
+
 		void Reserve(std::size_t size)
 		{
 			m_buffer->GetBuffer().reserve(size);
@@ -159,12 +179,68 @@ namespace NetworkLib::Packet::Serialization
 			return m_buffer->GetBuffer();
 		}
 
+		std::size_t GetFrontSize() const noexcept
+		{
+			return m_frontSize;
+		}
+
+		const char* GetBodyData() const noexcept
+		{
+			if (m_buffer == nullptr)
+			{
+				return nullptr;
+			}
+
+			const std::vector<char>& buffer = m_buffer->GetBuffer();
+			if (buffer.size() <= m_frontSize)
+			{
+				return nullptr;
+			}
+
+			return buffer.data() + m_frontSize;
+		}
+
+		std::size_t GetBodySize() const noexcept
+		{
+			if (m_buffer == nullptr)
+			{
+				return 0;
+			}
+
+			const std::vector<char>& buffer = m_buffer->GetBuffer();
+			return buffer.size() > m_frontSize ? buffer.size() - m_frontSize : 0;
+		}
+
+		void OverwriteFrontBytes(std::size_t offset, const void* data, std::size_t size)
+		{
+			if (m_buffer == nullptr || data == nullptr || size == 0)
+			{
+				return;
+			}
+
+			assert(offset + size <= m_frontSize);
+			if (offset + size > m_frontSize)
+			{
+				return;
+			}
+
+			std::vector<char>& buffer = m_buffer->GetBuffer();
+			std::memcpy(buffer.data() + offset, data, size);
+		}
+
 		std::vector<char> MoveBuffer() noexcept
 		{
 			return std::move(m_buffer->GetBuffer());
 		}
 
+		NetworkLib::Packet::Buffer::FPacketBuffer* ReleaseBuffer() noexcept
+		{
+			m_frontSize = 0;
+			return std::exchange(m_buffer, nullptr);
+		}
+
 	private:
 		NetworkLib::Packet::Buffer::FPacketBuffer* m_buffer = nullptr;
+		std::size_t m_frontSize = 0;
 	};
 }

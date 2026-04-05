@@ -64,6 +64,7 @@
   - `Iocp` -> [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
   - `Rio` -> [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h) pure RIO baseline
   - `BoostAsio` -> [FStubServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FStubServer.h)
+- 현재 2시간 A/B 비교 기준으로는 `Rio` 사용 시 기본 send 정책을 `Direct`로 유지하는 것이 가장 합리적이다.
 
 ## 6. Session 전략
 - 세션도 backend별 구현으로 나눈다.

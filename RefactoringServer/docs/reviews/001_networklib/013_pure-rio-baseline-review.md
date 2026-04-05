@@ -81,12 +81,37 @@
 ### 6-4. 수정 파일
 - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
 
+### 6-5. 추가로 잡힌 자원 부족 문제
+#### 증상
+- `250세션 / 10분` 비교 런에서 일부 세션이 `login-response` 전에 끊겼다.
+- 서버 로그에는 `RIOCreateRequestQueue failed. error=10055`가 반복됐다.
+
+#### 원인
+- baseline 구현은 세션당 `RIOCreateRequestQueue()` 예약값이 상대적으로 컸다.
+  - 특히 send reservation이 과하게 잡혀 있었다.
+- 세션 풀도 `MaxSessionCount` 기준으로 미리 warm-up되지 않아, 시작 구간 admission 비용이 더 컸다.
+
+#### 수정
+- `FRioSession::EnsurePoolCapacity(maxSessionCount)`를 추가해 세션 풀을 미리 확보했다.
+- `FRioServer`의 `kMaxOutstandingSend`를 `64 -> 8`로 낮췄다.
+
+#### 수정 파일
+- [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
+- [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.cpp)
+- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
+
 ## 7. 검증 결과
 - `Debug x64` 솔루션 빌드 성공
 - `RIO 1세션` 스모크 성공
 - `RIO 20세션 / 15초` 스모크 성공
 - `RIO 100세션 / 3분` 회귀 성공
 - 기존 `IOCP 100세션 / 3분` 회귀도 유지
+- 수정 후 `RIO Direct 250세션 / 10분` 성공
+  - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\client.log)
+  - [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\server.log)
+  - [rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\rtt.csv)
+  - `echo validation succeeded. sessions=250 responses=619436 ... holdSeconds=600`
+  - `RIOCreateRequestQueue failed` 발생 `0회`
 
 로그:
 - [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_smoke_20x15s_acceptfix2\server.log)
@@ -97,4 +122,5 @@
 ## 8. 현재 결론
 - `RIO`는 이제 stub이 아니라 실제 baseline backend다.
 - 아직 성능 최적화 단계는 아니지만, 상위 `EchoServer` / `ContentsRuntime` 경로를 태우는 데는 충분한 상태다.
-- 다음 작업은 장시간 soak, `IOCP` 비교, buffer 등록 비용 최적화다.
+- `250세션` 비교 런에서 보였던 `RIOCreateRequestQueue error=10055` admission 문제도 수정 후 재현되지 않았다.
+- 다음 작업은 `Direct / OwnerThread / IOCP` 비교와, 필요 시 buffer 등록 비용 최적화다.

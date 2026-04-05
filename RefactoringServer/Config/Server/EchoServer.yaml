@@ -11,6 +11,7 @@ EchoServer:
   WorkerThreadCount: 2
   MaxSessionCount: 512
   RecvBufferSize: 1024
+  SocketSendBufferBytes: -1
   # Allowed: Debug, Info, Warn, Error
   LogMinimumLevel: Info
   LogOutputDirectory: ""

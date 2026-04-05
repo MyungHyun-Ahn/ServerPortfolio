@@ -498,7 +498,9 @@ namespace ContentsRuntime::Routing
 		return true;
 	}
 
-	bool FContentRuntime::SendRaw(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length)
+	bool FContentRuntime::SendPacket(
+		std::uint64_t sessionId,
+		NetworkLib::Packet::Serialization::FOutgoingContentPacket&& packet)
 	{
 		NetworkLib::IServer* server = nullptr;
 		{
@@ -506,7 +508,7 @@ namespace ContentsRuntime::Routing
 			server = m_impl->server;
 		}
 
-		return server != nullptr && server->Send(sessionId, opcode, buffer, length);
+		return server != nullptr && server->SendPacket(sessionId, std::move(packet));
 	}
 
 	bool FContentRuntime::MoveSession(std::uint64_t sessionId, Core::FContentId targetContentId)

@@ -2,6 +2,155 @@
 
 namespace NetworkLib::Packet::Serialization
 {
+	class FOutgoingContentPacket
+	{
+	public:
+		FOutgoingContentPacket() noexcept = default;
+
+		explicit FOutgoingContentPacket(
+			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer,
+			const std::size_t bodyOffset) noexcept
+			: m_packetBuffer(packetBuffer)
+			, m_bodyOffset(bodyOffset)
+		{
+		}
+
+		~FOutgoingContentPacket() noexcept
+		{
+			Reset();
+		}
+
+		FOutgoingContentPacket(const FOutgoingContentPacket&) = delete;
+		FOutgoingContentPacket& operator=(const FOutgoingContentPacket&) = delete;
+
+		FOutgoingContentPacket(FOutgoingContentPacket&& other) noexcept
+			: m_packetBuffer(std::exchange(other.m_packetBuffer, nullptr))
+			, m_bodyOffset(std::exchange(other.m_bodyOffset, 0))
+		{
+		}
+
+		FOutgoingContentPacket& operator=(FOutgoingContentPacket&& other) noexcept
+		{
+			if (this != &other)
+			{
+				Reset();
+				m_packetBuffer = std::exchange(other.m_packetBuffer, nullptr);
+				m_bodyOffset = std::exchange(other.m_bodyOffset, 0);
+			}
+
+			return *this;
+		}
+
+	public:
+		bool IsValid() const noexcept
+		{
+			return m_packetBuffer != nullptr;
+		}
+
+		const char* GetPayloadData() const noexcept
+		{
+			if (m_packetBuffer == nullptr)
+			{
+				return nullptr;
+			}
+
+			const std::vector<char>& buffer = m_packetBuffer->GetBuffer();
+			return buffer.empty() ? nullptr : buffer.data();
+		}
+
+		std::int32_t GetPayloadLength() const noexcept
+		{
+			if (m_packetBuffer == nullptr)
+			{
+				return 0;
+			}
+
+			return static_cast<std::int32_t>(m_packetBuffer->GetBuffer().size());
+		}
+
+		std::int32_t GetBodyLength() const noexcept
+		{
+			if (m_packetBuffer == nullptr)
+			{
+				return 0;
+			}
+
+			const std::vector<char>& buffer = m_packetBuffer->GetBuffer();
+			return static_cast<std::int32_t>(buffer.size() > m_bodyOffset ? buffer.size() - m_bodyOffset : 0);
+		}
+
+		std::vector<char> MoveBuffer() noexcept
+		{
+			std::vector<char> buffer;
+			if (m_packetBuffer != nullptr)
+			{
+				buffer = std::move(m_packetBuffer->GetBuffer());
+				NetworkLib::Packet::Buffer::FPacketBuffer::Release(std::exchange(m_packetBuffer, nullptr));
+				m_bodyOffset = 0;
+			}
+
+			return buffer;
+		}
+
+		NetworkLib::Packet::Buffer::FPacketBuffer* ReleaseBuffer() noexcept
+		{
+			m_bodyOffset = 0;
+			return std::exchange(m_packetBuffer, nullptr);
+		}
+
+	private:
+		void Reset() noexcept
+		{
+			if (m_packetBuffer != nullptr)
+			{
+				NetworkLib::Packet::Buffer::FPacketBuffer::Release(m_packetBuffer);
+				m_packetBuffer = nullptr;
+				m_bodyOffset = 0;
+			}
+		}
+
+	private:
+		NetworkLib::Packet::Buffer::FPacketBuffer* m_packetBuffer = nullptr;
+		std::size_t m_bodyOffset = 0;
+	};
+
+	inline FOutgoingContentPacket BuildOutgoingContentPacket(
+		std::uint16_t opcode,
+		FPacketWriter&& writer)
+	{
+		const std::size_t bodyOffset = writer.GetFrontSize();
+		NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer = writer.ReleaseBuffer();
+		if (packetBuffer == nullptr)
+		{
+			return {};
+		}
+
+		if (bodyOffset < sizeof(NetworkLib::Packet::Framing::SContentHeader))
+		{
+			NetworkLib::Packet::Buffer::FPacketBuffer::Release(packetBuffer);
+			return {};
+		}
+
+		NetworkLib::Packet::Framing::SContentHeader contentHeader{};
+		contentHeader.opcode = opcode;
+		std::memcpy(
+			packetBuffer->GetBuffer().data(),
+			&contentHeader,
+			sizeof(NetworkLib::Packet::Framing::SContentHeader));
+
+		return FOutgoingContentPacket(packetBuffer, bodyOffset);
+	}
+
+	template <typename TPacket>
+	inline FOutgoingContentPacket BuildOutgoingContentPacket(const TPacket& packet)
+	{
+		FPacketWriter writer;
+		writer.ReserveFront(sizeof(NetworkLib::Packet::Framing::SContentHeader));
+		writer.ReserveAdditional(packet.GetEstimatedBodySize());
+		packet.Serialize(writer);
+		return BuildOutgoingContentPacket(packet.GetOpcode(), std::move(writer));
+	}
+
 	template <typename TValue>
 	inline std::size_t GetSerializedSize(const TValue&) noexcept
 		requires CPacketWritableScalar<TValue>
@@ -130,7 +279,7 @@ namespace NetworkLib::Packet::Serialization
 	template <typename TPacket>
 	inline std::vector<char> SerializeContentPacket(const TPacket& packet)
 	{
-		return BuildContentPayload(packet.GetOpcode(), SerializeContentBody(packet));
+		return BuildOutgoingContentPacket(packet).MoveBuffer();
 	}
 
 	inline bool TryParseContentPacketView(const NetworkLib::Packet::View::FPacketView& transportPacketView, NetworkLib::Packet::View::FPacketView& outPacketView)
@@ -154,14 +303,6 @@ namespace NetworkLib::Packet::Serialization
 	template <typename TPacket>
 	inline bool SendContentPacket(NetworkLib::IServer& server, std::uint64_t sessionId, const TPacket& packet)
 	{
-		FPacketWriter writer;
-		writer.ReserveAdditional(packet.GetEstimatedBodySize());
-		packet.Serialize(writer);
-		const std::vector<char>& payload = writer.GetBuffer();
-		return server.Send(
-			sessionId,
-			packet.GetOpcode(),
-			payload.empty() ? nullptr : payload.data(),
-			static_cast<std::int32_t>(payload.size()));
+		return server.SendPacket(sessionId, BuildOutgoingContentPacket(packet));
 	}
 }

@@ -22,7 +22,9 @@ namespace NetworkLib::Core
 
 		bool Start(const SServerConfig& serverConfig, IApplicationHandler& applicationHandler) override;
 		void Stop() override;
-		bool Send(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) override;
+		bool SendPacket(
+			std::uint64_t sessionId,
+			NetworkLib::Packet::Serialization::FOutgoingContentPacket&& packet) override;
 		bool Disconnect(std::uint64_t sessionId) override;
 		EBackendKind GetBackendKind() const override;
 		SServerStats GetStatsSnapshot() const override;

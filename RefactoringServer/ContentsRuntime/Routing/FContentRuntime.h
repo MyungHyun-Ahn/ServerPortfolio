@@ -35,7 +35,9 @@ namespace ContentsRuntime::Routing
 		bool EnqueuePacket(std::uint64_t sessionId, std::uint16_t opcode, const char* payload, std::int32_t payloadLength);
 
 	public:
-		bool SendRaw(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) override;
+		bool SendPacket(
+			std::uint64_t sessionId,
+			NetworkLib::Packet::Serialization::FOutgoingContentPacket&& packet) override;
 		bool MoveSession(std::uint64_t sessionId, Core::FContentId targetContentId) override;
 		bool MoveSessionToInstance(std::uint64_t sessionId, Core::FContentInstanceId targetContentInstanceId) override;
 		bool MoveSessionWithCompletion(

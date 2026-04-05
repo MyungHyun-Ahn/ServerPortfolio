@@ -45,14 +45,22 @@
 
 ## 4. 측정 항목 정의
 ### 4-1. 처리량
-- `recvTPS`
-  - 서버가 초당 처리한 content packet 수
-- `sendTPS`
-  - 서버가 초당 완료한 response packet 수
-- `recvBps`
-  - 서버가 초당 받은 payload byte 수
-- `sendBps`
-  - 서버가 초당 보낸 payload byte 수
+- `overall avg recvTPS`
+  - 전체 측정 시간 기준 평균 content packet 처리량
+  - `total recv packet count / elapsed seconds`
+- `overall avg sendTPS`
+  - 전체 측정 시간 기준 평균 response packet 처리량
+  - `total send packet count / elapsed seconds`
+- `overall avg recvBps`
+  - 전체 측정 시간 기준 평균 수신 payload byte 처리량
+- `overall avg sendBps`
+  - 전체 측정 시간 기준 평균 송신 payload byte 처리량
+- `minute avg recvTPS/sendTPS`
+  - 분 단위 평균 처리량 시계열
+  - 워밍업, 편차, tail 구간 확인용
+- `responses total`
+  - 보조 지표
+  - 전체 성공 응답 수는 남기되, 2시간 본실험의 주 비교값은 아니다
 
 ### 4-2. 지연
 - `RTT avg`
@@ -156,6 +164,27 @@ config 차이는 오직 이 값만 허용한다.
 - `RioSendDispatchMode: Direct`
 - `RioSendDispatchMode: OwnerThread`
 
+### 자동화 스크립트
+- 순차 실행 스크립트:
+  - [Run-RioDispatchComparisonSequence.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-RioDispatchComparisonSequence.ps1)
+  - [Run-RioDispatchComparisonSequence.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-RioDispatchComparisonSequence.cmd)
+- 기본 순서:
+  - `RioDirect -> RioOwnerThread -> Iocp`
+- 기본 출력:
+  - `Out/dispatch_ab_2h_<timestamp>/`
+  - mode별 로그 디렉터리
+  - `summary.csv`
+
+실행 예:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run-RioDispatchComparisonSequence.ps1 `
+  -SessionCount 250 `
+  -HoldSeconds 7200 `
+  -RoomCount 80 `
+  -RoomCapacity 4
+```
+
 ## 8. 판단 기준
 ### B안 채택 우세
 - `RTT p95/p99`가 개선되거나 유지된다.
@@ -181,3 +210,84 @@ config 차이는 오직 이 값만 허용한다.
 ## 10. 현재 결론
 - 지금은 pure `RIO` baseline이 이미 동작한다.
 - 다음 단계는 곧바로 lock-free 최적화가 아니라, `owner-thread send`가 실제 이득인지 먼저 수치로 검증하는 것이다.
+
+## 11. 1차 10분 파일럿 결과
+비교 조건:
+- `250세션`
+- `holdSeconds=600`
+- `room-count=80`
+- `room-capacity=4`
+- `room-change=90%`
+- recv 관련 timeout `15000ms`
+
+측정 로그:
+- `Rio + Direct`
+  - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\client.log)
+  - [rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\rtt.csv)
+- `Rio + OwnerThread`
+  - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_owner_fix_250x10m_t15_r80\client.log)
+  - [rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_owner_fix_250x10m_t15_r80\rtt.csv)
+- `Iocp`
+  - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\iocp_fix_250x10m_t15_r80\client.log)
+  - [rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\iocp_fix_250x10m_t15_r80\rtt.csv)
+
+참고 수치:
+
+| Mode | responses total | echo-response avg | room-change-list avg | room-change avg |
+| --- | ---: | ---: | ---: | ---: |
+| Rio Direct | 619436 | 3.584 ms | 8.107 ms | 9.390 ms |
+| Rio OwnerThread | 664640 | 34.702 ms | 41.093 ms | 69.929 ms |
+| Iocp | 669984 | 4.228 ms | 9.256 ms | 12.053 ms |
+
+관찰:
+- `Rio OwnerThread`는 처리량은 소폭 높았지만 RTT 평균이 크게 악화됐다.
+- `Rio Direct`와 `Iocp`는 steady-state RTT가 비슷한 수준이었다.
+- 이번 1회 파일럿에서는 `Iocp`가 처리량이 가장 높았다.
+
+현재 판단:
+- `OwnerThread`는 아직 기본 모드 후보가 아니라 비교용 실험 모드로 보는 게 맞다.
+- 다만 이 구간의 처리량 평가는 아직 `responses total` 참고 수준이다.
+- 다음 2시간 본실험부터는 `overall avg recvTPS/sendTPS/Bps`를 주 비교값으로 사용한다.
+- 이후 `OwnerThread` 경로의 queue/handoff 비용을 더 줄일지, 아니면 `Direct`를 RIO 기본으로 유지할지 판단한다.
+
+## 12. 2시간 본실험 결과
+비교 조건:
+- 순서: `RioDirect -> RioOwnerThread -> Iocp`
+- `250세션`
+- `holdSeconds=7200`
+- `room-count=80`
+- `room-capacity=4`
+- `room-change=90%`
+- recv 관련 timeout `15000ms`
+- 자동 실행 스크립트:
+  - [Run-RioDispatchComparisonSequence.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-RioDispatchComparisonSequence.ps1)
+
+결과:
+- 요약 CSV: [summary.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\dispatch_ab_2h_20260405_035034_2h\summary.csv)
+- 모드별 로그:
+  - [rio_direct](D:\Project\ServerPortfolio\RefactoringServer\Out\dispatch_ab_2h_20260405_035034_2h\rio_direct)
+  - [rio_owner](D:\Project\ServerPortfolio\RefactoringServer\Out\dispatch_ab_2h_20260405_035034_2h\rio_owner)
+  - [iocp](D:\Project\ServerPortfolio\RefactoringServer\Out\dispatch_ab_2h_20260405_035034_2h\iocp)
+- 세 모드 모두 성공
+  - `client.err.log` 비어 있음
+  - 2시간 hold 종료 후 정상 정리
+
+핵심 수치:
+
+| Mode | responses total | avg recvTPS | avg sendTPS | avg recvBps | avg sendBps | avg CPU | echo avg | room-change-list avg | room-change avg |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Rio Direct | 1768780 | 714.084 | 714.084 | 10199.501 | 456290.961 | 3.766% | 1.578 ms | 1.446 ms | 4.647 ms |
+| Rio OwnerThread | 1767533 | 711.470 | 711.370 | 10168.318 | 454156.445 | 3.729% | 1.470 ms | 1.459 ms | 4.778 ms |
+| Iocp | 1767073 | 710.884 | 710.884 | 10164.527 | 453679.689 | 3.700% | 1.464 ms | 1.418 ms | 4.651 ms |
+
+관찰:
+- `avg TPS/Bps` 기준으로는 `Rio Direct`가 가장 높았다.
+- `echo-response avg`는 `Iocp`와 `Rio OwnerThread`가 근소하게 낮았지만 차이는 작았다.
+- `room-change-list avg`는 `Iocp`가 가장 낮았고, `Rio Direct`가 근접했다.
+- `room-change avg`는 `Rio Direct`와 `Iocp`가 사실상 비슷했고, `Rio OwnerThread`가 약간 더 느렸다.
+- `10분 파일럿`에서 보였던 `OwnerThread 처리량 우세`는 2시간 avg 기준에선 유지되지 않았다.
+
+현재 결론:
+- `Rio Direct`를 현재 RIO 기본 정책으로 유지하는 것이 가장 합리적이다.
+- `Rio OwnerThread`는 correctness와 장시간 안정성은 확보됐지만, 현재 구현 상태로는 기본 채택 이점이 분명하지 않다.
+- `Iocp`는 여전히 매우 경쟁력 있고, 현재 수치상 `Rio Direct`와 근소한 차이 비교 구도다.

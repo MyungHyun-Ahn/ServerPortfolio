@@ -41,6 +41,7 @@ namespace NetworkLib::Core
 		std::uint32_t workerThreadCount = 2;
 		std::uint32_t maxSessionCount = 64;
 		std::uint32_t recvBufferSize = 1024;
+		std::int32_t socketSendBufferBytes = -1;
 		bool enablePageBufferReuse = true;
 		std::uint32_t pageBufferSize = 4096;
 		Foundation::SLogConfig logConfig{};

@@ -20,7 +20,9 @@ namespace NetworkLib::Core
 	{
 	}
 
-	bool FStubServer::Send(std::uint64_t, std::uint16_t, const char*, std::int32_t)
+	bool FStubServer::SendPacket(
+		std::uint64_t,
+		NetworkLib::Packet::Serialization::FOutgoingContentPacket&&)
 	{
 		return false;
 	}

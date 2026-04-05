@@ -97,7 +97,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		constexpr std::array<std::string_view, 19> kEchoServerKnownKeys =
+		constexpr std::array<std::string_view, 20> kEchoServerKnownKeys =
 		{
 			"Backend",
 			"RioSendDispatchMode",
@@ -106,6 +106,7 @@ namespace Generated::Config::EchoServer
 			"WorkerThreadCount",
 			"MaxSessionCount",
 			"RecvBufferSize",
+			"SocketSendBufferBytes",
 			"LogMinimumLevel",
 			"LogOutputDirectory",
 			"LogConsoleEnabled",
@@ -180,6 +181,11 @@ namespace Generated::Config::EchoServer
 		}
 
 		if (!reader.ReadOptionalInt32("EchoServer", "RecvBufferSize", outConfig.EchoServer.RecvBufferSize, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalInt32("EchoServer", "SocketSendBufferBytes", outConfig.EchoServer.SocketSendBufferBytes, outError))
 		{
 			return false;
 		}

@@ -22,6 +22,33 @@ namespace NetworkLib::Session
 		s_sessionPool.Free(session);
 	}
 
+	void FRioSession::EnsurePoolCapacity(LONG targetCapacity) noexcept
+	{
+		if (targetCapacity <= 0)
+		{
+			return;
+		}
+
+		std::vector<FRioSession*> reservedSessions;
+		reservedSessions.reserve(static_cast<std::size_t>(targetCapacity));
+		while (GetPoolCapacity() < targetCapacity)
+		{
+			FRioSession* session = s_sessionPool.Alloc();
+			if (session == nullptr)
+			{
+				break;
+			}
+
+			session->Reset();
+			reservedSessions.push_back(session);
+		}
+
+		for (FRioSession* session : reservedSessions)
+		{
+			s_sessionPool.Free(session);
+		}
+	}
+
 	LONG FRioSession::GetPoolCapacity() noexcept
 	{
 		return s_sessionPool.GetCapacity();

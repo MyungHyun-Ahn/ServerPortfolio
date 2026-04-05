@@ -9,6 +9,7 @@ namespace NetworkLib::Session
 	public:
 		static FRioSession* Create() noexcept;
 		static void Destroy(FRioSession* session) noexcept;
+		static void EnsurePoolCapacity(LONG targetCapacity) noexcept;
 		static LONG GetPoolCapacity() noexcept;
 		static LONG GetPoolUsage() noexcept;
 

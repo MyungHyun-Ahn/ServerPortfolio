@@ -12,6 +12,7 @@ EchoServer:
   WorkerThreadCount: { type: int32, default: 2 }
   MaxSessionCount: { type: int32, default: 512 }
   RecvBufferSize: { type: int32, default: 1024 }
+  SocketSendBufferBytes: { type: int32, default: -1 }
   LogMinimumLevel:
     type: enum
     default: Info

@@ -16,13 +16,43 @@ namespace NetworkLib::Core
 	using NetworkLib::Packet::Buffer::FPacketBuffer;
 	using NetworkLib::Packet::Buffer::FSendBuffer;
 	using NetworkLib::Packet::Framing::CalculatePacketChecksum;
-	using NetworkLib::Packet::Framing::SContentHeader;
 	using NetworkLib::Packet::Framing::SFramedPacketBufferParts;
 	using NetworkLib::Packet::Framing::SOutgoingPacket;
 	using NetworkLib::Packet::Framing::SPacketHeader;
 	using NetworkLib::Packet::Serialization::TryParseContentPacketView;
 	using NetworkLib::Packet::View::FPacketView;
 	using NetworkLib::Session::FIocpSession;
+
+	namespace
+	{
+		bool ApplyAcceptedSocketSendBufferOption(
+			const SServerConfig& serverConfig,
+			const SOCKET clientSocket,
+			std::string& outError) noexcept
+		{
+			if (serverConfig.socketSendBufferBytes < 0)
+			{
+				return true;
+			}
+
+			const int sendBufferBytes = serverConfig.socketSendBufferBytes;
+			if (setsockopt(
+				clientSocket,
+				SOL_SOCKET,
+				SO_SNDBUF,
+				reinterpret_cast<const char*>(&sendBufferBytes),
+				sizeof(sendBufferBytes)) == SOCKET_ERROR)
+			{
+				std::ostringstream oss;
+				oss << "setsockopt(SO_SNDBUF) failed. requested=" << sendBufferBytes
+					<< " error=" << WSAGetLastError();
+				outError = oss.str();
+				return false;
+			}
+
+			return true;
+		}
+	}
 
 	FIocpServer::FIocpServer() = default;
 
@@ -153,14 +183,17 @@ namespace NetworkLib::Core
 		m_logger.reset();
 	}
 
-	bool FIocpServer::Send(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length)
+	bool FIocpServer::SendPacket(
+		std::uint64_t sessionId,
+		NetworkLib::Packet::Serialization::FOutgoingContentPacket&& packet)
 	{
-		if ((buffer == nullptr && length > 0) || length < 0)
+		if (!packet.IsValid())
 		{
-			Log(Foundation::ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
+			Log(Foundation::ELogLevel::Warn, "Send rejected because outgoing packet was invalid.");
 			return false;
 		}
 
+		const std::int32_t bodyLength = packet.GetBodyLength();
 		FIocpSession* sessionContext = AcquireSession(sessionId);
 		if (sessionContext == nullptr)
 		{
@@ -170,21 +203,9 @@ namespace NetworkLib::Core
 			return false;
 		}
 
-		std::vector<char> framedBuffer;
 		if (m_packetFramer != nullptr)
 		{
-			std::vector<char> payloadBuffer;
-			payloadBuffer.resize(sizeof(SContentHeader) + static_cast<std::size_t>(length));
-			SContentHeader contentHeader{};
-			contentHeader.opcode = opcode;
-			std::memcpy(payloadBuffer.data(), &contentHeader, sizeof(contentHeader));
-			if (length > 0)
-			{
-				std::memcpy(
-					payloadBuffer.data() + sizeof(SContentHeader),
-					buffer,
-					static_cast<std::size_t>(length));
-			}
+			std::vector<char> payloadBuffer = packet.MoveBuffer();
 			std::uint8_t randomKey = 0;
 			if (m_packetCipher != nullptr)
 			{
@@ -213,11 +234,11 @@ namespace NetworkLib::Core
 		}
 		else
 		{
-			framedBuffer.assign(buffer, buffer + length);
-			sessionContext->EnqueueSendBuffer(FSendBuffer::Create(std::move(framedBuffer)));
+			std::vector<char> payloadBuffer = packet.MoveBuffer();
+			sessionContext->EnqueueSendBuffer(FSendBuffer::Create(std::move(payloadBuffer)));
 		}
 		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
-		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(length > 0 ? length : 0), std::memory_order_relaxed);
+		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(bodyLength > 0 ? bodyLength : 0), std::memory_order_relaxed);
 		PostSend(*sessionContext);
 
 		ReleaseSession(sessionContext);
@@ -708,6 +729,15 @@ bool FIocpServer::PostSend(FIocpSession& sessionContext)
 
 	bool FIocpServer::AttachAcceptedSocket(SOCKET clientSocket)
 	{
+		{
+			std::string errorMessage;
+			if (!ApplyAcceptedSocketSendBufferOption(m_serverConfig, clientSocket, errorMessage))
+			{
+				Log(Foundation::ELogLevel::Error, errorMessage);
+				return false;
+			}
+		}
+
 		FIocpSession* newSessionContext = nullptr;
 
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)

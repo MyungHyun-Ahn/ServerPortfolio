@@ -7,6 +7,11 @@ namespace ContentsRuntime::Core
 	using FTransitionCompletionCallback = std::function<void()>;
 }
 
+namespace NetworkLib::Packet::Serialization
+{
+	class FOutgoingContentPacket;
+}
+
 namespace ContentsRuntime::Bridge
 {
 	class IContentBridge
@@ -14,7 +19,9 @@ namespace ContentsRuntime::Bridge
 	public:
 		virtual ~IContentBridge() = default;
 
-		virtual bool SendRaw(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length) = 0;
+		virtual bool SendPacket(
+			std::uint64_t sessionId,
+			NetworkLib::Packet::Serialization::FOutgoingContentPacket&& packet) = 0;
 		virtual bool MoveSession(std::uint64_t sessionId, Core::FContentId targetContentId) = 0;
 		virtual bool MoveSessionToInstance(std::uint64_t sessionId, Core::FContentInstanceId targetContentInstanceId) = 0;
 		virtual bool MoveSessionWithCompletion(
@@ -35,15 +42,9 @@ namespace ContentsRuntime::Bridge
 	template <typename TPacket>
 	inline bool SendContentPacket(IContentBridge& bridge, std::uint64_t sessionId, const TPacket& packet)
 	{
-		NetworkLib::Packet::Serialization::FPacketWriter writer;
-		writer.ReserveAdditional(packet.GetEstimatedBodySize());
-		packet.Serialize(writer);
-		const std::vector<char>& payload = writer.GetBuffer();
-		return bridge.SendRaw(
+		return bridge.SendPacket(
 			sessionId,
-			packet.GetOpcode(),
-			payload.empty() ? nullptr : payload.data(),
-			static_cast<std::int32_t>(payload.size()));
+			NetworkLib::Packet::Serialization::BuildOutgoingContentPacket(packet));
 	}
 
 	template <typename TPacket>

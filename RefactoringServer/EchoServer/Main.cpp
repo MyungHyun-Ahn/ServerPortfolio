@@ -406,6 +406,7 @@ namespace
 		serverConfig.workerThreadCount = std::max(1, configDocument.EchoServer.WorkerThreadCount);
 		serverConfig.maxSessionCount = std::max(1, configDocument.EchoServer.MaxSessionCount);
 		serverConfig.recvBufferSize = std::max(1, configDocument.EchoServer.RecvBufferSize);
+		serverConfig.socketSendBufferBytes = configDocument.EchoServer.SocketSendBufferBytes;
 		serverConfig.logConfig.minimumLevel = ToLogLevel(configDocument.EchoServer.LogMinimumLevel);
 		serverConfig.logConfig.consoleEnabled = configDocument.EchoServer.LogConsoleEnabled;
 		serverConfig.logConfig.fileEnabled = configDocument.EchoServer.LogFileEnabled;

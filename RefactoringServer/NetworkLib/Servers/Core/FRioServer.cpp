@@ -18,7 +18,6 @@ namespace NetworkLib::Core
 	using NetworkLib::Packet::Buffer::FPacketBuffer;
 	using NetworkLib::Packet::Buffer::FSendBuffer;
 	using NetworkLib::Packet::Framing::CalculatePacketChecksum;
-	using NetworkLib::Packet::Framing::SContentHeader;
 	using NetworkLib::Packet::Framing::SPacketHeader;
 	using NetworkLib::Packet::Framing::SOutgoingPacket;
 	using NetworkLib::Packet::Serialization::TryParseContentPacketView;
@@ -31,8 +30,36 @@ namespace NetworkLib::Core
 		inline constexpr DWORD kWorkerWaitTimeoutMs = 100;
 		inline constexpr ULONG kMaxOutstandingReceive = 1;
 		inline constexpr ULONG kMaxReceiveDataBuffers = 1;
-		inline constexpr ULONG kMaxOutstandingSend = 64;
+		inline constexpr ULONG kMaxOutstandingSend = 8;
 		inline constexpr ULONG kMaxSendDataBuffers = 1;
+
+		bool ApplyAcceptedSocketSendBufferOption(
+			const SServerConfig& serverConfig,
+			const SOCKET clientSocket,
+			std::string& outError) noexcept
+		{
+			if (serverConfig.socketSendBufferBytes < 0)
+			{
+				return true;
+			}
+
+			const int sendBufferBytes = serverConfig.socketSendBufferBytes;
+			if (setsockopt(
+				clientSocket,
+				SOL_SOCKET,
+				SO_SNDBUF,
+				reinterpret_cast<const char*>(&sendBufferBytes),
+				sizeof(sendBufferBytes)) == SOCKET_ERROR)
+			{
+				std::ostringstream oss;
+				oss << "setsockopt(SO_SNDBUF) failed. requested=" << sendBufferBytes
+					<< " error=" << WSAGetLastError();
+				outError = oss.str();
+				return false;
+			}
+
+			return true;
+		}
 	}
 
 	FRioServer::FRioServer()
@@ -76,6 +103,8 @@ namespace NetworkLib::Core
 			m_sessionSlots[slotIndex].store(nullptr);
 			m_generations[slotIndex].store(1);
 		}
+
+		FRioSession::EnsurePoolCapacity(static_cast<LONG>(m_serverConfig.maxSessionCount));
 
 		if (!InitializeWinsock())
 		{
@@ -171,14 +200,17 @@ namespace NetworkLib::Core
 		m_logger.reset();
 	}
 
-	bool FRioServer::Send(std::uint64_t sessionId, std::uint16_t opcode, const char* buffer, std::int32_t length)
+	bool FRioServer::SendPacket(
+		std::uint64_t sessionId,
+		NetworkLib::Packet::Serialization::FOutgoingContentPacket&& packet)
 	{
-		if ((buffer == nullptr && length > 0) || length < 0)
+		if (!packet.IsValid())
 		{
-			Log(Foundation::ELogLevel::Warn, "Send rejected because buffer is null or length is invalid.");
+			Log(Foundation::ELogLevel::Warn, "Send rejected because outgoing packet was invalid.");
 			return false;
 		}
 
+		const std::int32_t bodyLength = packet.GetBodyLength();
 		FRioSession* sessionContext = AcquireSession(sessionId);
 		if (sessionContext == nullptr)
 		{
@@ -188,22 +220,10 @@ namespace NetworkLib::Core
 			return false;
 		}
 
-		FPacketBuffer* packetBuffer = FPacketBuffer::Create();
-		std::vector<char>& framedBuffer = packetBuffer->GetBuffer();
+		FPacketBuffer* packetBuffer = packet.ReleaseBuffer();
 		if (m_packetFramer != nullptr)
 		{
-			std::vector<char> payloadBuffer;
-			payloadBuffer.resize(sizeof(SContentHeader) + static_cast<std::size_t>(length));
-			SContentHeader contentHeader{};
-			contentHeader.opcode = opcode;
-			std::memcpy(payloadBuffer.data(), &contentHeader, sizeof(contentHeader));
-			if (length > 0)
-			{
-				std::memcpy(
-					payloadBuffer.data() + sizeof(SContentHeader),
-					buffer,
-					static_cast<std::size_t>(length));
-			}
+			std::vector<char>& payloadBuffer = packetBuffer->GetBuffer();
 
 			std::uint8_t randomKey = 0;
 			if (m_packetCipher != nullptr)
@@ -221,20 +241,22 @@ namespace NetworkLib::Core
 			outgoingPacket.payload = payloadBuffer.data();
 			outgoingPacket.payloadLength = static_cast<std::int32_t>(payloadBuffer.size());
 
+			FPacketBuffer* framedPacketBuffer = FPacketBuffer::Create();
+			std::vector<char>& framedBuffer = framedPacketBuffer->GetBuffer();
 			if (!m_packetFramer->BuildPacket(outgoingPacket, framedBuffer))
 			{
 				Log(Foundation::ELogLevel::Error, "BuildPacket failed during RIO send path.");
 				FPacketBuffer::Release(packetBuffer);
+				FPacketBuffer::Release(framedPacketBuffer);
 				ReleaseSession(sessionContext);
 				return false;
 			}
-		}
-		else
-		{
-			framedBuffer.assign(buffer, buffer + length);
+
+			FPacketBuffer::Release(packetBuffer);
+			packetBuffer = framedPacketBuffer;
 		}
 
-		if (framedBuffer.empty())
+		if (packetBuffer == nullptr || packetBuffer->GetBuffer().empty())
 		{
 			Log(Foundation::ELogLevel::Warn, "RIO send rejected because framed buffer is empty.");
 			FPacketBuffer::Release(packetBuffer);
@@ -248,8 +270,8 @@ namespace NetworkLib::Core
 					sessionId,
 					sessionContext->GetOwnerWorkerIndex(),
 					packetBuffer,
-					length)
-				: SubmitSendDirect(*sessionContext, sessionId, packetBuffer, length);
+					bodyLength)
+				: SubmitSendDirect(*sessionContext, sessionId, packetBuffer, bodyLength);
 		ReleaseSession(sessionContext);
 		return sendResult;
 	}
@@ -921,6 +943,15 @@ namespace NetworkLib::Core
 
 	bool FRioServer::AttachAcceptedSocket(SOCKET clientSocket)
 	{
+		{
+			std::string errorMessage;
+			if (!ApplyAcceptedSocketSendBufferOption(m_serverConfig, clientSocket, errorMessage))
+			{
+				Log(Foundation::ELogLevel::Error, errorMessage);
+				return false;
+			}
+		}
+
 		const std::uint32_t workerIndex = ChooseLeastLoadedWorkerIndex();
 		const std::size_t recvBufferCapacity =
 			static_cast<std::size_t>(std::max<std::uint32_t>(m_serverConfig.recvBufferSize * 8u, 65536u));

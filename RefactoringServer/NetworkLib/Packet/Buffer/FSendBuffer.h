@@ -47,10 +47,38 @@ namespace NetworkLib::Packet::Buffer
 			return sendBuffer;
 		}
 
+		static FSendBuffer* Create(NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer) noexcept
+		{
+			if (packetBuffer == nullptr)
+			{
+				return nullptr;
+			}
+
+			FSendBuffer* sendBuffer = s_sendBufferPool.Alloc();
+			sendBuffer->Initialize(std::move(packetBuffer->GetBuffer()));
+			NetworkLib::Packet::Buffer::FPacketBuffer::Release(packetBuffer);
+			return sendBuffer;
+		}
+
 		static FSendBuffer* Create(const NetworkLib::Packet::Framing::SFramedPacketBufferParts& packetParts, std::vector<char>&& payloadBuffer) noexcept
 		{
 			FSendBuffer* sendBuffer = s_sendBufferPool.Alloc();
 			sendBuffer->Initialize(packetParts, std::move(payloadBuffer));
+			return sendBuffer;
+		}
+
+		static FSendBuffer* Create(
+			const NetworkLib::Packet::Framing::SFramedPacketBufferParts& packetParts,
+			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer) noexcept
+		{
+			if (packetBuffer == nullptr)
+			{
+				return nullptr;
+			}
+
+			FSendBuffer* sendBuffer = s_sendBufferPool.Alloc();
+			sendBuffer->Initialize(packetParts, std::move(packetBuffer->GetBuffer()));
+			NetworkLib::Packet::Buffer::FPacketBuffer::Release(packetBuffer);
 			return sendBuffer;
 		}
 
