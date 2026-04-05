@@ -117,15 +117,42 @@ namespace NetworkLib::Core
 			return false;
 		}
 
+		if (CreateIoCompletionPort(
+			reinterpret_cast<HANDLE>(m_listenSocket),
+			m_iocpHandle,
+			kAcceptCompletionKey,
+			0) == nullptr)
+		{
+			std::ostringstream oss;
+			oss << "CreateIoCompletionPort listen attach failed. error=" << GetLastError();
+			Log(Foundation::ELogLevel::Error, oss.str());
+			Stop();
+			return false;
+		}
+
+		if (!LoadAcceptExFunctions())
+		{
+			Log(Foundation::ELogLevel::Error, "AcceptEx extension function load failed.");
+			Stop();
+			return false;
+		}
+
+		if (!InitializeAcceptContexts())
+		{
+			Log(Foundation::ELogLevel::Error, "AcceptEx context initialization failed.");
+			Stop();
+			return false;
+		}
+
 		StartWorkers();
-		m_acceptThread = std::thread(&FIocpServer::AcceptLoop, this);
 		const std::uint32_t workerCount = std::max(1u, m_serverConfig.workerThreadCount);
 		{
 			std::ostringstream oss;
 			oss << "Server started. ip=" << m_serverConfig.bindIp
 				<< " port=" << m_serverConfig.port
 				<< " workers=" << workerCount
-				<< " maxSessions=" << m_serverConfig.maxSessionCount;
+				<< " maxSessions=" << m_serverConfig.maxSessionCount
+				<< " acceptContexts=" << m_acceptContextCount;
 			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnServerStarted(*this);
@@ -143,11 +170,6 @@ namespace NetworkLib::Core
 
 		CloseListenSocket();
 
-		if (m_acceptThread.joinable())
-		{
-			m_acceptThread.join();
-		}
-
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
 			FIocpSession* sessionContext = m_sessionSlots[slotIndex].exchange(nullptr);
@@ -159,6 +181,7 @@ namespace NetworkLib::Core
 		}
 
 		StopWorkers();
+		CloseAcceptContexts();
 
 		if (m_iocpHandle != nullptr)
 		{
@@ -361,6 +384,152 @@ namespace NetworkLib::Core
 		return true;
 	}
 
+	bool FIocpServer::LoadAcceptExFunctions()
+	{
+		DWORD bytesReturned = 0;
+		GUID acceptExGuid = WSAID_ACCEPTEX;
+		if (WSAIoctl(
+			m_listenSocket,
+			SIO_GET_EXTENSION_FUNCTION_POINTER,
+			&acceptExGuid,
+			sizeof(acceptExGuid),
+			&m_acceptEx,
+			sizeof(m_acceptEx),
+			&bytesReturned,
+			nullptr,
+			nullptr) == SOCKET_ERROR)
+		{
+			std::ostringstream oss;
+			oss << "WSAIoctl(AcceptEx) failed. error=" << WSAGetLastError();
+			Log(Foundation::ELogLevel::Error, oss.str());
+			return false;
+		}
+
+		GUID getAcceptExSockaddrsGuid = WSAID_GETACCEPTEXSOCKADDRS;
+		if (WSAIoctl(
+			m_listenSocket,
+			SIO_GET_EXTENSION_FUNCTION_POINTER,
+			&getAcceptExSockaddrsGuid,
+			sizeof(getAcceptExSockaddrsGuid),
+			&m_getAcceptExSockaddrs,
+			sizeof(m_getAcceptExSockaddrs),
+			&bytesReturned,
+			nullptr,
+			nullptr) == SOCKET_ERROR)
+		{
+			std::ostringstream oss;
+			oss << "WSAIoctl(GetAcceptExSockaddrs) failed. error=" << WSAGetLastError();
+			Log(Foundation::ELogLevel::Error, oss.str());
+			return false;
+		}
+
+		return true;
+	}
+
+	bool FIocpServer::InitializeAcceptContexts()
+	{
+		if (m_serverConfig.maxSessionCount == 0)
+		{
+			Log(Foundation::ELogLevel::Error, "AcceptEx initialization requires maxSessionCount > 0.");
+			return false;
+		}
+
+		const std::uint32_t desiredAcceptContextCount =
+			std::max(kMinimumAcceptContextCount, std::max(1u, m_serverConfig.workerThreadCount) * 2u);
+		m_acceptContextCount = std::min(m_serverConfig.maxSessionCount, desiredAcceptContextCount);
+		m_acceptContexts = std::make_unique<SAcceptContext[]>(m_acceptContextCount);
+		for (std::uint32_t acceptSlotIndex = 0; acceptSlotIndex < m_acceptContextCount; ++acceptSlotIndex)
+		{
+			m_acceptContexts[acceptSlotIndex].slotIndex = acceptSlotIndex;
+			m_acceptContexts[acceptSlotIndex].acceptedSocket = INVALID_SOCKET;
+			m_acceptContexts[acceptSlotIndex].ResetOverlapped();
+
+			if (!PostAccept(acceptSlotIndex))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool FIocpServer::PostAccept(std::uint32_t acceptSlotIndex)
+	{
+		if (acceptSlotIndex >= m_acceptContextCount || m_acceptEx == nullptr)
+		{
+			return false;
+		}
+
+		SAcceptContext& acceptContext = m_acceptContexts[acceptSlotIndex];
+		if (acceptContext.acceptedSocket != INVALID_SOCKET)
+		{
+			closesocket(acceptContext.acceptedSocket);
+			acceptContext.acceptedSocket = INVALID_SOCKET;
+		}
+
+		acceptContext.acceptedSocket =
+			WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+		if (acceptContext.acceptedSocket == INVALID_SOCKET)
+		{
+			std::ostringstream oss;
+			oss << "WSASocketW for AcceptEx failed. slot=" << acceptSlotIndex
+				<< " error=" << WSAGetLastError();
+			Log(Foundation::ELogLevel::Error, oss.str());
+			return false;
+		}
+
+		acceptContext.ResetOverlapped();
+
+		DWORD bytesReceived = 0;
+		const BOOL acceptResult =
+			m_acceptEx(
+				m_listenSocket,
+				acceptContext.acceptedSocket,
+				acceptContext.buffer.data(),
+				0,
+				static_cast<DWORD>((sizeof(sockaddr_in) + 16)),
+				static_cast<DWORD>((sizeof(sockaddr_in) + 16)),
+				&bytesReceived,
+				&acceptContext.overlapped);
+		if (acceptResult == FALSE)
+		{
+			const int errorCode = WSAGetLastError();
+			if (errorCode != WSA_IO_PENDING)
+			{
+				std::ostringstream oss;
+				oss << "AcceptEx post failed. slot=" << acceptSlotIndex
+					<< " error=" << errorCode;
+				Log(Foundation::ELogLevel::Error, oss.str());
+				closesocket(acceptContext.acceptedSocket);
+				acceptContext.acceptedSocket = INVALID_SOCKET;
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	void FIocpServer::CloseAcceptContexts() noexcept
+	{
+		if (m_acceptContexts == nullptr)
+		{
+			return;
+		}
+
+		for (std::uint32_t acceptSlotIndex = 0; acceptSlotIndex < m_acceptContextCount; ++acceptSlotIndex)
+		{
+			SAcceptContext& acceptContext = m_acceptContexts[acceptSlotIndex];
+			if (acceptContext.acceptedSocket != INVALID_SOCKET)
+			{
+				closesocket(acceptContext.acceptedSocket);
+				acceptContext.acceptedSocket = INVALID_SOCKET;
+			}
+		}
+
+		m_acceptContexts.reset();
+		m_acceptContextCount = 0;
+	}
+
 	void FIocpServer::CloseListenSocket()
 	{
 		if (m_listenSocket != INVALID_SOCKET)
@@ -398,29 +567,47 @@ namespace NetworkLib::Core
 		m_workerThreads.clear();
 	}
 
-	void FIocpServer::AcceptLoop()
+	bool FIocpServer::HandleAcceptCompletion(
+		SAcceptContext& acceptContext,
+		bool completionSucceeded,
+		DWORD completionError)
 	{
-		while (m_isRunning)
+		if (acceptContext.acceptedSocket == INVALID_SOCKET)
 		{
-			SOCKET clientSocket = accept(m_listenSocket, nullptr, nullptr);
-			if (clientSocket == INVALID_SOCKET)
+			return false;
+		}
+
+		if (!completionSucceeded)
+		{
+			if (m_isRunning && completionError != ERROR_OPERATION_ABORTED)
 			{
-				if (m_isRunning)
-				{
-					std::ostringstream oss;
-					oss << "accept failed. error=" << WSAGetLastError();
-					Log(Foundation::ELogLevel::Warn, oss.str());
-					std::this_thread::sleep_for(std::chrono::milliseconds(10));
-				}
-				continue;
+				std::ostringstream oss;
+				oss << "AcceptEx completion failed. slot=" << acceptContext.slotIndex
+					<< " error=" << completionError;
+				Log(Foundation::ELogLevel::Warn, oss.str());
 			}
 
-			if (!AttachAcceptedSocket(clientSocket))
-			{
-				Log(Foundation::ELogLevel::Warn, "Accepted socket was rejected because no session slot was available.");
-				closesocket(clientSocket);
-			}
+			closesocket(acceptContext.acceptedSocket);
+			acceptContext.acceptedSocket = INVALID_SOCKET;
+			return false;
 		}
+
+		if (!m_isRunning)
+		{
+			closesocket(acceptContext.acceptedSocket);
+			acceptContext.acceptedSocket = INVALID_SOCKET;
+			return false;
+		}
+
+		if (!AttachAcceptedSocket(acceptContext.acceptedSocket))
+		{
+			closesocket(acceptContext.acceptedSocket);
+			acceptContext.acceptedSocket = INVALID_SOCKET;
+			return false;
+		}
+
+		acceptContext.acceptedSocket = INVALID_SOCKET;
+		return true;
 	}
 
 	void FIocpServer::WorkerLoop()
@@ -432,9 +619,29 @@ namespace NetworkLib::Core
 			LPOVERLAPPED overlapped = nullptr;
 
 			const BOOL queuedResult = GetQueuedCompletionStatus(m_iocpHandle, &transferredBytes, &completionKey, &overlapped, INFINITE);
+			const DWORD completionError = queuedResult != FALSE ? ERROR_SUCCESS : GetLastError();
 			if (overlapped == nullptr && completionKey == 0)
 			{
 				break;
+			}
+
+			if (completionKey == kAcceptCompletionKey)
+			{
+				auto* acceptContext = reinterpret_cast<SAcceptContext*>(overlapped);
+				if (acceptContext == nullptr)
+				{
+					continue;
+				}
+
+				HandleAcceptCompletion(*acceptContext, queuedResult != FALSE, completionError);
+				if (m_isRunning && !PostAccept(acceptContext->slotIndex))
+				{
+					std::ostringstream oss;
+					oss << "AcceptEx repost failed. slot=" << acceptContext->slotIndex;
+					Log(Foundation::ELogLevel::Error, oss.str());
+				}
+
+				continue;
 			}
 
 			auto* ioContext = reinterpret_cast<FIocpSession::SIoContext*>(overlapped);
@@ -449,7 +656,7 @@ namespace NetworkLib::Core
 				if (queuedResult == FALSE)
 				{
 					std::ostringstream oss;
-					oss << "I/O completion failed. sessionId=" << sessionContext->GetSessionId() << " error=" << GetLastError();
+					oss << "I/O completion failed. sessionId=" << sessionContext->GetSessionId() << " error=" << completionError;
 					Log(Foundation::ELogLevel::Warn, oss.str());
 				}
 				if (ioContext->ioType == FIocpSession::EIoType::Send)
@@ -729,6 +936,19 @@ bool FIocpServer::PostSend(FIocpSession& sessionContext)
 
 	bool FIocpServer::AttachAcceptedSocket(SOCKET clientSocket)
 	{
+		if (setsockopt(
+			clientSocket,
+			SOL_SOCKET,
+			SO_UPDATE_ACCEPT_CONTEXT,
+			reinterpret_cast<const char*>(&m_listenSocket),
+			sizeof(m_listenSocket)) == SOCKET_ERROR)
+		{
+			std::ostringstream oss;
+			oss << "setsockopt(SO_UPDATE_ACCEPT_CONTEXT) failed. error=" << WSAGetLastError();
+			Log(Foundation::ELogLevel::Warn, oss.str());
+			return false;
+		}
+
 		{
 			std::string errorMessage;
 			if (!ApplyAcceptedSocketSendBufferOption(m_serverConfig, clientSocket, errorMessage))

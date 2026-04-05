@@ -11,12 +11,12 @@
 - transport header / content header / packet framing
 - packet reader/writer, generated packet 직렬화 지원
 - borrowed packet view와 zero-copy 보조 구조
-- 성능 계측과 page pool / TLS pool 같은 보조 최적화
+- RTT 계측, page pool 같은 성능 보조 기능
 
 ## 3. 현재 비책임
 - 콘텐츠 스레드 실행 루프
 - 콘텐츠 전이 규칙
-- 로비, 룸, 배틀 같은 게임 규칙
+- 로비, 룸, 매치 같은 게임 규칙
 - DB, Redis, 운영 명령 계층
 
 ## 4. 디렉터리 구조
@@ -57,28 +57,37 @@
   - [IServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h)
   - [IApplicationHandler](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IApplicationHandler.h)
 
-## 5. Backend 전략
+## 5. Backend 개요
 - public 경계는 [IServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h) 하나로 유지한다.
 - backend 선택은 [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.h)가 맡는다.
-- 현재 backend 상태는 다음과 같다.
+- 현재 backend 상태
   - `Iocp` -> [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
-  - `Rio` -> [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h) pure RIO baseline
+  - `Rio` -> [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
   - `BoostAsio` -> [FStubServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FStubServer.h)
-- 현재 2시간 A/B 비교 기준으로는 `Rio` 사용 시 기본 send 정책을 `Direct`로 유지하는 것이 가장 합리적이다.
 
-## 6. Session 전략
-- 세션도 backend별 구현으로 나눈다.
+## 6. IOCP 현재 상태
+- `FIocpServer`는 현재 `accept()` thread 기반이 아니라 `AcceptEx + IOCP completion` 기반이다.
+- accept는 `SAcceptContext[]` 고정 배열을 사용해 여러 slot을 미리 pre-post 한다.
+- accept completion은 worker의 `GetQueuedCompletionStatus()` 루프에서 recv/send completion과 함께 처리한다.
+- 현재는 `accept context slot pool`은 적용되어 있지만, `accepted socket reuse`는 기본 채택하지 않았다.
+
+## 7. RIO 현재 상태
+- `FRioServer`는 pure `RIO` baseline이 구현되어 있다.
+- 현재 비교 결과 기준으로 `Rio`의 기본 send 정책은 `Direct` 유지가 적절하다.
+- `OwnerThread` send 경로는 후속 최적화 실험 경로로 남겨둔다.
+
+## 8. Session 개요
+- 세션은 backend별 구현으로 나뉜다.
 - 공통 경계는 [ISession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\ISession.h)이다.
-- `IOCP` 경로는 [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)이 맡는다.
-- `RIO` 경로는 [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)이 맡는다.
-- 즉 `NetworkLib`는 `single IOCP session implementation`에서 `dual-backend 확장이 가능한 구조`로 넘어간 상태다.
+- `IOCP` 경로는 [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
+- `RIO` 경로는 [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
 
-## 7. 상위 계층과의 경계
+## 9. 상위 계층과의 경계
 - `NetworkLib`는 `sessionId + packet` 전달까지만 책임진다.
-- 콘텐츠 스레드, 콘텐츠 전이, 콘텐츠 플레이 루프는 `ContentsRuntime` 프로젝트가 담당한다.
-- 네트워크와 게임 로직 실행 모델을 강하게 결합하지 않는 것이 현재 구조의 목표다.
+- 콘텐츠 스레드, 콘텐츠 전이, 콘텐츠별 실행 모델은 `ContentsRuntime`가 맡는다.
+- 네트워크 계층과 게임 로직 실행 모델을 강하게 결합하지 않는 것이 현재 구조의 목표다.
 
-## 8. 헤더 / PCH 규칙
+## 10. 헤더 / PCH 규칙
 - 공용 인터페이스 헤더는 forward declaration을 우선 사용한다.
 - 자주 바뀌지 않는 공용 의존성은 [NetLibPch.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\NetLibPch.h)로 모은다.
 - 자세한 규칙은 [003_cpp-header-pch-convention.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\001_project\003_cpp-header-pch-convention.md)를 따른다.

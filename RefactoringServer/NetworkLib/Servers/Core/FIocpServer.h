@@ -30,13 +30,31 @@ namespace NetworkLib::Core
 		SServerStats GetStatsSnapshot() const override;
 
 	private:
+		struct SAcceptContext
+		{
+			OVERLAPPED overlapped{};
+			SOCKET acceptedSocket = INVALID_SOCKET;
+			std::uint32_t slotIndex = 0;
+			std::array<char, (sizeof(sockaddr_in) + 16) * 2> buffer{};
+
+			void ResetOverlapped() noexcept
+			{
+				ZeroMemory(&overlapped, sizeof(overlapped));
+			}
+		};
+
+	private:
 		bool InitializeWinsock();
 		bool OpenListenSocket();
+		bool LoadAcceptExFunctions();
+		bool InitializeAcceptContexts();
+		bool PostAccept(std::uint32_t acceptSlotIndex);
+		void CloseAcceptContexts() noexcept;
 		void CloseListenSocket();
 		void StartWorkers();
 		void StopWorkers();
-		void AcceptLoop();
 		void WorkerLoop();
+		bool HandleAcceptCompletion(SAcceptContext& acceptContext, bool completionSucceeded, DWORD completionError);
 		bool PostRecv(NetworkLib::Session::FIocpSession& sessionContext);
 		bool PostSend(NetworkLib::Session::FIocpSession& sessionContext);
 		void CloseSession(NetworkLib::Session::FIocpSession& sessionContext);
@@ -49,6 +67,8 @@ namespace NetworkLib::Core
 
 	private:
 		inline static constexpr std::size_t kMaxSendBatchCount = 32;
+		inline static constexpr ULONG_PTR kAcceptCompletionKey = 1;
+		inline static constexpr std::uint32_t kMinimumAcceptContextCount = 4;
 		SServerConfig m_serverConfig{};
 		IApplicationHandler* m_applicationHandler = nullptr;
 		std::shared_ptr<Foundation::ILogger> m_logger;
@@ -56,10 +76,13 @@ namespace NetworkLib::Core
 		std::shared_ptr<NetworkLib::Packet::Framing::IPacketFramer> m_packetFramer;
 		HANDLE m_iocpHandle = nullptr;
 		SOCKET m_listenSocket = INVALID_SOCKET;
-		std::thread m_acceptThread;
 		std::vector<std::thread> m_workerThreads;
 		std::unique_ptr<std::atomic<NetworkLib::Session::FIocpSession*>[]> m_sessionSlots;
 		std::unique_ptr<std::atomic<std::uint32_t>[]> m_generations;
+		std::unique_ptr<SAcceptContext[]> m_acceptContexts;
+		std::uint32_t m_acceptContextCount = 0;
+		LPFN_ACCEPTEX m_acceptEx = nullptr;
+		LPFN_GETACCEPTEXSOCKADDRS m_getAcceptExSockaddrs = nullptr;
 		std::atomic<std::uint32_t> m_packetRandomKeySeed = 1;
 		std::atomic<std::uint32_t> m_activeSessionCount = 0;
 		std::atomic<std::uint64_t> m_acceptedSessionCount = 0;
