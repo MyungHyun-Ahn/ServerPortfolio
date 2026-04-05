@@ -30,7 +30,7 @@ namespace Generated::Config::EchoClient
 			return false;
 		}
 
-		constexpr std::array<std::string_view, 21> kEchoClientKnownKeys =
+		constexpr std::array<std::string_view, 22> kEchoClientKnownKeys =
 		{
 			"ServerIp",
 			"Port",
@@ -48,6 +48,7 @@ namespace Generated::Config::EchoClient
 			"PacketsPerSend",
 			"ReconnectProbabilityPercent",
 			"ReconnectDelayMs",
+			"WorkerThreadCount",
 			"RoomChangeProbabilityPercent",
 			"MaxRoomEnterRetryCount",
 			"MaxRoomChangeRetryCount",
@@ -153,6 +154,11 @@ namespace Generated::Config::EchoClient
 		}
 
 		if (!reader.ReadOptionalInt32("EchoClient", "ReconnectDelayMs", outConfig.EchoClient.ReconnectDelayMs, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalInt32("EchoClient", "WorkerThreadCount", outConfig.EchoClient.WorkerThreadCount, outError))
 		{
 			return false;
 		}

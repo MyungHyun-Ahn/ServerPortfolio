@@ -16,10 +16,14 @@
 #include "Packet/View/FPacketView.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
+#include <deque>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <random>
 #include <thread>
@@ -31,6 +35,7 @@
 namespace
 {
 	constexpr std::uint8_t kPacketKey = 0x37;
+	std::mutex g_consoleOutputMutex;
 
 	struct SClientOptions
 	{
@@ -50,6 +55,7 @@ namespace
 		int packetsPerSend = 1;
 		int reconnectProbabilityPercent = 0;
 		int reconnectDelayMs = 100;
+		int workerThreadCount = 4;
 		int recvTimeoutMs = 0;
 		int roomListRecvTimeoutMs = -1;
 		int echoRecvTimeoutMs = -1;
@@ -166,6 +172,7 @@ namespace
 		outOptions.reconnectProbabilityPercent =
 			std::clamp(configDocument.EchoClient.ReconnectProbabilityPercent, 0, 100);
 		outOptions.reconnectDelayMs = std::max(0, configDocument.EchoClient.ReconnectDelayMs);
+		outOptions.workerThreadCount = std::max(1, configDocument.EchoClient.WorkerThreadCount);
 		outOptions.roomChangeProbabilityPercent =
 			std::clamp(configDocument.EchoClient.RoomChangeProbabilityPercent, 0, 100);
 		outOptions.maxRoomEnterRetryCount = std::max(1, configDocument.EchoClient.MaxRoomEnterRetryCount);
@@ -326,6 +333,13 @@ namespace
 					return false;
 				}
 			}
+			else if (argument == "--worker-thread-count" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.workerThreadCount) || outOptions.workerThreadCount <= 0)
+				{
+					return false;
+				}
+			}
 			else if (argument == "--recv-timeout-ms" && argumentIndex + 1 < argc)
 			{
 				if (!TryParseInt(argv[++argumentIndex], outOptions.recvTimeoutMs) || outOptions.recvTimeoutMs < 0)
@@ -446,6 +460,16 @@ namespace
 	Foundation::Diagnostics::FRttStageIndex ToRttStageIndex(const ERttStage stage)
 	{
 		return static_cast<Foundation::Diagnostics::FRttStageIndex>(stage);
+	}
+
+	Foundation::Diagnostics::SRttPendingRequest MakePendingRequest(const ERttStage stage, const int sessionIndex)
+	{
+		Foundation::Diagnostics::SRttPendingRequest pendingRequest{};
+		pendingRequest.stageIndex = ToRttStageIndex(stage);
+		pendingRequest.sessionIndex = sessionIndex;
+		pendingRequest.sentSteady = std::chrono::steady_clock::now();
+		pendingRequest.sentSystem = std::chrono::system_clock::now();
+		return pendingRequest;
 	}
 
 	Foundation::Diagnostics::SRttMetricsConfig BuildRttMetricsConfig(const SClientOptions& options)
@@ -624,6 +648,33 @@ namespace
 		return true;
 	}
 
+	bool TryConnectSocketOverlapped(const SClientOptions& options, SOCKET& outSocket, std::string& outErrorMessage)
+	{
+		outSocket = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+		if (outSocket == INVALID_SOCKET)
+		{
+			outErrorMessage = "overlapped socket creation failed.";
+			return false;
+		}
+
+		sockaddr_in serverAddress{};
+		serverAddress.sin_family = AF_INET;
+		serverAddress.sin_port = htons(options.port);
+		InetPtonA(AF_INET, options.serverIp.c_str(), &serverAddress.sin_addr);
+
+		if (connect(outSocket, reinterpret_cast<sockaddr*>(&serverAddress), sizeof(serverAddress)) == SOCKET_ERROR)
+		{
+			std::ostringstream oss;
+			oss << "connect failed: " << WSAGetLastError();
+			outErrorMessage = oss.str();
+			closesocket(outSocket);
+			outSocket = INVALID_SOCKET;
+			return false;
+		}
+
+		return true;
+	}
+
 	bool ShouldReconnect(const SClientOptions& options, std::mt19937& randomEngine)
 	{
 		if (options.reconnectProbabilityPercent <= 0)
@@ -653,17 +704,15 @@ namespace
 			return;
 		}
 
+		const std::lock_guard<std::mutex> lock(g_consoleOutputMutex);
 		std::cerr << "[trace][session " << sessionIndex << "] " << message << "\n";
 	}
 
-	bool SendContentPacketRequest(
-		SOCKET clientSocket,
+	std::vector<char> BuildContentPacketBuffer(
 		NetworkLib::Crypto::FDefaultPacketCipher& packetCipher,
 		NetworkLib::Packet::Framing::FDefaultPacketFramer& packetFramer,
 		const NetworkLib::Packet::Serialization::IContentPacket& packet,
-		const std::uint8_t randomKey,
-		const SClientOptions& options,
-		std::string& outErrorMessage)
+		const std::uint8_t randomKey)
 	{
 		std::vector<char> serializedPayload = NetworkLib::Packet::Serialization::SerializeContentPacket(packet);
 		packetCipher.Encode(serializedPayload.data(), static_cast<int>(serializedPayload.size()), randomKey);
@@ -679,6 +728,24 @@ namespace
 
 		std::vector<char> outboundPacket;
 		if (!packetFramer.BuildPacket(outgoingPacket, outboundPacket))
+		{
+			return {};
+		}
+
+		return outboundPacket;
+	}
+
+	bool SendContentPacketRequest(
+		SOCKET clientSocket,
+		NetworkLib::Crypto::FDefaultPacketCipher& packetCipher,
+		NetworkLib::Packet::Framing::FDefaultPacketFramer& packetFramer,
+		const NetworkLib::Packet::Serialization::IContentPacket& packet,
+		const std::uint8_t randomKey,
+		const SClientOptions& options,
+		std::string& outErrorMessage)
+	{
+		std::vector<char> outboundPacket = BuildContentPacketBuffer(packetCipher, packetFramer, packet, randomKey);
+		if (outboundPacket.empty())
 		{
 			outErrorMessage = "BuildPacket failed.";
 			return false;
@@ -1475,6 +1542,1637 @@ namespace
 		sessionResult.succeeded = true;
 		return sessionResult;
 	}
+
+	enum class EClientSessionState : std::uint8_t
+	{
+		None = 0,
+		WaitingLoginResponse,
+		WaitingRoomListForEnter,
+		WaitingRoomEnterResponse,
+		WaitingEchoResponses,
+		WaitingRoomChangeList,
+		WaitingRoomChangeResponse,
+		WaitingInterval,
+		WaitingReconnect,
+		Completed,
+		Failed
+	};
+
+	enum class EClientIoOperation : std::uint8_t
+	{
+		Recv = 0,
+		Send
+	};
+
+	enum class EClientCommandType : std::uint8_t
+	{
+		ContinueCycle = 0,
+		Reconnect
+	};
+
+	struct SClientIocpSession;
+
+	struct SClientIoContext
+	{
+		OVERLAPPED overlapped{};
+		EClientIoOperation operation = EClientIoOperation::Recv;
+		SClientIocpSession* session = nullptr;
+	};
+
+	struct SClientRecvContext final : SClientIoContext
+	{
+		std::vector<char> buffer;
+	};
+
+	struct SClientSendContext final : SClientIoContext
+	{
+	};
+
+	struct SClientCommand
+	{
+		EClientCommandType type = EClientCommandType::ContinueCycle;
+		int sessionIndex = -1;
+	};
+
+	struct SClientIocpSession final
+	{
+		int sessionIndex = 0;
+		SOCKET socketHandle = INVALID_SOCKET;
+		std::mutex mutex;
+		SSessionResult result;
+		std::mt19937 randomEngine{};
+		NetworkLib::Crypto::FDefaultPacketCipher packetCipher;
+		NetworkLib::Packet::Framing::FDefaultPacketFramer packetFramer;
+		SClientRecvContext recvContext;
+		SClientSendContext sendContext;
+		std::vector<char> inboundBuffer;
+		std::deque<std::vector<char>> sendQueue;
+		std::vector<char> activeSendBuffer;
+		std::size_t activeSendOffset = 0;
+		bool sendInFlight = false;
+		bool recvPosted = false;
+		bool finalized = false;
+		bool commandPending = false;
+		EClientSessionState state = EClientSessionState::None;
+		std::optional<std::uint32_t> currentRoomId;
+		int requestSequence = 0;
+		int roomEnterAttemptCount = 0;
+		int roomChangeAttemptCount = 0;
+		int expectedResponseCount = 0;
+		int cycleReceivedResponseCount = 0;
+		std::unordered_map<std::string, int> expectedResponseCounts;
+		std::unordered_map<std::string, SRttPendingRequest> expectedResponseMetrics;
+		std::optional<ERttStage> timeoutStage;
+		std::optional<SRttPendingRequest> singlePendingRequest;
+		std::string timeoutStageName;
+		std::chrono::steady_clock::time_point timeoutDeadline{};
+		std::chrono::steady_clock::time_point wakeTime{};
+		std::chrono::steady_clock::time_point deadline{};
+
+		SClientIocpSession();
+	};
+
+	class FIocpEchoClientRuntime final
+	{
+	public:
+		FIocpEchoClientRuntime(const SClientOptions& options, FRttMetricsRuntime* rttMetricsRuntime);
+		bool Run(std::vector<SSessionResult>& outSessionResults);
+
+	private:
+		static constexpr ULONG_PTR kCommandCompletionKey = 1;
+		static constexpr ULONG_PTR kShutdownCompletionKey = 2;
+
+		void StartWorkers();
+		void WaitForCompletion();
+		void RequestStop();
+		void JoinThreads();
+		bool ConnectSession(SClientIocpSession& session, std::string& outErrorMessage);
+		void SchedulerLoop();
+		void WorkerLoop(FRttThreadLocalCollector& rttCollector);
+		void DrainCommands(FRttThreadLocalCollector& rttCollector);
+		void HandleContinueCommand(SClientIocpSession& session);
+		void HandleReconnectCommand(SClientIocpSession& session);
+		void HandleIoFailure(
+			SClientIocpSession& session,
+			EClientIoOperation operation,
+			int errorCode,
+			FRttThreadLocalCollector& rttCollector);
+		void HandleRecvCompletion(
+			SClientIocpSession& session,
+			DWORD transferredBytes,
+			FRttThreadLocalCollector& rttCollector);
+		void HandleSendCompletion(SClientIocpSession& session, DWORD transferredBytes);
+		void HandleContentPacketLocked(
+			SClientIocpSession& session,
+			const NetworkLib::Packet::View::FPacketView& contentPacketView,
+			FRttThreadLocalCollector& rttCollector);
+		void HandleLoginResponseLocked(SClientIocpSession& session, const NetworkLib::Packet::View::FPacketView& packetView);
+		void HandleRoomListForEnterLocked(SClientIocpSession& session, const NetworkLib::Packet::View::FPacketView& packetView);
+		void HandleRoomEnterResponseLocked(SClientIocpSession& session, const NetworkLib::Packet::View::FPacketView& packetView);
+		void HandleEchoResponseLocked(
+			SClientIocpSession& session,
+			const NetworkLib::Packet::View::FPacketView& packetView,
+			FRttThreadLocalCollector& rttCollector);
+		void HandleRoomChangeListLocked(SClientIocpSession& session, const NetworkLib::Packet::View::FPacketView& packetView);
+		void HandleRoomChangeResponseLocked(SClientIocpSession& session, const NetworkLib::Packet::View::FPacketView& packetView);
+		void OnCycleCompletedLocked(SClientIocpSession& session);
+		bool SendLoginLocked(SClientIocpSession& session, std::string& outErrorMessage);
+		bool SendRoomListForEnterLocked(SClientIocpSession& session, std::string& outErrorMessage);
+		bool SendRoomEnterLocked(SClientIocpSession& session, std::uint32_t roomId, std::string& outErrorMessage);
+		bool SendRoomChangeListLocked(SClientIocpSession& session, std::string& outErrorMessage);
+		bool SendRoomChangeLocked(SClientIocpSession& session, std::uint32_t targetRoomId, std::string& outErrorMessage);
+		bool StartEchoCycleLocked(SClientIocpSession& session, std::string& outErrorMessage);
+		bool QueuePacketLocked(
+			SClientIocpSession& session,
+			const NetworkLib::Packet::Serialization::IContentPacket& packet,
+			std::uint8_t randomKey,
+			std::string& outErrorMessage);
+		bool EnqueueSendBufferLocked(
+			SClientIocpSession& session,
+			std::vector<char>&& buffer,
+			std::string& outErrorMessage);
+		bool StartNextSendLocked(SClientIocpSession& session, std::string& outErrorMessage);
+		bool SubmitActiveSendLocked(SClientIocpSession& session, std::string& outErrorMessage);
+		bool PostRecvLocked(SClientIocpSession& session, std::string& outErrorMessage);
+		void SetWaitStateLocked(
+			SClientIocpSession& session,
+			EClientSessionState state,
+			ERttStage stage,
+			const char* stageName,
+			const std::optional<SRttPendingRequest>& pendingRequest);
+		void ClearWaitStateLocked(SClientIocpSession& session);
+		void RefreshWaitDeadlineLocked(SClientIocpSession& session);
+		std::string BuildRecvFailureMessage(const SClientIocpSession& session, int errorCode, bool timedOut) const;
+		void EnqueueCommand(EClientCommandType type, int sessionIndex);
+		void FailSession(SClientIocpSession& session, const std::string& errorMessage);
+		void FinalizeSessionLocked(SClientIocpSession& session, bool succeeded, const std::string& errorMessage);
+
+	private:
+		const SClientOptions& m_options;
+		FRttMetricsRuntime* m_rttMetricsRuntime = nullptr;
+		HANDLE m_iocpHandle = nullptr;
+		std::vector<std::unique_ptr<SClientIocpSession>> m_sessions;
+		std::vector<std::thread> m_workerThreads;
+		std::thread m_schedulerThread;
+		std::mutex m_commandMutex;
+		std::deque<SClientCommand> m_commands;
+		std::mutex m_completionMutex;
+		std::condition_variable m_completionCondition;
+		std::atomic<int> m_completedSessionCount = 0;
+		std::atomic<bool> m_stopRequested = false;
+		std::atomic<bool> m_abortRequested = false;
+		std::string m_runtimeError;
+	};
+
+	SClientIocpSession::SClientIocpSession()
+		: packetCipher([]()
+			{
+				NetworkLib::Crypto::SDefaultPacketCipherConfig cipherConfig{};
+				cipherConfig.packetKey = kPacketKey;
+				return NetworkLib::Crypto::FDefaultPacketCipher(cipherConfig);
+			}())
+	{
+		recvContext.operation = EClientIoOperation::Recv;
+		recvContext.session = this;
+		sendContext.operation = EClientIoOperation::Send;
+		sendContext.session = this;
+	}
+
+	FIocpEchoClientRuntime::FIocpEchoClientRuntime(
+		const SClientOptions& options,
+		FRttMetricsRuntime* const rttMetricsRuntime)
+		: m_options(options)
+		, m_rttMetricsRuntime(rttMetricsRuntime)
+	{
+	}
+
+	bool FIocpEchoClientRuntime::Run(std::vector<SSessionResult>& outSessionResults)
+	{
+		m_iocpHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
+		if (m_iocpHandle == nullptr)
+		{
+			m_runtimeError = "CreateIoCompletionPort failed.";
+			return false;
+		}
+
+		m_sessions.reserve(static_cast<std::size_t>(m_options.sessionCount));
+		for (int sessionIndex = 0; sessionIndex < m_options.sessionCount; ++sessionIndex)
+		{
+			auto session = std::make_unique<SClientIocpSession>();
+			session->sessionIndex = sessionIndex;
+			session->randomEngine.seed(
+				static_cast<std::uint32_t>(GetTickCount64()) ^
+				static_cast<std::uint32_t>(sessionIndex * 2654435761u));
+			session->recvContext.buffer.resize(static_cast<std::size_t>(std::max(1, m_options.recvBufferSize)));
+			session->inboundBuffer.reserve(static_cast<std::size_t>(std::max(1, m_options.recvBufferSize) * 2));
+			session->deadline =
+				std::chrono::steady_clock::now() +
+				std::chrono::seconds(m_options.holdSeconds > 0 ? m_options.holdSeconds : 0);
+			m_sessions.push_back(std::move(session));
+		}
+
+		StartWorkers();
+		m_schedulerThread = std::thread([this]() { SchedulerLoop(); });
+
+		for (const auto& session : m_sessions)
+		{
+			std::string errorMessage;
+			if (!ConnectSession(*session, errorMessage))
+			{
+				FailSession(*session, errorMessage);
+				break;
+			}
+		}
+
+		WaitForCompletion();
+		RequestStop();
+		JoinThreads();
+
+		outSessionResults.clear();
+		outSessionResults.reserve(m_sessions.size());
+		for (const auto& session : m_sessions)
+		{
+			std::lock_guard<std::mutex> lock(session->mutex);
+			outSessionResults.push_back(session->result);
+		}
+
+		return m_runtimeError.empty();
+	}
+
+	void FIocpEchoClientRuntime::StartWorkers()
+	{
+		const int workerThreadCount = std::max(1, m_options.workerThreadCount);
+		m_workerThreads.reserve(static_cast<std::size_t>(workerThreadCount));
+		for (int workerIndex = 0; workerIndex < workerThreadCount; ++workerIndex)
+		{
+			m_workerThreads.emplace_back([this]()
+			{
+				FRttThreadLocalCollector rttCollector(m_rttMetricsRuntime);
+				WorkerLoop(rttCollector);
+			});
+		}
+	}
+
+	void FIocpEchoClientRuntime::WaitForCompletion()
+	{
+		std::unique_lock<std::mutex> lock(m_completionMutex);
+		m_completionCondition.wait(lock, [this]()
+		{
+			return m_completedSessionCount.load() >= m_options.sessionCount;
+		});
+	}
+
+	void FIocpEchoClientRuntime::RequestStop()
+	{
+		m_stopRequested.store(true);
+		if (m_iocpHandle != nullptr)
+		{
+			for (std::size_t index = 0; index < m_workerThreads.size(); ++index)
+			{
+				PostQueuedCompletionStatus(m_iocpHandle, 0, kShutdownCompletionKey, nullptr);
+			}
+		}
+	}
+
+	void FIocpEchoClientRuntime::JoinThreads()
+	{
+		if (m_schedulerThread.joinable())
+		{
+			m_schedulerThread.join();
+		}
+
+		for (std::thread& workerThread : m_workerThreads)
+		{
+			if (workerThread.joinable())
+			{
+				workerThread.join();
+			}
+		}
+
+		if (m_iocpHandle != nullptr)
+		{
+			CloseHandle(m_iocpHandle);
+			m_iocpHandle = nullptr;
+		}
+	}
+
+	bool FIocpEchoClientRuntime::ConnectSession(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		SOCKET connectedSocket = INVALID_SOCKET;
+		if (!TryConnectSocketOverlapped(m_options, connectedSocket, outErrorMessage))
+		{
+			return false;
+		}
+
+		if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(connectedSocket), m_iocpHandle, 0, 0) == nullptr)
+		{
+			outErrorMessage = "CreateIoCompletionPort attach failed.";
+			closesocket(connectedSocket);
+			return false;
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(session.mutex);
+			if (session.finalized)
+			{
+				closesocket(connectedSocket);
+				return false;
+			}
+
+			if (session.socketHandle != INVALID_SOCKET)
+			{
+				closesocket(session.socketHandle);
+			}
+
+			session.socketHandle = connectedSocket;
+			session.currentRoomId.reset();
+			session.roomEnterAttemptCount = 0;
+			session.roomChangeAttemptCount = 0;
+			session.expectedResponseCount = 0;
+			session.cycleReceivedResponseCount = 0;
+			session.expectedResponseCounts.clear();
+			session.expectedResponseMetrics.clear();
+			session.inboundBuffer.clear();
+			session.sendQueue.clear();
+			session.activeSendBuffer.clear();
+			session.activeSendOffset = 0;
+			session.sendInFlight = false;
+			session.recvPosted = false;
+			ClearWaitStateLocked(session);
+
+			if (!PostRecvLocked(session, outErrorMessage))
+			{
+				closesocket(session.socketHandle);
+				session.socketHandle = INVALID_SOCKET;
+				return false;
+			}
+
+			if (!SendLoginLocked(session, outErrorMessage))
+			{
+				closesocket(session.socketHandle);
+				session.socketHandle = INVALID_SOCKET;
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	void FIocpEchoClientRuntime::SchedulerLoop()
+	{
+		FRttThreadLocalCollector rttCollector(m_rttMetricsRuntime);
+		while (!m_stopRequested.load())
+		{
+			const auto now = std::chrono::steady_clock::now();
+			for (const auto& session : m_sessions)
+			{
+				std::lock_guard<std::mutex> lock(session->mutex);
+				if (session->finalized)
+				{
+					continue;
+				}
+
+				if (m_abortRequested.load())
+				{
+					FinalizeSessionLocked(*session, false, "aborted due to peer failure.");
+					continue;
+				}
+
+				if (session->timeoutStage.has_value() &&
+					session->timeoutDeadline != std::chrono::steady_clock::time_point::max() &&
+					now >= session->timeoutDeadline)
+				{
+					rttCollector.RecordTimeout(ToRttStageIndex(session->timeoutStage.value()), std::chrono::system_clock::now());
+					FinalizeSessionLocked(*session, false, BuildRecvFailureMessage(*session, WSAETIMEDOUT, true));
+					continue;
+				}
+
+				if (!session->commandPending &&
+					(session->state == EClientSessionState::WaitingInterval ||
+						session->state == EClientSessionState::WaitingReconnect) &&
+					now >= session->wakeTime)
+				{
+					session->commandPending = true;
+					EnqueueCommand(
+						session->state == EClientSessionState::WaitingReconnect
+							? EClientCommandType::Reconnect
+							: EClientCommandType::ContinueCycle,
+						session->sessionIndex);
+				}
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		}
+	}
+
+	void FIocpEchoClientRuntime::WorkerLoop(FRttThreadLocalCollector& rttCollector)
+	{
+		while (true)
+		{
+			DWORD transferredBytes = 0;
+			ULONG_PTR completionKey = 0;
+			LPOVERLAPPED overlapped = nullptr;
+			const BOOL completionResult =
+				GetQueuedCompletionStatus(m_iocpHandle, &transferredBytes, &completionKey, &overlapped, INFINITE);
+
+			if (completionKey == kShutdownCompletionKey && overlapped == nullptr)
+			{
+				return;
+			}
+
+			if (completionKey == kCommandCompletionKey && overlapped == nullptr)
+			{
+				DrainCommands(rttCollector);
+				continue;
+			}
+
+			if (overlapped == nullptr)
+			{
+				continue;
+			}
+
+			auto* ioContext = reinterpret_cast<SClientIoContext*>(overlapped);
+			if (ioContext->session == nullptr)
+			{
+				continue;
+			}
+
+			if (!completionResult)
+			{
+				HandleIoFailure(*ioContext->session, ioContext->operation, GetLastError(), rttCollector);
+				continue;
+			}
+
+			switch (ioContext->operation)
+			{
+			case EClientIoOperation::Recv:
+				HandleRecvCompletion(*ioContext->session, transferredBytes, rttCollector);
+				break;
+
+			case EClientIoOperation::Send:
+				HandleSendCompletion(*ioContext->session, transferredBytes);
+				break;
+			}
+		}
+	}
+
+	void FIocpEchoClientRuntime::DrainCommands(FRttThreadLocalCollector& rttCollector)
+	{
+		while (true)
+		{
+			SClientCommand command{};
+			{
+				std::lock_guard<std::mutex> lock(m_commandMutex);
+				if (m_commands.empty())
+				{
+					return;
+				}
+
+				command = m_commands.front();
+				m_commands.pop_front();
+			}
+
+			if (command.sessionIndex < 0 || command.sessionIndex >= static_cast<int>(m_sessions.size()))
+			{
+				continue;
+			}
+
+			SClientIocpSession& session = *m_sessions[static_cast<std::size_t>(command.sessionIndex)];
+			switch (command.type)
+			{
+			case EClientCommandType::ContinueCycle:
+				HandleContinueCommand(session);
+				break;
+
+			case EClientCommandType::Reconnect:
+				HandleReconnectCommand(session);
+				break;
+			}
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleContinueCommand(SClientIocpSession& session)
+	{
+		std::string errorMessage;
+		std::lock_guard<std::mutex> lock(session.mutex);
+		session.commandPending = false;
+		if (session.finalized || session.state != EClientSessionState::WaitingInterval)
+		{
+			return;
+		}
+
+		if (!StartEchoCycleLocked(session, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleReconnectCommand(SClientIocpSession& session)
+	{
+		{
+			std::lock_guard<std::mutex> lock(session.mutex);
+			session.commandPending = false;
+			if (session.finalized || session.state != EClientSessionState::WaitingReconnect)
+			{
+				return;
+			}
+		}
+
+		std::string errorMessage;
+		if (!ConnectSession(session, errorMessage))
+		{
+			FailSession(session, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleIoFailure(
+		SClientIocpSession& session,
+		const EClientIoOperation operation,
+		const int errorCode,
+		FRttThreadLocalCollector& rttCollector)
+	{
+		std::lock_guard<std::mutex> lock(session.mutex);
+		if (session.finalized)
+		{
+			return;
+		}
+
+		if (operation == EClientIoOperation::Recv)
+		{
+			if (errorCode == WSAETIMEDOUT && session.timeoutStage.has_value())
+			{
+				rttCollector.RecordTimeout(ToRttStageIndex(session.timeoutStage.value()), std::chrono::system_clock::now());
+			}
+
+			session.recvPosted = false;
+			FinalizeSessionLocked(session, false, BuildRecvFailureMessage(session, errorCode, errorCode == WSAETIMEDOUT));
+			return;
+		}
+
+		session.sendInFlight = false;
+		std::ostringstream oss;
+		oss << "send failed. sessionIndex=" << session.sessionIndex << " error=" << errorCode;
+		FinalizeSessionLocked(session, false, oss.str());
+	}
+
+	void FIocpEchoClientRuntime::HandleRecvCompletion(
+		SClientIocpSession& session,
+		const DWORD transferredBytes,
+		FRttThreadLocalCollector& rttCollector)
+	{
+		std::lock_guard<std::mutex> lock(session.mutex);
+		session.recvPosted = false;
+		if (session.finalized)
+		{
+			return;
+		}
+
+		if (transferredBytes == 0)
+		{
+			FinalizeSessionLocked(session, false, BuildRecvFailureMessage(session, 0, false));
+			return;
+		}
+
+		session.inboundBuffer.insert(
+			session.inboundBuffer.end(),
+			session.recvContext.buffer.begin(),
+			session.recvContext.buffer.begin() + static_cast<std::ptrdiff_t>(transferredBytes));
+
+		NetworkLib::Packet::Framing::SFramedPacket framedPacket{};
+		NetworkLib::Packet::View::FPacketView contentPacketView{};
+		while (!session.finalized && session.packetFramer.TryExtractPacket(session.inboundBuffer, framedPacket))
+		{
+			const std::uint8_t responseChecksum =
+				NetworkLib::Packet::Framing::CalculatePacketChecksum(
+					framedPacket.payload.data(),
+					static_cast<std::int32_t>(framedPacket.payload.size()));
+			if (responseChecksum != framedPacket.checkSum)
+			{
+				FinalizeSessionLocked(session, false, "packet checksum failed.");
+				break;
+			}
+
+			session.packetCipher.Decode(
+				framedPacket.payload.data(),
+				static_cast<int>(framedPacket.payload.size()),
+				framedPacket.randomKey);
+
+			NetworkLib::Packet::View::FPacketView transportPacketView{};
+			transportPacketView.randomKey = framedPacket.randomKey;
+			transportPacketView.checkSum = framedPacket.checkSum;
+			transportPacketView.payload = framedPacket.payload.data();
+			transportPacketView.payloadLength = static_cast<std::int32_t>(framedPacket.payload.size());
+
+			if (!NetworkLib::Packet::Serialization::TryParseContentPacketView(transportPacketView, contentPacketView))
+			{
+				FinalizeSessionLocked(session, false, "response content header parse failed.");
+				break;
+			}
+
+			if (session.singlePendingRequest.has_value())
+			{
+				rttCollector.RecordSample(session.singlePendingRequest.value(), std::chrono::system_clock::now());
+				session.singlePendingRequest.reset();
+			}
+
+			HandleContentPacketLocked(session, contentPacketView, rttCollector);
+		}
+
+		if (!session.finalized)
+		{
+			std::string errorMessage;
+			if (!PostRecvLocked(session, errorMessage))
+			{
+				FinalizeSessionLocked(session, false, errorMessage);
+			}
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleSendCompletion(SClientIocpSession& session, const DWORD transferredBytes)
+	{
+		std::lock_guard<std::mutex> lock(session.mutex);
+		if (session.finalized)
+		{
+			return;
+		}
+
+		session.activeSendOffset += static_cast<std::size_t>(transferredBytes);
+		if (session.activeSendOffset < session.activeSendBuffer.size())
+		{
+			std::string errorMessage;
+			if (!SubmitActiveSendLocked(session, errorMessage))
+			{
+				FinalizeSessionLocked(session, false, errorMessage);
+			}
+			return;
+		}
+
+		session.activeSendBuffer.clear();
+		session.activeSendOffset = 0;
+		session.sendInFlight = false;
+
+		std::string errorMessage;
+		if (!StartNextSendLocked(session, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleContentPacketLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::View::FPacketView& contentPacketView,
+		FRttThreadLocalCollector& rttCollector)
+	{
+		switch (session.state)
+		{
+		case EClientSessionState::WaitingLoginResponse:
+			HandleLoginResponseLocked(session, contentPacketView);
+			break;
+
+		case EClientSessionState::WaitingRoomListForEnter:
+			HandleRoomListForEnterLocked(session, contentPacketView);
+			break;
+
+		case EClientSessionState::WaitingRoomEnterResponse:
+			HandleRoomEnterResponseLocked(session, contentPacketView);
+			break;
+
+		case EClientSessionState::WaitingEchoResponses:
+			HandleEchoResponseLocked(session, contentPacketView, rttCollector);
+			break;
+
+		case EClientSessionState::WaitingRoomChangeList:
+			HandleRoomChangeListLocked(session, contentPacketView);
+			break;
+
+		case EClientSessionState::WaitingRoomChangeResponse:
+			HandleRoomChangeResponseLocked(session, contentPacketView);
+			break;
+
+		default:
+			FinalizeSessionLocked(session, false, "unexpected packet for current session state.");
+			break;
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleLoginResponseLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::View::FPacketView& packetView)
+	{
+		if (packetView.opcode != Generated::Login::FLoginRp::kOpcode)
+		{
+			std::ostringstream oss;
+			oss << "unexpected login response opcode: " << packetView.opcode;
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		Generated::Login::FLoginRp loginResponse;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, loginResponse))
+		{
+			FinalizeSessionLocked(session, false, "login response deserialize failed.");
+			return;
+		}
+
+		const std::uint32_t expectedUserId = m_options.loginUserIdBase + static_cast<std::uint32_t>(session.sessionIndex);
+		if (!loginResponse.success || loginResponse.userId != expectedUserId)
+		{
+			FinalizeSessionLocked(session, false, "login validation failed.");
+			return;
+		}
+
+		if (m_options.bootstrapTrace)
+		{
+			const std::lock_guard<std::mutex> outputLock(g_consoleOutputMutex);
+			std::cerr << "bootstrap trace: login response ok. sessionIndex=" << session.sessionIndex
+				<< " userId=" << loginResponse.userId << "\n";
+		}
+
+		session.roomEnterAttemptCount = 0;
+		std::string errorMessage;
+		if (!SendRoomListForEnterLocked(session, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleRoomListForEnterLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::View::FPacketView& packetView)
+	{
+		if (packetView.opcode != Generated::Chat::FRoomListRp::kOpcode)
+		{
+			std::ostringstream oss;
+			oss << "unexpected room list response opcode: " << packetView.opcode;
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		Generated::Chat::FRoomListRp roomListResponse;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, roomListResponse))
+		{
+			FinalizeSessionLocked(session, false, "room list response deserialize failed.");
+			return;
+		}
+
+		std::vector<SRoomCandidate> roomCandidates;
+		if (!TryBuildRoomCandidates(roomListResponse, roomCandidates))
+		{
+			FinalizeSessionLocked(session, false, "room list response validation failed.");
+			return;
+		}
+
+		const auto joinableRooms = BuildJoinableRoomCandidates(roomCandidates);
+		const auto targetRoomCandidate = PickRandomRoomCandidate(joinableRooms, session.randomEngine);
+		if (!targetRoomCandidate.has_value())
+		{
+			FinalizeSessionLocked(session, false, "no joinable room available.");
+			return;
+		}
+
+		std::string errorMessage;
+		if (!SendRoomEnterLocked(session, targetRoomCandidate->roomId, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleRoomEnterResponseLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::View::FPacketView& packetView)
+	{
+		if (packetView.opcode != Generated::Chat::FRoomEnterRp::kOpcode)
+		{
+			std::ostringstream oss;
+			oss << "unexpected room enter response opcode: " << packetView.opcode;
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		Generated::Chat::FRoomEnterRp roomEnterResponse;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, roomEnterResponse))
+		{
+			FinalizeSessionLocked(session, false, "room enter response deserialize failed.");
+			return;
+		}
+
+		if (roomEnterResponse.success)
+		{
+			session.currentRoomId = roomEnterResponse.roomId;
+			TraceSession(m_options, session.sessionIndex, "recv RoomEnterRp success roomId=" + std::to_string(roomEnterResponse.roomId));
+			if (m_options.bootstrapTrace)
+			{
+				const std::lock_guard<std::mutex> outputLock(g_consoleOutputMutex);
+				std::cerr << "bootstrap trace: room enter ok. sessionIndex=" << session.sessionIndex
+					<< " roomId=" << roomEnterResponse.roomId << "\n";
+			}
+
+			std::string errorMessage;
+			if (!StartEchoCycleLocked(session, errorMessage))
+			{
+				FinalizeSessionLocked(session, false, errorMessage);
+			}
+			return;
+		}
+
+		const auto resultCode = static_cast<EchoServer::Contents::ERoomFlowResultCode>(roomEnterResponse.resultCode);
+		if (!EchoServer::Contents::IsNormalRoomFlowFailure(resultCode))
+		{
+			std::ostringstream oss;
+			oss << "room enter failed with abnormal resultCode="
+				<< EchoServer::Contents::ToString(resultCode);
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		++session.roomEnterAttemptCount;
+		if (session.roomEnterAttemptCount >= m_options.maxRoomEnterRetryCount)
+		{
+			FinalizeSessionLocked(session, false, "room enter retry exhausted.");
+			return;
+		}
+
+		std::string errorMessage;
+		if (!SendRoomListForEnterLocked(session, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleEchoResponseLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::View::FPacketView& packetView,
+		FRttThreadLocalCollector& rttCollector)
+	{
+		if (packetView.opcode != Generated::Echo::FEchoRp::kOpcode)
+		{
+			std::ostringstream oss;
+			oss << "unexpected opcode: " << packetView.opcode;
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		Generated::Echo::FEchoRp responsePacket;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, responsePacket))
+		{
+			FinalizeSessionLocked(session, false, "response packet deserialize failed.");
+			return;
+		}
+
+		if (!responsePacket.ContainsBorrowedViews())
+		{
+			FinalizeSessionLocked(session, false, "echo response should report borrowed view payload.");
+			return;
+		}
+
+		const std::string responseMessage(responsePacket.GetMessageValue());
+		TraceSession(
+			m_options,
+			session.sessionIndex,
+			"recv EchoRp message=" + responseMessage +
+				" currentRoomId=" + (session.currentRoomId.has_value() ? std::to_string(*session.currentRoomId) : std::string("none")));
+
+		auto expectedIt = session.expectedResponseCounts.find(responseMessage);
+		if (expectedIt == session.expectedResponseCounts.end() || expectedIt->second <= 0)
+		{
+			std::ostringstream oss;
+			oss << "unexpected response=" << responseMessage;
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		--expectedIt->second;
+
+		auto pendingMetricIt = session.expectedResponseMetrics.find(responseMessage);
+		if (pendingMetricIt != session.expectedResponseMetrics.end())
+		{
+			rttCollector.RecordSample(pendingMetricIt->second, std::chrono::system_clock::now());
+			session.expectedResponseMetrics.erase(pendingMetricIt);
+		}
+
+		if (m_options.verbose)
+		{
+			const std::lock_guard<std::mutex> outputLock(g_consoleOutputMutex);
+			std::cout << "session[" << session.sessionIndex << "] response[" << session.result.receivedResponseCount
+				<< "]: " << responseMessage << "\n";
+		}
+
+		++session.cycleReceivedResponseCount;
+		++session.result.receivedResponseCount;
+		RefreshWaitDeadlineLocked(session);
+
+		if (session.cycleReceivedResponseCount < session.expectedResponseCount)
+		{
+			return;
+		}
+
+		for (const auto& [message, remainingCount] : session.expectedResponseCounts)
+		{
+			if (remainingCount != 0)
+			{
+				std::ostringstream oss;
+				oss << "missing response=" << message << " remaining=" << remainingCount;
+				FinalizeSessionLocked(session, false, oss.str());
+				return;
+			}
+		}
+
+		if (session.currentRoomId.has_value() && ShouldAttemptRoomChange(m_options, session.randomEngine))
+		{
+			session.roomChangeAttemptCount = 0;
+			std::string errorMessage;
+			if (!SendRoomChangeListLocked(session, errorMessage))
+			{
+				FinalizeSessionLocked(session, false, errorMessage);
+			}
+			return;
+		}
+
+		OnCycleCompletedLocked(session);
+	}
+
+	void FIocpEchoClientRuntime::HandleRoomChangeListLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::View::FPacketView& packetView)
+	{
+		if (packetView.opcode != Generated::Chat::FRoomListRp::kOpcode)
+		{
+			std::ostringstream oss;
+			oss << "unexpected room list response opcode during change: " << packetView.opcode;
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		Generated::Chat::FRoomListRp roomListResponse;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, roomListResponse))
+		{
+			FinalizeSessionLocked(session, false, "room list response deserialize failed during change.");
+			return;
+		}
+
+		std::vector<SRoomCandidate> roomCandidates;
+		if (!TryBuildRoomCandidates(roomListResponse, roomCandidates))
+		{
+			FinalizeSessionLocked(session, false, "room list response validation failed during change.");
+			return;
+		}
+
+		const auto joinableRooms = BuildJoinableRoomCandidates(roomCandidates, session.currentRoomId);
+		const auto targetRoomCandidate = PickRandomRoomCandidate(joinableRooms, session.randomEngine);
+		if (!targetRoomCandidate.has_value())
+		{
+			OnCycleCompletedLocked(session);
+			return;
+		}
+
+		std::string errorMessage;
+		if (!SendRoomChangeLocked(session, targetRoomCandidate->roomId, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleRoomChangeResponseLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::View::FPacketView& packetView)
+	{
+		if (packetView.opcode != Generated::Chat::FRoomChangeRp::kOpcode)
+		{
+			std::ostringstream oss;
+			oss << "unexpected room change response opcode: " << packetView.opcode;
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		Generated::Chat::FRoomChangeRp roomChangeResponse;
+		if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, roomChangeResponse))
+		{
+			FinalizeSessionLocked(session, false, "room change response deserialize failed.");
+			return;
+		}
+
+		if (roomChangeResponse.success)
+		{
+			TraceSession(
+				m_options,
+				session.sessionIndex,
+				"recv RoomChangeRp success previousRoomId=" + std::to_string(roomChangeResponse.previousRoomId) +
+					" currentRoomId=" + std::to_string(roomChangeResponse.currentRoomId));
+			session.currentRoomId = roomChangeResponse.currentRoomId;
+			OnCycleCompletedLocked(session);
+			return;
+		}
+
+		const auto resultCode = static_cast<EchoServer::Contents::ERoomFlowResultCode>(roomChangeResponse.resultCode);
+		TraceSession(
+			m_options,
+			session.sessionIndex,
+			"recv RoomChangeRp failure resultCode=" + std::string(EchoServer::Contents::ToString(resultCode)));
+		if (!EchoServer::Contents::IsNormalRoomFlowFailure(resultCode))
+		{
+			std::ostringstream oss;
+			oss << "room change failed with abnormal resultCode="
+				<< EchoServer::Contents::ToString(resultCode);
+			FinalizeSessionLocked(session, false, oss.str());
+			return;
+		}
+
+		++session.roomChangeAttemptCount;
+		if (session.roomChangeAttemptCount >= m_options.maxRoomChangeRetryCount)
+		{
+			OnCycleCompletedLocked(session);
+			return;
+		}
+
+		std::string errorMessage;
+		if (!SendRoomChangeListLocked(session, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	void FIocpEchoClientRuntime::OnCycleCompletedLocked(SClientIocpSession& session)
+	{
+		session.expectedResponseCounts.clear();
+		session.expectedResponseMetrics.clear();
+		session.expectedResponseCount = 0;
+		session.cycleReceivedResponseCount = 0;
+		ClearWaitStateLocked(session);
+
+		if (m_options.holdSeconds <= 0 || std::chrono::steady_clock::now() >= session.deadline)
+		{
+			FinalizeSessionLocked(session, true, {});
+			return;
+		}
+
+		if (ShouldReconnect(m_options, session.randomEngine))
+		{
+			if (session.socketHandle != INVALID_SOCKET)
+			{
+				shutdown(session.socketHandle, SD_BOTH);
+				closesocket(session.socketHandle);
+				session.socketHandle = INVALID_SOCKET;
+			}
+
+			session.currentRoomId.reset();
+			session.state = EClientSessionState::WaitingReconnect;
+			session.wakeTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::max(0, m_options.reconnectDelayMs));
+			if (m_options.reconnectDelayMs <= 0)
+			{
+				session.commandPending = true;
+				EnqueueCommand(EClientCommandType::Reconnect, session.sessionIndex);
+			}
+			return;
+		}
+
+		if (m_options.intervalMs > 0)
+		{
+			session.state = EClientSessionState::WaitingInterval;
+			session.wakeTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(m_options.intervalMs);
+			return;
+		}
+
+		std::string errorMessage;
+		if (!StartEchoCycleLocked(session, errorMessage))
+		{
+			FinalizeSessionLocked(session, false, errorMessage);
+		}
+	}
+
+	bool FIocpEchoClientRuntime::SendLoginLocked(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		Generated::Login::FLoginRq loginRequest;
+		loginRequest.userId = m_options.loginUserIdBase + static_cast<std::uint32_t>(session.sessionIndex);
+		if (!QueuePacketLocked(
+			session,
+			loginRequest,
+			static_cast<std::uint8_t>((0x21 + session.sessionIndex) & 0xFF),
+			outErrorMessage))
+		{
+			return false;
+		}
+
+		SetWaitStateLocked(
+			session,
+			EClientSessionState::WaitingLoginResponse,
+			ERttStage::LoginResponse,
+			"login-response",
+			MakePendingRequest(ERttStage::LoginResponse, session.sessionIndex));
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::SendRoomListForEnterLocked(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		Generated::Chat::FRoomListRq roomListRequest;
+		if (!QueuePacketLocked(
+			session,
+			roomListRequest,
+			static_cast<std::uint8_t>((0x41 + session.sessionIndex + session.roomEnterAttemptCount) & 0xFF),
+			outErrorMessage))
+		{
+			return false;
+		}
+
+		SetWaitStateLocked(
+			session,
+			EClientSessionState::WaitingRoomListForEnter,
+			ERttStage::RoomList,
+			"room-list",
+			MakePendingRequest(ERttStage::RoomList, session.sessionIndex));
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::SendRoomEnterLocked(
+		SClientIocpSession& session,
+		const std::uint32_t roomId,
+		std::string& outErrorMessage)
+	{
+		Generated::Chat::FRoomEnterRq roomEnterRequest;
+		roomEnterRequest.roomId = roomId;
+		TraceSession(m_options, session.sessionIndex, "send RoomEnterRq roomId=" + std::to_string(roomId));
+		if (!QueuePacketLocked(
+			session,
+			roomEnterRequest,
+			static_cast<std::uint8_t>((0x51 + session.sessionIndex + session.roomEnterAttemptCount) & 0xFF),
+			outErrorMessage))
+		{
+			return false;
+		}
+
+		SetWaitStateLocked(
+			session,
+			EClientSessionState::WaitingRoomEnterResponse,
+			ERttStage::RoomEnter,
+			"room-enter",
+			MakePendingRequest(ERttStage::RoomEnter, session.sessionIndex));
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::SendRoomChangeListLocked(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		Generated::Chat::FRoomListRq roomListRequest;
+		if (!QueuePacketLocked(
+			session,
+			roomListRequest,
+			static_cast<std::uint8_t>((0x71 + session.sessionIndex + session.roomChangeAttemptCount) & 0xFF),
+			outErrorMessage))
+		{
+			return false;
+		}
+
+		SetWaitStateLocked(
+			session,
+			EClientSessionState::WaitingRoomChangeList,
+			ERttStage::RoomChangeList,
+			"room-change-list",
+			MakePendingRequest(ERttStage::RoomChangeList, session.sessionIndex));
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::SendRoomChangeLocked(
+		SClientIocpSession& session,
+		const std::uint32_t targetRoomId,
+		std::string& outErrorMessage)
+	{
+		Generated::Chat::FRoomChangeRq roomChangeRequest;
+		roomChangeRequest.targetRoomId = targetRoomId;
+		TraceSession(
+			m_options,
+			session.sessionIndex,
+			"send RoomChangeRq fromRoomId=" + (session.currentRoomId.has_value() ? std::to_string(*session.currentRoomId) : std::string("none")) +
+				" targetRoomId=" + std::to_string(targetRoomId));
+		if (!QueuePacketLocked(
+			session,
+			roomChangeRequest,
+			static_cast<std::uint8_t>((0x81 + session.sessionIndex + session.roomChangeAttemptCount) & 0xFF),
+			outErrorMessage))
+		{
+			return false;
+		}
+
+		SetWaitStateLocked(
+			session,
+			EClientSessionState::WaitingRoomChangeResponse,
+			ERttStage::RoomChange,
+			"room-change",
+			MakePendingRequest(ERttStage::RoomChange, session.sessionIndex));
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::StartEchoCycleLocked(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		session.expectedResponseCount =
+			m_options.requestCount * m_options.responseThreadCount * m_options.responsesPerThread;
+		session.cycleReceivedResponseCount = 0;
+		session.expectedResponseCounts.clear();
+		session.expectedResponseMetrics.clear();
+
+		if (session.expectedResponseCount <= 0)
+		{
+			outErrorMessage = "invalid expected response count.";
+			return false;
+		}
+
+		TraceSession(
+			m_options,
+			session.sessionIndex,
+			"send EchoRq batch requestCount=" + std::to_string(m_options.requestCount) +
+				" currentRoomId=" + (session.currentRoomId.has_value() ? std::to_string(*session.currentRoomId) : std::string("none")));
+
+		std::vector<char> batchBuffer;
+		std::vector<std::string> pendingBatchResponseMetrics;
+		for (int requestIndex = 0; requestIndex < m_options.requestCount; ++requestIndex)
+		{
+			const std::string requestMessage =
+				BuildRequestMessage(session.sessionIndex, session.requestSequence++, m_options.payloadSize);
+			const std::vector<std::string> expectedResponses =
+				BuildExpectedResponseMessages(requestMessage, m_options);
+			for (const std::string& expectedResponse : expectedResponses)
+			{
+				++session.expectedResponseCounts[expectedResponse];
+				pendingBatchResponseMetrics.push_back(expectedResponse);
+			}
+
+			Generated::Echo::FEchoRq requestPacket;
+			requestPacket.SetMessageValue(requestMessage);
+
+			const std::uint8_t requestRandomKey =
+				static_cast<std::uint8_t>((0x61 + session.requestSequence + session.sessionIndex) & 0xFF);
+			std::vector<char> outboundPacket =
+				BuildContentPacketBuffer(session.packetCipher, session.packetFramer, requestPacket, requestRandomKey);
+			if (outboundPacket.empty())
+			{
+				outErrorMessage = "BuildPacket failed.";
+				return false;
+			}
+
+			batchBuffer.insert(batchBuffer.end(), outboundPacket.begin(), outboundPacket.end());
+			const bool shouldFlush =
+				((requestIndex + 1) % m_options.packetsPerSend) == 0 ||
+				requestIndex == m_options.requestCount - 1;
+			if (!shouldFlush)
+			{
+				continue;
+			}
+
+			if (!EnqueueSendBufferLocked(session, std::move(batchBuffer), outErrorMessage))
+			{
+				return false;
+			}
+
+			const auto batchSentSteady = std::chrono::steady_clock::now();
+			const auto batchSentSystem = std::chrono::system_clock::now();
+			for (const std::string& expectedResponse : pendingBatchResponseMetrics)
+			{
+				SRttPendingRequest pendingRequest{};
+				pendingRequest.stageIndex = ToRttStageIndex(ERttStage::EchoResponse);
+				pendingRequest.sessionIndex = session.sessionIndex;
+				pendingRequest.sentSteady = batchSentSteady;
+				pendingRequest.sentSystem = batchSentSystem;
+				session.expectedResponseMetrics.insert_or_assign(expectedResponse, pendingRequest);
+			}
+
+			batchBuffer.clear();
+			pendingBatchResponseMetrics.clear();
+		}
+
+		SetWaitStateLocked(
+			session,
+			EClientSessionState::WaitingEchoResponses,
+			ERttStage::EchoResponse,
+			"echo-response",
+			std::nullopt);
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::QueuePacketLocked(
+		SClientIocpSession& session,
+		const NetworkLib::Packet::Serialization::IContentPacket& packet,
+		const std::uint8_t randomKey,
+		std::string& outErrorMessage)
+	{
+		std::vector<char> outboundPacket =
+			BuildContentPacketBuffer(session.packetCipher, session.packetFramer, packet, randomKey);
+		if (outboundPacket.empty())
+		{
+			outErrorMessage = "BuildPacket failed.";
+			return false;
+		}
+
+		return EnqueueSendBufferLocked(session, std::move(outboundPacket), outErrorMessage);
+	}
+
+	bool FIocpEchoClientRuntime::EnqueueSendBufferLocked(
+		SClientIocpSession& session,
+		std::vector<char>&& buffer,
+		std::string& outErrorMessage)
+	{
+		if (session.finalized)
+		{
+			outErrorMessage = "session already finalized.";
+			return false;
+		}
+
+		if (session.socketHandle == INVALID_SOCKET)
+		{
+			outErrorMessage = "socket is not connected.";
+			return false;
+		}
+
+		if (buffer.empty())
+		{
+			return true;
+		}
+
+		const int chunkSize = m_options.sendChunkSize;
+		if (chunkSize > 0 && chunkSize < static_cast<int>(buffer.size()))
+		{
+			std::size_t offset = 0;
+			while (offset < buffer.size())
+			{
+				const std::size_t bytesToCopy =
+					std::min(static_cast<std::size_t>(chunkSize), buffer.size() - offset);
+				std::vector<char> chunk(buffer.begin() + static_cast<std::ptrdiff_t>(offset),
+					buffer.begin() + static_cast<std::ptrdiff_t>(offset + bytesToCopy));
+				session.sendQueue.emplace_back(std::move(chunk));
+				offset += bytesToCopy;
+			}
+		}
+		else
+		{
+			session.sendQueue.emplace_back(std::move(buffer));
+		}
+
+		return StartNextSendLocked(session, outErrorMessage);
+	}
+
+	bool FIocpEchoClientRuntime::StartNextSendLocked(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		if (session.finalized)
+		{
+			return true;
+		}
+
+		if (session.sendInFlight)
+		{
+			return true;
+		}
+
+		if (session.activeSendBuffer.empty())
+		{
+			if (session.sendQueue.empty())
+			{
+				return true;
+			}
+
+			session.activeSendBuffer = std::move(session.sendQueue.front());
+			session.sendQueue.pop_front();
+			session.activeSendOffset = 0;
+		}
+
+		session.sendInFlight = true;
+		if (!SubmitActiveSendLocked(session, outErrorMessage))
+		{
+			session.sendInFlight = false;
+			return false;
+		}
+
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::SubmitActiveSendLocked(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		if (session.socketHandle == INVALID_SOCKET)
+		{
+			outErrorMessage = "socket is not connected.";
+			return false;
+		}
+
+		if (session.activeSendBuffer.empty() || session.activeSendOffset >= session.activeSendBuffer.size())
+		{
+			outErrorMessage = "active send buffer is empty.";
+			return false;
+		}
+
+		std::memset(&session.sendContext.overlapped, 0, sizeof(session.sendContext.overlapped));
+
+		WSABUF sendBuffer{};
+		sendBuffer.buf = session.activeSendBuffer.data() + static_cast<std::ptrdiff_t>(session.activeSendOffset);
+		sendBuffer.len =
+			static_cast<ULONG>(session.activeSendBuffer.size() - session.activeSendOffset);
+
+		DWORD sentBytes = 0;
+		const int sendResult =
+			WSASend(
+				session.socketHandle,
+				&sendBuffer,
+				1,
+				&sentBytes,
+				0,
+				&session.sendContext.overlapped,
+				nullptr);
+		if (sendResult == SOCKET_ERROR)
+		{
+			const int errorCode = WSAGetLastError();
+			if (errorCode != WSA_IO_PENDING)
+			{
+				std::ostringstream oss;
+				oss << "WSASend failed. sessionIndex=" << session.sessionIndex << " error=" << errorCode;
+				outErrorMessage = oss.str();
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool FIocpEchoClientRuntime::PostRecvLocked(SClientIocpSession& session, std::string& outErrorMessage)
+	{
+		if (session.finalized)
+		{
+			return true;
+		}
+
+		if (session.recvPosted)
+		{
+			return true;
+		}
+
+		if (session.socketHandle == INVALID_SOCKET)
+		{
+			outErrorMessage = "socket is not connected.";
+			return false;
+		}
+
+		if (session.recvContext.buffer.empty())
+		{
+			session.recvContext.buffer.resize(static_cast<std::size_t>(std::max(1, m_options.recvBufferSize)));
+		}
+
+		std::memset(&session.recvContext.overlapped, 0, sizeof(session.recvContext.overlapped));
+
+		WSABUF recvBuffer{};
+		recvBuffer.buf = session.recvContext.buffer.data();
+		recvBuffer.len = static_cast<ULONG>(session.recvContext.buffer.size());
+
+		DWORD flags = 0;
+		DWORD receivedBytes = 0;
+		const int recvResult =
+			WSARecv(
+				session.socketHandle,
+				&recvBuffer,
+				1,
+				&receivedBytes,
+				&flags,
+				&session.recvContext.overlapped,
+				nullptr);
+		if (recvResult == SOCKET_ERROR)
+		{
+			const int errorCode = WSAGetLastError();
+			if (errorCode != WSA_IO_PENDING)
+			{
+				std::ostringstream oss;
+				oss << "WSARecv failed. sessionIndex=" << session.sessionIndex << " error=" << errorCode;
+				outErrorMessage = oss.str();
+				return false;
+			}
+		}
+
+		session.recvPosted = true;
+		return true;
+	}
+
+	void FIocpEchoClientRuntime::SetWaitStateLocked(
+		SClientIocpSession& session,
+		const EClientSessionState state,
+		const ERttStage stage,
+		const char* stageName,
+		const std::optional<SRttPendingRequest>& pendingRequest)
+	{
+		session.state = state;
+		session.timeoutStage = stage;
+		session.timeoutStageName = stageName != nullptr ? stageName : "";
+		session.singlePendingRequest = pendingRequest;
+		RefreshWaitDeadlineLocked(session);
+	}
+
+	void FIocpEchoClientRuntime::ClearWaitStateLocked(SClientIocpSession& session)
+	{
+		session.timeoutStage.reset();
+		session.singlePendingRequest.reset();
+		session.timeoutStageName.clear();
+		session.timeoutDeadline = std::chrono::steady_clock::time_point::max();
+	}
+
+	void FIocpEchoClientRuntime::RefreshWaitDeadlineLocked(SClientIocpSession& session)
+	{
+		if (!session.timeoutStage.has_value())
+		{
+			session.timeoutDeadline = std::chrono::steady_clock::time_point::max();
+			return;
+		}
+
+		const int timeoutMs =
+			ResolveStageRecvTimeoutMs(
+				m_options,
+				session.timeoutStageName.empty() ? nullptr : session.timeoutStageName.c_str());
+		if (timeoutMs <= 0)
+		{
+			session.timeoutDeadline = std::chrono::steady_clock::time_point::max();
+			return;
+		}
+
+		session.timeoutDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+	}
+
+	std::string FIocpEchoClientRuntime::BuildRecvFailureMessage(
+		const SClientIocpSession& session,
+		const int errorCode,
+		const bool timedOut) const
+	{
+		std::ostringstream oss;
+		oss << "recv failed at stage="
+			<< (!session.timeoutStageName.empty() ? session.timeoutStageName : "unknown")
+			<< " sessionIndex=" << session.sessionIndex
+			<< " error=" << errorCode;
+		if (timedOut)
+		{
+			oss << " (timeout)";
+		}
+
+		return oss.str();
+	}
+
+	void FIocpEchoClientRuntime::EnqueueCommand(const EClientCommandType type, const int sessionIndex)
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_commandMutex);
+			m_commands.push_back({ type, sessionIndex });
+		}
+
+		if (m_iocpHandle != nullptr)
+		{
+			PostQueuedCompletionStatus(m_iocpHandle, 0, kCommandCompletionKey, nullptr);
+		}
+	}
+
+	void FIocpEchoClientRuntime::FailSession(SClientIocpSession& session, const std::string& errorMessage)
+	{
+		std::lock_guard<std::mutex> lock(session.mutex);
+		FinalizeSessionLocked(session, false, errorMessage);
+	}
+
+	void FIocpEchoClientRuntime::FinalizeSessionLocked(
+		SClientIocpSession& session,
+		const bool succeeded,
+		const std::string& errorMessage)
+	{
+		if (session.finalized)
+		{
+			return;
+		}
+
+		session.finalized = true;
+		session.state = succeeded ? EClientSessionState::Completed : EClientSessionState::Failed;
+		session.commandPending = false;
+		session.recvPosted = false;
+		session.sendInFlight = false;
+		session.sendQueue.clear();
+		session.activeSendBuffer.clear();
+		session.activeSendOffset = 0;
+		session.expectedResponseCounts.clear();
+		session.expectedResponseMetrics.clear();
+		session.expectedResponseCount = 0;
+		session.cycleReceivedResponseCount = 0;
+		ClearWaitStateLocked(session);
+
+		if (session.socketHandle != INVALID_SOCKET)
+		{
+			shutdown(session.socketHandle, SD_BOTH);
+			closesocket(session.socketHandle);
+			session.socketHandle = INVALID_SOCKET;
+		}
+
+		session.result.succeeded = succeeded;
+		session.result.errorMessage = succeeded ? std::string() : errorMessage;
+
+		{
+			std::lock_guard<std::mutex> completionLock(m_completionMutex);
+			if (!succeeded)
+			{
+				if (m_runtimeError.empty())
+				{
+					m_runtimeError = errorMessage;
+				}
+
+				m_abortRequested.store(true);
+			}
+
+			++m_completedSessionCount;
+		}
+
+		m_completionCondition.notify_all();
+	}
 }
 
 int main(int argc, char* argv[])
@@ -1498,7 +3196,7 @@ int main(int argc, char* argv[])
 		std::cerr
 			<< "usage: EchoClient.exe [--config path] [--server-ip 127.0.0.1] [--port 19000] [--login-userid-base 1000] "
 			<< "[--sessions 1] [--count 10] [--payload-size 64] [--send-chunk-size 8] [--send-chunk-delay-ms 1] "
-			<< "[--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--hold-seconds 0] "
+			<< "[--recv-buffer-size 16] [--response-thread-count 1] [--responses-per-thread 1] [--worker-thread-count 4] [--hold-seconds 0] "
 			<< "[--interval-ms 1000] [--packets-per-send 1] [--reconnect-probability-percent 0] [--reconnect-delay-ms 100] "
 			<< "[--recv-timeout-ms 0] [--room-list-recv-timeout-ms -1] [--echo-recv-timeout-ms -1] "
 			<< "[--rtt-csv-path path] [--rtt-flush-interval-seconds 60] "
@@ -1528,22 +3226,8 @@ int main(int argc, char* argv[])
 	}
 
 	std::vector<SSessionResult> sessionResults(static_cast<std::size_t>(options.sessionCount));
-	std::vector<std::thread> sessionThreads;
-	sessionThreads.reserve(static_cast<std::size_t>(options.sessionCount));
-
-	for (int sessionIndex = 0; sessionIndex < options.sessionCount; ++sessionIndex)
-	{
-		sessionThreads.emplace_back([&, sessionIndex]()
-		{
-			sessionResults[static_cast<std::size_t>(sessionIndex)] =
-				RunSingleSession(sessionIndex, options, rttMetricsRuntime.get());
-		});
-	}
-
-	for (std::thread& sessionThread : sessionThreads)
-	{
-		sessionThread.join();
-	}
+	FIocpEchoClientRuntime clientRuntime(options, rttMetricsRuntime.get());
+	const bool runSucceeded = clientRuntime.Run(sessionResults);
 
 	if (rttCsvLogger)
 	{
@@ -1567,11 +3251,17 @@ int main(int argc, char* argv[])
 		++successCount;
 	}
 
+	if (!runSucceeded)
+	{
+		return 1;
+	}
+
 	std::cout << "echo validation succeeded. sessions=" << successCount
 		<< " responses=" << totalResponses
 		<< " payloadSize=" << options.payloadSize
 		<< " sendChunkSize=" << options.sendChunkSize
 		<< " recvBufferSize=" << options.recvBufferSize
+		<< " workerThreadCount=" << options.workerThreadCount
 		<< " responseThreadCount=" << options.responseThreadCount
 		<< " responsesPerThread=" << options.responsesPerThread
 		<< " intervalMs=" << options.intervalMs

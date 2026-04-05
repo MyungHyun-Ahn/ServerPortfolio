@@ -24,6 +24,7 @@ namespace Generated::Config::EchoClient
 		std::int32_t PacketsPerSend = static_cast<std::int32_t>(1);
 		std::int32_t ReconnectProbabilityPercent = static_cast<std::int32_t>(0);
 		std::int32_t ReconnectDelayMs = static_cast<std::int32_t>(100);
+		std::int32_t WorkerThreadCount = static_cast<std::int32_t>(4);
 		std::int32_t RoomChangeProbabilityPercent = static_cast<std::int32_t>(25);
 		std::int32_t MaxRoomEnterRetryCount = static_cast<std::int32_t>(5);
 		std::int32_t MaxRoomChangeRetryCount = static_cast<std::int32_t>(3);

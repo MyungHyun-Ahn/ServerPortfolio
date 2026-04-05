@@ -18,6 +18,7 @@ EchoClient:
   PacketsPerSend: 1
   ReconnectProbabilityPercent: 0
   ReconnectDelayMs: 100
+  WorkerThreadCount: 4
   RoomChangeProbabilityPercent: 25
   MaxRoomEnterRetryCount: 5
   MaxRoomChangeRetryCount: 3
