@@ -77,6 +77,7 @@ namespace Generated::Config::EchoServer
 		std::uint32_t PacketKey = static_cast<std::uint32_t>(55);
 		bool EnablePagePool = true;
 		std::uint32_t PageSize = static_cast<std::uint32_t>(4096);
+		std::int32_t ContentsWorkerThreadCount = static_cast<std::int32_t>(4);
 		std::int32_t SendThreadCount = static_cast<std::int32_t>(1);
 		std::int32_t ResponsesPerThread = static_cast<std::int32_t>(1);
 		std::int32_t RoomCount = static_cast<std::int32_t>(50);

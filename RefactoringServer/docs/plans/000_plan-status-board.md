@@ -1,51 +1,57 @@
-# Plans 상태판
+# Plan Status Board
 
-## 1. 상태 기준
-- `완료`
-  - 1차 구현과 기본 검증까지 끝난 작업
-- `진행 중`
-  - 구현 또는 성능/안정성 검증이 계속 진행 중인 작업
-- `추가 확인 필요`
-  - 방향은 맞지만 후속 실험이나 정책 결정이 더 필요한 작업
+## 1. Status Legend
+- `Completed`
+  - First implementation and baseline verification are done.
+- `In Progress`
+  - Implementation or verification is still ongoing.
+- `Needs Follow-up`
+  - Direction is agreed, but the work is intentionally deferred.
 
-## 2. 작업 상태
-| 번호 | 작업 묶음 | 상태 | 비고 |
+## 2. Work Streams
+| ID | Area | Status | Notes |
 |---|---|---|---|
-| `001` | Foundation | 진행 중 | `Diagnostics` RTT 계측, `Ids` allocator, `Config` YAML 로더와 `ConfigGenerator`까지 반영 완료. 이후 `Logging / Diagnostics / Config` 경계 정리와 reserve bit 후속 정책이 남아 있다. |
-| `002` | Legacy MhLib 조사/정리 | 완료 | 과거 구조 비교와 참고 사항 정리 완료. |
-| `003` | NetworkLib Crypto / Packet Header | 완료 | cipher, framing, content header 기반 정리 완료. |
-| `004` | NetworkLib Session | 완료 | 세션 생명주기와 참조 관리 구조 정리 완료. |
-| `005` | NetworkLib Packet View | 완료 | `string_view`, `bytes_view`, borrowed view guard 반영 완료. |
-| `006` | Packet Schema Tooling | 완료 | `PacketGenerator`, generated packet/handler/router 반영 완료. |
-| `007` | NetworkLib Performance | 진행 중 | `IOCP + RIO` 병행 지원 구조 분리, pure `RIO` baseline, `Rio Direct / Rio OwnerThread / Iocp` 2시간 A/B 비교, 기본 `SendPacket` 경로 교체, `IOCP AcceptEx` 전환과 재접속 stress 검증까지 완료. 현재 결론은 `Rio` 기본 send 정책은 `Direct` 유지가 적절하고, `IOCP`는 `AcceptEx + accept context slot pool` 기준으로 안정화되었다는 것이다. 다음 단계는 `RIO` 후속 최적화, broadcast fan-out, `IOCP AcceptEx` 성능 비교, 필요 시 socket reuse 실험 옵션 재검토다. |
-| `008` | ContentsRuntime | 완료 | lock-free inbox 안정성 검증, 로비/룸 멀티 인스턴스, send lost-wakeup 수정, 무timeout 6시간 RTT 검증, `contentInstanceId` allocator 적용까지 완료. 이후 콘텐츠 확장은 별도 후속 작업으로 본다. |
+| `001` | Foundation | In Progress | `Diagnostics` RTT metrics, `Ids` allocator, and YAML `Config` + `ConfigGenerator` are in place. Remaining work is boundary cleanup between `Logging / Diagnostics / Config` and reserve-bit follow-up policy. |
+| `002` | Legacy MhLib Review | Completed | Legacy structure comparison and reference notes are organized. |
+| `003` | NetworkLib Crypto / Packet Header | Completed | Cipher, framing, and content header baseline are organized. |
+| `004` | NetworkLib Session | Completed | Session lifecycle and ownership model are organized. |
+| `005` | NetworkLib Packet View | Completed | `string_view`, `bytes_view`, and borrowed-view guard work is done. |
+| `006` | Packet Schema Tooling | Completed | `PacketGenerator` and generated packet/handler/router flow are in place. |
+| `007` | NetworkLib Performance | In Progress | `IOCP + RIO` dual-backend split, pure `RIO` baseline, `Rio Direct / Rio OwnerThread / Iocp` comparisons, `SO_SNDBUF` comparisons, `SendPacket` path rewrite, and `IOCP AcceptEx` migration are done. Current baseline on the same machine favors `Rio Direct`, but results should still be treated as relative rankings because server and client were co-located during the tests. |
+| `008` | ContentsRuntime | In Progress | Lock-free inbox validation, lobby/room multi-instance flow, send lost-wakeup fix, `contentInstanceId` allocator, and the first `content worker pool` conversion are done. The old `content instance = dedicated thread` model is gone, and `ContentsWorkerThreadCount` now controls the worker pool size. Remaining work is placement policy refinement and future multi-content expansion. |
+| `009` | WorldServer | Needs Follow-up | Cell-based world simulation and task-graph execution are separated into a future track. Direction is `ContentsRuntime = executor`, `WorldContent = task graph owner`, but priority is intentionally very low for now. |
 
-## 3. 현재 우선순위
-1. `007_networklib-performance`
-   - `RIO` 후속 최적화와 `IOCP / RIO` 비교 결과 정리
-   - `OwnerThread` 경로 최적화 가치 판단
-   - 기본 `SendPacket` 경로 교체 이후 broadcast fan-out과 send copy 감소 구조 진행
-   - `IOCP AcceptEx` 전환 후 accept path 성능 비교
-   - 필요 시 `accepted socket reuse` 실험 옵션 재검토
-2. `001_foundation`
-   - `Logging / Diagnostics / Config` 경계 문서화
-   - `contentInstanceId reserve` 비트 후속 정책 정리
-3. 후속 확장 항목
-   - 실제 새 콘텐츠 추가 시 `ContentsRuntime` 확장 재개
-   - 멀티 콘텐츠 운영 정책과 인스턴스 배치 정책 구체화
+## 3. Current Priorities
+1. `008_contents-runtime`
+   - Stabilize the new content worker pool structure.
+   - Refine placement policy after the `instance-thread` split.
+   - Re-run network benchmarks on top of the new runtime baseline.
+2. `007_networklib-performance`
+   - Continue `RIO` follow-up optimization.
+   - Add broadcast fan-out and further send-copy reduction.
+   - Compare `IOCP AcceptEx` performance and revisit socket-reuse only if needed.
+3. `001_foundation`
+   - Clean up `Logging / Diagnostics / Config` boundaries.
+   - Finalize the follow-up policy for `contentInstanceId` reserve bits.
+4. Low-priority expansion tracks
+   - Resume multi-content runtime expansion when new content types are actually added.
+   - Start `WorldServer` task-graph work only when real world-content requirements appear.
 
-## 4. 추후 다시 확인할 항목
+## 4. Follow-up Backlog
 - `007_networklib-performance`
-  - page pool 장시간 비교
-  - 큰 payload 조건에서 copy 감소 효과 확인
-  - `OwnerThread` inbox 최적화 여부 판단
-  - `RIO` buffer 등록/해제 비용 최적화
-  - broadcast packet fan-out과 send copy 감소 구조 검증
-  - `IOCP AcceptEx` 전환 후 accept path 성능 비교
-  - `accepted socket reuse` 실험 옵션 재검토
+  - Page-pool remeasurement.
+  - Large-payload copy-reduction validation.
+  - `RIO` buffer registration/release cost tuning.
+  - Broadcast packet fan-out verification.
+  - `IOCP` send-path copy reduction vs `SO_SNDBUF=0` trade-off review.
 - `008_contents-runtime`
-  - 새 콘텐츠 타입 추가와 멀티 콘텐츠 확장
-  - 정상 실패/비정상 실패 로그 정책 일반화
+  - Worker-pool placement tuning.
+  - Additional content types and multi-content expansion.
+  - Normal-failure vs abnormal-failure logging policy cleanup.
+- `009_worldserver`
+  - Cell task graph model.
+  - One-shot task, phase, and barrier execution model.
+  - World-content internal scheduler design.
 - `001_foundation`
-  - 서버 측 RTT/진단 재사용 범위 정리
-  - `contentInstanceId reserve` 비트를 분산 서버 `serverId`로 전환할 시점과 규칙 정리
+  - Server-side RTT/diagnostics reuse boundary cleanup.
+  - Future reserve-bit transition policy such as `serverId` if distributed servers become real scope.

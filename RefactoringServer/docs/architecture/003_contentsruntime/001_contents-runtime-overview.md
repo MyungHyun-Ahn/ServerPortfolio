@@ -1,5 +1,12 @@
 # ContentsRuntime 개요
 
+## 0. Latest Update
+- `2026-04-06` 기준으로 `content instance = dedicated thread` 구조는 제거됐다.
+- `FContentRuntime`는 이제 worker pool을 만들고, 등록된 content instance를 `round-robin`으로 worker에 배치한다.
+- `FContentThread`는 이름은 그대로지만 실제 의미는 `content worker thread`다.
+- `FOwnedPacketEnvelope`, `SContentLifecycleEvent`는 `contentInstanceId`를 함께 들고 worker queue에 들어간다.
+- 검증 기준으로 `room-count=80`, `contents-worker-thread-count=4`일 때 서버 프로세스 thread count는 `10`으로 확인됐다.
+
 ## 1. 역할
 - `ContentsRuntime`는 콘텐츠 스레드, 콘텐츠 전이, 콘텐츠 라우팅을 담당하는 상위 실행 계층이다.
 - `NetworkLib`가 전달한 `sessionId + opcode + payload`를 받아 어떤 콘텐츠 인스턴스가 처리할지 결정한다.

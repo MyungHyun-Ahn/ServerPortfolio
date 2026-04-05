@@ -97,7 +97,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		constexpr std::array<std::string_view, 20> kEchoServerKnownKeys =
+		constexpr std::array<std::string_view, 21> kEchoServerKnownKeys =
 		{
 			"Backend",
 			"RioSendDispatchMode",
@@ -115,6 +115,7 @@ namespace Generated::Config::EchoServer
 			"PacketKey",
 			"EnablePagePool",
 			"PageSize",
+			"ContentsWorkerThreadCount",
 			"SendThreadCount",
 			"ResponsesPerThread",
 			"RoomCount",
@@ -226,6 +227,11 @@ namespace Generated::Config::EchoServer
 		}
 
 		if (!reader.ReadOptionalUInt32("EchoServer", "PageSize", outConfig.EchoServer.PageSize, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalInt32("EchoServer", "ContentsWorkerThreadCount", outConfig.EchoServer.ContentsWorkerThreadCount, outError))
 		{
 			return false;
 		}

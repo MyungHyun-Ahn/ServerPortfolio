@@ -24,6 +24,7 @@ EchoServer:
   PacketKey: { type: uint32, default: 55 }
   EnablePagePool: { type: bool, default: true }
   PageSize: { type: uint32, default: 4096 }
+  ContentsWorkerThreadCount: { type: int32, default: 4 }
   SendThreadCount: { type: int32, default: 1 }
   ResponsesPerThread: { type: int32, default: 1 }
   RoomCount: { type: int32, default: 50 }

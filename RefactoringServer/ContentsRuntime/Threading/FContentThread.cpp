@@ -17,7 +17,7 @@ namespace ContentsRuntime::Threading
 		};
 
 		template <typename TValue>
-		void UpdateMaxAtomic(std::atomic<TValue>& target, TValue candidate)
+		void UpdateMaxAtomic(std::atomic<TValue>& target, const TValue candidate)
 		{
 			TValue current = target.load(std::memory_order_relaxed);
 			while (current < candidate &&
@@ -73,6 +73,7 @@ namespace ContentsRuntime::Threading
 				lifecycleEvent = {};
 				packet.sessionId = 0;
 				packet.routeGeneration = 0;
+				packet.contentInstanceId = Core::kInvalidContentInstanceId;
 				packet.opcode = 0;
 				packet.payload.clear();
 			}
@@ -95,7 +96,10 @@ namespace ContentsRuntime::Threading
 			return config.tracedSessionId->load(std::memory_order_relaxed) == sessionId;
 		}
 
-		void TraceThread(const Core::SContentRuntimeConfig& config, const std::uint64_t sessionId, const std::string& message)
+		void TraceThread(
+			const Core::SContentRuntimeConfig& config,
+			const std::uint64_t sessionId,
+			const std::string& message)
 		{
 			if (!ShouldTraceSession(config, sessionId))
 			{
@@ -108,50 +112,96 @@ namespace ContentsRuntime::Threading
 
 	struct FContentThread::SImpl
 	{
-		Core::IContent* content = nullptr;
+		struct SPerContentState
+		{
+			Core::IContent* content = nullptr;
+			Core::FContentId contentId = Core::kInvalidContentId;
+			Core::FContentInstanceId contentInstanceId = Core::kInvalidContentInstanceId;
+			std::chrono::milliseconds frameDuration{ 33 };
+			std::chrono::steady_clock::time_point nextFrameTime{};
+			std::atomic<std::uint64_t> enqueueEnterCallCount = 0;
+			std::atomic<std::uint64_t> enqueueLeaveCallCount = 0;
+			std::atomic<std::uint64_t> enqueuePacketCallCount = 0;
+			std::atomic<std::uint64_t> enterCount = 0;
+			std::atomic<std::uint64_t> leaveCount = 0;
+			std::atomic<std::uint64_t> packetCount = 0;
+			std::atomic<std::uint64_t> frameCount = 0;
+			std::atomic<std::uint64_t> enterQueueDepth = 0;
+			std::atomic<std::uint64_t> leaveQueueDepth = 0;
+			std::atomic<std::uint64_t> packetQueueDepth = 0;
+			std::atomic<std::uint64_t> maxEnterQueueDepth = 0;
+			std::atomic<std::uint64_t> maxLeaveQueueDepth = 0;
+			std::atomic<std::uint64_t> maxPacketQueueDepth = 0;
+			std::atomic<std::uint64_t> enqueueEnterLockWaitNs = 0;
+			std::atomic<std::uint64_t> enqueueLeaveLockWaitNs = 0;
+			std::atomic<std::uint64_t> enqueuePacketLockWaitNs = 0;
+			std::atomic<std::uint64_t> maxEnqueueEnterLockWaitNs = 0;
+			std::atomic<std::uint64_t> maxEnqueueLeaveLockWaitNs = 0;
+			std::atomic<std::uint64_t> maxEnqueuePacketLockWaitNs = 0;
+			std::atomic<int> lastDelayFrame = 0;
+			std::atomic<int> maxDelayFrame = 0;
+		};
+
 		Bridge::IContentBridge* bridge = nullptr;
 		Core::SContentRuntimeConfig config{};
+		std::uint32_t workerIndex = 0;
 		std::thread workerThread;
 		std::mutex lock;
 		std::condition_variable wakeCondition;
 		NetworkLib::Containers::FLockFreeQueue<SQueuedWorkItem*> workQueueLockFree;
-		bool running = false;
-		std::atomic<std::uint64_t> enqueueEnterCallCount = 0;
-		std::atomic<std::uint64_t> enqueueLeaveCallCount = 0;
-		std::atomic<std::uint64_t> enqueuePacketCallCount = 0;
-		std::atomic<std::uint64_t> enterCount = 0;
-		std::atomic<std::uint64_t> leaveCount = 0;
-		std::atomic<std::uint64_t> packetCount = 0;
-		std::atomic<std::uint64_t> frameCount = 0;
+		std::unordered_map<Core::FContentInstanceId, SPerContentState> contents;
 		std::atomic<std::uint64_t> pendingWorkCount = 0;
-		std::atomic<std::uint64_t> enterQueueDepth = 0;
-		std::atomic<std::uint64_t> leaveQueueDepth = 0;
-		std::atomic<std::uint64_t> packetQueueDepth = 0;
-		std::atomic<std::uint64_t> maxEnterQueueDepth = 0;
-		std::atomic<std::uint64_t> maxLeaveQueueDepth = 0;
-		std::atomic<std::uint64_t> maxPacketQueueDepth = 0;
-		std::atomic<std::uint64_t> enqueueEnterLockWaitNs = 0;
-		std::atomic<std::uint64_t> enqueueLeaveLockWaitNs = 0;
-		std::atomic<std::uint64_t> enqueuePacketLockWaitNs = 0;
-		std::atomic<std::uint64_t> maxEnqueueEnterLockWaitNs = 0;
-		std::atomic<std::uint64_t> maxEnqueueLeaveLockWaitNs = 0;
-		std::atomic<std::uint64_t> maxEnqueuePacketLockWaitNs = 0;
-		std::atomic<int> lastDelayFrame = 0;
-		std::atomic<int> maxDelayFrame = 0;
 		std::atomic<std::uint64_t> raceInjectionCounter = 0;
+		bool running = false;
 	};
 
-	FContentThread::FContentThread(Core::IContent& content, Bridge::IContentBridge& bridge, const Core::SContentRuntimeConfig& config)
+	FContentThread::FContentThread(
+		Bridge::IContentBridge& bridge,
+		const Core::SContentRuntimeConfig& config,
+		const std::uint32_t workerIndex)
 		: m_impl(std::make_unique<SImpl>())
 	{
-		m_impl->content = &content;
 		m_impl->bridge = &bridge;
 		m_impl->config = config;
+		m_impl->workerIndex = workerIndex;
 	}
 
 	FContentThread::~FContentThread()
 	{
 		Stop();
+	}
+
+	bool FContentThread::RegisterContent(Core::IContent& content)
+	{
+		std::lock_guard<std::mutex> lock(m_impl->lock);
+		if (m_impl->running)
+		{
+			return false;
+		}
+
+		const Core::FContentInstanceId contentInstanceId = content.GetContentInstanceId();
+		if (content.GetContentId() == Core::kInvalidContentId ||
+			contentInstanceId == Core::kInvalidContentInstanceId ||
+			m_impl->contents.contains(contentInstanceId))
+		{
+			return false;
+		}
+
+		auto [stateIt, inserted] = m_impl->contents.try_emplace(contentInstanceId);
+		if (!inserted)
+		{
+			return false;
+		}
+
+		SImpl::SPerContentState& state = stateIt->second;
+		state.content = &content;
+		state.contentId = content.GetContentId();
+		state.contentInstanceId = contentInstanceId;
+		const std::uint32_t targetFps = std::max<std::uint32_t>(1u, content.GetTargetFps());
+		state.frameDuration =
+			std::chrono::milliseconds(std::max<std::int64_t>(1, 1000 / static_cast<std::int64_t>(targetFps)));
+		state.nextFrameTime = std::chrono::steady_clock::now() + state.frameDuration;
+		return true;
 	}
 
 	void FContentThread::Start()
@@ -161,57 +211,70 @@ namespace ContentsRuntime::Threading
 			return;
 		}
 
-		m_impl->running = true;
+		{
+			std::lock_guard<std::mutex> lock(m_impl->lock);
+			const auto now = std::chrono::steady_clock::now();
+			for (auto& [contentInstanceId, state] : m_impl->contents)
+			{
+				(void)contentInstanceId;
+				state.nextFrameTime = now + state.frameDuration;
+			}
+			m_impl->running = true;
+		}
+
 		m_impl->workerThread = std::thread([this]()
 		{
 			SImpl& impl = *m_impl;
-			const std::uint32_t targetFps = std::max<std::uint32_t>(1u, impl.content->GetTargetFps());
-			const auto frameDuration = std::chrono::milliseconds(std::max<std::int64_t>(1, 1000 / static_cast<std::int64_t>(targetFps)));
-			auto nextFrameTime = std::chrono::steady_clock::now() + frameDuration;
 
 			while (true)
 			{
-				std::vector<SQueuedWorkItem*> workItems;
-				int delayFrame = 1;
-				bool shouldRunFrame = false;
-
 				{
 					std::unique_lock<std::mutex> lock(impl.lock);
-					impl.wakeCondition.wait_until(
-						lock,
-						nextFrameTime,
-						[&impl]()
+					auto nextWakeTime = std::chrono::steady_clock::time_point::max();
+					for (const auto& [contentInstanceId, state] : impl.contents)
+					{
+						(void)contentInstanceId;
+						if (state.nextFrameTime < nextWakeTime)
+						{
+							nextWakeTime = state.nextFrameTime;
+						}
+					}
+
+					if (nextWakeTime == std::chrono::steady_clock::time_point::max())
+					{
+						impl.wakeCondition.wait(lock, [&impl]()
 						{
 							return !impl.running ||
 								impl.pendingWorkCount.load(std::memory_order_relaxed) > 0;
 						});
+					}
+					else
+					{
+						impl.wakeCondition.wait_until(
+							lock,
+							nextWakeTime,
+							[&impl]()
+							{
+								return !impl.running ||
+									impl.pendingWorkCount.load(std::memory_order_relaxed) > 0;
+							});
+					}
 
 					if (!impl.running)
 					{
 						break;
 					}
-
-					const auto now = std::chrono::steady_clock::now();
-					if (now >= nextFrameTime)
-					{
-						const auto overdue = now - nextFrameTime;
-						delayFrame = 1 + static_cast<int>(overdue / frameDuration);
-						nextFrameTime += frameDuration * delayFrame;
-						shouldRunFrame = true;
-					}
 				}
 
+				std::vector<SQueuedWorkItem*> workItems;
 				SQueuedWorkItem* queuedWorkItem = nullptr;
 				RunRaceInjection(impl.config, impl.raceInjectionCounter);
 				while (impl.workQueueLockFree.Dequeue(queuedWorkItem))
 				{
-					if (queuedWorkItem == nullptr)
+					if (queuedWorkItem != nullptr)
 					{
-						continue;
+						workItems.push_back(queuedWorkItem);
 					}
-
-					workItems.push_back(queuedWorkItem);
-					RunRaceInjection(impl.config, impl.raceInjectionCounter);
 				}
 
 				if (!workItems.empty())
@@ -226,23 +289,38 @@ namespace ContentsRuntime::Threading
 						continue;
 					}
 
+					Core::FContentInstanceId contentInstanceId = Core::kInvalidContentInstanceId;
 					switch (workItem->kind)
 					{
 					case EQueuedWorkKind::Enter:
-						impl.content->OnEnter(workItem->lifecycleEvent.sessionId, workItem->lifecycleEvent.routeGeneration, *impl.bridge);
-						if (workItem->lifecycleEvent.completionFlag != nullptr)
-						{
-							workItem->lifecycleEvent.completionFlag->store(true, std::memory_order_release);
-						}
-						if (workItem->lifecycleEvent.completionCallback)
-						{
-							workItem->lifecycleEvent.completionCallback();
-						}
-						impl.enterCount.fetch_add(1, std::memory_order_relaxed);
-						impl.enterQueueDepth.fetch_sub(1, std::memory_order_relaxed);
+						contentInstanceId = workItem->lifecycleEvent.contentInstanceId;
 						break;
 					case EQueuedWorkKind::Leave:
-						impl.content->OnLeave(workItem->lifecycleEvent.sessionId, workItem->lifecycleEvent.routeGeneration, *impl.bridge);
+						contentInstanceId = workItem->lifecycleEvent.contentInstanceId;
+						break;
+					case EQueuedWorkKind::Packet:
+						contentInstanceId = workItem->packet.contentInstanceId;
+						break;
+					default:
+						break;
+					}
+
+					auto stateIt = impl.contents.find(contentInstanceId);
+					if (stateIt == impl.contents.end() || stateIt->second.content == nullptr)
+					{
+						workItem->Reset();
+						SQueuedWorkItem::Free(workItem);
+						continue;
+					}
+
+					SImpl::SPerContentState& state = stateIt->second;
+					switch (workItem->kind)
+					{
+					case EQueuedWorkKind::Enter:
+						state.content->OnEnter(
+							workItem->lifecycleEvent.sessionId,
+							workItem->lifecycleEvent.routeGeneration,
+							*impl.bridge);
 						if (workItem->lifecycleEvent.completionFlag != nullptr)
 						{
 							workItem->lifecycleEvent.completionFlag->store(true, std::memory_order_release);
@@ -251,30 +329,51 @@ namespace ContentsRuntime::Threading
 						{
 							workItem->lifecycleEvent.completionCallback();
 						}
-						impl.leaveCount.fetch_add(1, std::memory_order_relaxed);
-						impl.leaveQueueDepth.fetch_sub(1, std::memory_order_relaxed);
+						state.enterCount.fetch_add(1, std::memory_order_relaxed);
+						state.enterQueueDepth.fetch_sub(1, std::memory_order_relaxed);
 						break;
+
+					case EQueuedWorkKind::Leave:
+						state.content->OnLeave(
+							workItem->lifecycleEvent.sessionId,
+							workItem->lifecycleEvent.routeGeneration,
+							*impl.bridge);
+						if (workItem->lifecycleEvent.completionFlag != nullptr)
+						{
+							workItem->lifecycleEvent.completionFlag->store(true, std::memory_order_release);
+						}
+						if (workItem->lifecycleEvent.completionCallback)
+						{
+							workItem->lifecycleEvent.completionCallback();
+						}
+						state.leaveCount.fetch_add(1, std::memory_order_relaxed);
+						state.leaveQueueDepth.fetch_sub(1, std::memory_order_relaxed);
+						break;
+
 					case EQueuedWorkKind::Packet:
 						if (impl.config.enableTraceLogging)
 						{
 							std::ostringstream oss;
-							oss << "thread dequeue packet. sessionId=" << workItem->packet.sessionId
+							oss << "worker dequeue packet. workerIndex=" << impl.workerIndex
+								<< " sessionId=" << workItem->packet.sessionId
 								<< " opcode=" << workItem->packet.opcode
 								<< " routeGeneration=" << workItem->packet.routeGeneration
-								<< " contentId=" << impl.content->GetContentId()
-								<< " contentInstanceId=" << impl.content->GetContentInstanceId()
+								<< " contentId=" << state.contentId
+								<< " contentInstanceId=" << state.contentInstanceId
 								<< " payloadBytes=" << workItem->packet.payload.size();
 							TraceThread(impl.config, workItem->packet.sessionId, oss.str());
 						}
-						impl.content->OnPacket(
+
+						state.content->OnPacket(
 							workItem->packet.sessionId,
 							workItem->packet.routeGeneration,
 							workItem->packet.opcode,
 							std::span<const char>(workItem->packet.payload.data(), workItem->packet.payload.size()),
 							*impl.bridge);
-						impl.packetCount.fetch_add(1, std::memory_order_relaxed);
-						impl.packetQueueDepth.fetch_sub(1, std::memory_order_relaxed);
+						state.packetCount.fetch_add(1, std::memory_order_relaxed);
+						state.packetQueueDepth.fetch_sub(1, std::memory_order_relaxed);
 						break;
+
 					default:
 						break;
 					}
@@ -283,12 +382,23 @@ namespace ContentsRuntime::Threading
 					SQueuedWorkItem::Free(workItem);
 				}
 
-				if (shouldRunFrame)
+				const auto now = std::chrono::steady_clock::now();
+				for (auto& [contentInstanceId, state] : impl.contents)
 				{
-					impl.lastDelayFrame.store(delayFrame, std::memory_order_relaxed);
-					UpdateMaxAtomic(impl.maxDelayFrame, delayFrame);
-					impl.content->OnFrame(delayFrame, *impl.bridge);
-					impl.frameCount.fetch_add(1, std::memory_order_relaxed);
+					(void)contentInstanceId;
+					if (now < state.nextFrameTime)
+					{
+						continue;
+					}
+
+					const auto overdue = now - state.nextFrameTime;
+					const auto frameDuration = std::max(state.frameDuration, std::chrono::milliseconds(1));
+					const int delayFrame = 1 + static_cast<int>(overdue / frameDuration);
+					state.nextFrameTime += frameDuration * delayFrame;
+					state.lastDelayFrame.store(delayFrame, std::memory_order_relaxed);
+					UpdateMaxAtomic(state.maxDelayFrame, delayFrame);
+					state.content->OnFrame(delayFrame, *impl.bridge);
+					state.frameCount.fetch_add(1, std::memory_order_relaxed);
 				}
 			}
 		});
@@ -313,91 +423,127 @@ namespace ContentsRuntime::Threading
 		}
 	}
 
-	Core::SContentThreadStats FContentThread::GetStatsSnapshot()
+	Core::SContentThreadStats FContentThread::GetStatsSnapshot(const Core::FContentInstanceId contentInstanceId)
 	{
 		Core::SContentThreadStats stats{};
+		stats.contentInstanceId = contentInstanceId;
+
+		std::lock_guard<std::mutex> lock(m_impl->lock);
+		const auto stateIt = m_impl->contents.find(contentInstanceId);
+		if (stateIt == m_impl->contents.end())
 		{
-			std::lock_guard<std::mutex> lock(m_impl->lock);
-			stats.contentId = m_impl->content != nullptr ? m_impl->content->GetContentId() : Core::kInvalidContentId;
-			stats.contentInstanceId =
-				m_impl->content != nullptr ? m_impl->content->GetContentInstanceId() : Core::kInvalidContentInstanceId;
-			stats.running = m_impl->running;
+			return stats;
 		}
 
-		stats.enqueueEnterCallCount = m_impl->enqueueEnterCallCount.load(std::memory_order_relaxed);
-		stats.enqueueLeaveCallCount = m_impl->enqueueLeaveCallCount.load(std::memory_order_relaxed);
-		stats.enqueuePacketCallCount = m_impl->enqueuePacketCallCount.load(std::memory_order_relaxed);
-		stats.enterCount = m_impl->enterCount.load(std::memory_order_relaxed);
-		stats.leaveCount = m_impl->leaveCount.load(std::memory_order_relaxed);
-		stats.packetCount = m_impl->packetCount.load(std::memory_order_relaxed);
-		stats.frameCount = m_impl->frameCount.load(std::memory_order_relaxed);
-		stats.enterQueueDepth = m_impl->enterQueueDepth.load(std::memory_order_relaxed);
-		stats.leaveQueueDepth = m_impl->leaveQueueDepth.load(std::memory_order_relaxed);
-		stats.packetQueueDepth = m_impl->packetQueueDepth.load(std::memory_order_relaxed);
-		stats.maxEnterQueueDepth = m_impl->maxEnterQueueDepth.load(std::memory_order_relaxed);
-		stats.maxLeaveQueueDepth = m_impl->maxLeaveQueueDepth.load(std::memory_order_relaxed);
-		stats.maxPacketQueueDepth = m_impl->maxPacketQueueDepth.load(std::memory_order_relaxed);
-		stats.enqueueEnterLockWaitNs = m_impl->enqueueEnterLockWaitNs.load(std::memory_order_relaxed);
-		stats.enqueueLeaveLockWaitNs = m_impl->enqueueLeaveLockWaitNs.load(std::memory_order_relaxed);
-		stats.enqueuePacketLockWaitNs = m_impl->enqueuePacketLockWaitNs.load(std::memory_order_relaxed);
-		stats.maxEnqueueEnterLockWaitNs = m_impl->maxEnqueueEnterLockWaitNs.load(std::memory_order_relaxed);
-		stats.maxEnqueueLeaveLockWaitNs = m_impl->maxEnqueueLeaveLockWaitNs.load(std::memory_order_relaxed);
-		stats.maxEnqueuePacketLockWaitNs = m_impl->maxEnqueuePacketLockWaitNs.load(std::memory_order_relaxed);
-		stats.lastDelayFrame = m_impl->lastDelayFrame.load(std::memory_order_relaxed);
-		stats.maxDelayFrame = m_impl->maxDelayFrame.load(std::memory_order_relaxed);
+		const SImpl::SPerContentState& state = stateIt->second;
+		stats.contentId = state.contentId;
+		stats.contentInstanceId = state.contentInstanceId;
+		stats.running = m_impl->running;
+		stats.enqueueEnterCallCount = state.enqueueEnterCallCount.load(std::memory_order_relaxed);
+		stats.enqueueLeaveCallCount = state.enqueueLeaveCallCount.load(std::memory_order_relaxed);
+		stats.enqueuePacketCallCount = state.enqueuePacketCallCount.load(std::memory_order_relaxed);
+		stats.enterCount = state.enterCount.load(std::memory_order_relaxed);
+		stats.leaveCount = state.leaveCount.load(std::memory_order_relaxed);
+		stats.packetCount = state.packetCount.load(std::memory_order_relaxed);
+		stats.frameCount = state.frameCount.load(std::memory_order_relaxed);
+		stats.enterQueueDepth = state.enterQueueDepth.load(std::memory_order_relaxed);
+		stats.leaveQueueDepth = state.leaveQueueDepth.load(std::memory_order_relaxed);
+		stats.packetQueueDepth = state.packetQueueDepth.load(std::memory_order_relaxed);
+		stats.maxEnterQueueDepth = state.maxEnterQueueDepth.load(std::memory_order_relaxed);
+		stats.maxLeaveQueueDepth = state.maxLeaveQueueDepth.load(std::memory_order_relaxed);
+		stats.maxPacketQueueDepth = state.maxPacketQueueDepth.load(std::memory_order_relaxed);
+		stats.enqueueEnterLockWaitNs = state.enqueueEnterLockWaitNs.load(std::memory_order_relaxed);
+		stats.enqueueLeaveLockWaitNs = state.enqueueLeaveLockWaitNs.load(std::memory_order_relaxed);
+		stats.enqueuePacketLockWaitNs = state.enqueuePacketLockWaitNs.load(std::memory_order_relaxed);
+		stats.maxEnqueueEnterLockWaitNs = state.maxEnqueueEnterLockWaitNs.load(std::memory_order_relaxed);
+		stats.maxEnqueueLeaveLockWaitNs = state.maxEnqueueLeaveLockWaitNs.load(std::memory_order_relaxed);
+		stats.maxEnqueuePacketLockWaitNs = state.maxEnqueuePacketLockWaitNs.load(std::memory_order_relaxed);
+		stats.lastDelayFrame = state.lastDelayFrame.load(std::memory_order_relaxed);
+		stats.maxDelayFrame = state.maxDelayFrame.load(std::memory_order_relaxed);
 		return stats;
+	}
+
+	std::uint32_t FContentThread::GetWorkerIndex() const noexcept
+	{
+		return m_impl->workerIndex;
 	}
 
 	void FContentThread::EnqueueEnter(Core::SContentLifecycleEvent event)
 	{
-		m_impl->enqueueEnterCallCount.fetch_add(1, std::memory_order_relaxed);
+		auto stateIt = m_impl->contents.find(event.contentInstanceId);
+		if (stateIt == m_impl->contents.end())
+		{
+			return;
+		}
+
+		SImpl::SPerContentState& state = stateIt->second;
+		state.enqueueEnterCallCount.fetch_add(1, std::memory_order_relaxed);
 		const std::uint64_t queueDepth =
-			m_impl->enterQueueDepth.fetch_add(1, std::memory_order_relaxed) + 1;
-		UpdateMaxAtomic(m_impl->maxEnterQueueDepth, queueDepth);
-		m_impl->pendingWorkCount.fetch_add(1, std::memory_order_relaxed);
+			state.enterQueueDepth.fetch_add(1, std::memory_order_relaxed) + 1;
+		UpdateMaxAtomic(state.maxEnterQueueDepth, queueDepth);
+
 		SQueuedWorkItem* workItem = SQueuedWorkItem::Alloc();
 		workItem->kind = EQueuedWorkKind::Enter;
 		workItem->lifecycleEvent = std::move(event);
+		m_impl->pendingWorkCount.fetch_add(1, std::memory_order_relaxed);
 		m_impl->workQueueLockFree.Enqueue(workItem);
 		m_impl->wakeCondition.notify_one();
 	}
 
 	void FContentThread::EnqueueLeave(Core::SContentLifecycleEvent event)
 	{
-		m_impl->enqueueLeaveCallCount.fetch_add(1, std::memory_order_relaxed);
+		auto stateIt = m_impl->contents.find(event.contentInstanceId);
+		if (stateIt == m_impl->contents.end())
+		{
+			return;
+		}
+
+		SImpl::SPerContentState& state = stateIt->second;
+		state.enqueueLeaveCallCount.fetch_add(1, std::memory_order_relaxed);
 		const std::uint64_t queueDepth =
-			m_impl->leaveQueueDepth.fetch_add(1, std::memory_order_relaxed) + 1;
-		UpdateMaxAtomic(m_impl->maxLeaveQueueDepth, queueDepth);
-		m_impl->pendingWorkCount.fetch_add(1, std::memory_order_relaxed);
+			state.leaveQueueDepth.fetch_add(1, std::memory_order_relaxed) + 1;
+		UpdateMaxAtomic(state.maxLeaveQueueDepth, queueDepth);
+
 		SQueuedWorkItem* workItem = SQueuedWorkItem::Alloc();
 		workItem->kind = EQueuedWorkKind::Leave;
 		workItem->lifecycleEvent = std::move(event);
+		m_impl->pendingWorkCount.fetch_add(1, std::memory_order_relaxed);
 		m_impl->workQueueLockFree.Enqueue(workItem);
 		m_impl->wakeCondition.notify_one();
 	}
 
 	void FContentThread::EnqueuePacket(Core::FOwnedPacketEnvelope&& packet)
 	{
-		m_impl->enqueuePacketCallCount.fetch_add(1, std::memory_order_relaxed);
+		auto stateIt = m_impl->contents.find(packet.contentInstanceId);
+		if (stateIt == m_impl->contents.end())
+		{
+			return;
+		}
+
+		SImpl::SPerContentState& state = stateIt->second;
+		state.enqueuePacketCallCount.fetch_add(1, std::memory_order_relaxed);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		const std::uint64_t queueDepth =
-			m_impl->packetQueueDepth.fetch_add(1, std::memory_order_relaxed) + 1;
-		UpdateMaxAtomic(m_impl->maxPacketQueueDepth, queueDepth);
-		m_impl->pendingWorkCount.fetch_add(1, std::memory_order_relaxed);
+			state.packetQueueDepth.fetch_add(1, std::memory_order_relaxed) + 1;
+		UpdateMaxAtomic(state.maxPacketQueueDepth, queueDepth);
+
 		SQueuedWorkItem* workItem = SQueuedWorkItem::Alloc();
 		workItem->kind = EQueuedWorkKind::Packet;
 		workItem->packet = std::move(packet);
 		if (m_impl->config.enableTraceLogging)
 		{
 			std::ostringstream oss;
-			oss << "thread enqueue packet. sessionId=" << workItem->packet.sessionId
+			oss << "worker enqueue packet. workerIndex=" << m_impl->workerIndex
+				<< " sessionId=" << workItem->packet.sessionId
 				<< " opcode=" << workItem->packet.opcode
 				<< " routeGeneration=" << workItem->packet.routeGeneration
-				<< " contentId=" << (m_impl->content != nullptr ? m_impl->content->GetContentId() : Core::kInvalidContentId)
-				<< " contentInstanceId=" << (m_impl->content != nullptr ? m_impl->content->GetContentInstanceId() : Core::kInvalidContentInstanceId)
+				<< " contentId=" << state.contentId
+				<< " contentInstanceId=" << state.contentInstanceId
 				<< " queueDepth=" << queueDepth;
 			TraceThread(m_impl->config, workItem->packet.sessionId, oss.str());
 		}
+
+		m_impl->pendingWorkCount.fetch_add(1, std::memory_order_relaxed);
 		m_impl->workQueueLockFree.Enqueue(workItem);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		m_impl->wakeCondition.notify_one();

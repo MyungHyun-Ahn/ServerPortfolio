@@ -430,6 +430,7 @@ namespace
 		runtimeOptions.responsesPerThread = std::max(1, configDocument.EchoServer.ResponsesPerThread);
 		runtimeOptions.roomCount = std::max(1, configDocument.EchoServer.RoomCount);
 		runtimeOptions.roomCapacity = std::max(1, configDocument.EchoServer.RoomCapacity);
+		contentRuntimeConfig.workerThreadCount = std::max(1, configDocument.EchoServer.ContentsWorkerThreadCount);
 		runtimeOptions.bootstrapTrace = configDocument.Debug.BootstrapTrace;
 		runtimeOptions.traceUserId = configDocument.Debug.TraceUserId;
 		runtimeOptions.logPackets = configDocument.Debug.LogPackets;
@@ -790,6 +791,11 @@ int main(int argc, char* argv[])
 			else if (argument == "--page-size" && argumentIndex + 1 < argc)
 			{
 				runtimeOptions.pageSize = static_cast<std::uint32_t>(std::max(1, std::atoi(argv[++argumentIndex])));
+			}
+			else if (argument == "--contents-worker-thread-count" && argumentIndex + 1 < argc)
+			{
+				contentRuntimeConfig.workerThreadCount =
+					static_cast<std::uint32_t>(std::max(1, std::atoi(argv[++argumentIndex])));
 			}
 			else if (argument == "--contents-race-injection")
 			{

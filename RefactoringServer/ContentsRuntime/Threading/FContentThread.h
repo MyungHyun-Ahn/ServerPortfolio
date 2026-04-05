@@ -17,12 +17,14 @@ namespace ContentsRuntime::Threading
 	class FContentThread
 	{
 	public:
-		FContentThread(Core::IContent& content, Bridge::IContentBridge& bridge, const Core::SContentRuntimeConfig& config);
+		FContentThread(Bridge::IContentBridge& bridge, const Core::SContentRuntimeConfig& config, std::uint32_t workerIndex);
 		~FContentThread();
 
+		bool RegisterContent(Core::IContent& content);
 		void Start();
 		void Stop();
-		Core::SContentThreadStats GetStatsSnapshot();
+		Core::SContentThreadStats GetStatsSnapshot(Core::FContentInstanceId contentInstanceId);
+		std::uint32_t GetWorkerIndex() const noexcept;
 
 		void EnqueueEnter(Core::SContentLifecycleEvent event);
 		void EnqueueLeave(Core::SContentLifecycleEvent event);

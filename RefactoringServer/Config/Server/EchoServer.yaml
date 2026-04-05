@@ -21,6 +21,7 @@ EchoServer:
   PacketKey: 55
   EnablePagePool: true
   PageSize: 4096
+  ContentsWorkerThreadCount: 4
   SendThreadCount: 1
   ResponsesPerThread: 1
   RoomCount: 50

@@ -6,6 +6,7 @@
 #include "ContentsRuntime/Threading/FContentThread.h"
 #include "Servers/IServer.h"
 
+#include <algorithm>
 #include <shared_mutex>
 
 namespace ContentsRuntime::Routing
@@ -108,7 +109,8 @@ namespace ContentsRuntime::Routing
 		Core::FContentId contentId = Core::kInvalidContentId;
 		Core::FContentInstanceId contentInstanceId = Core::kInvalidContentInstanceId;
 		std::unique_ptr<Core::IContent> content;
-		std::unique_ptr<Threading::FContentThread> thread;
+		std::uint32_t workerIndex = 0;
+		Threading::FContentThread* worker = nullptr;
 	};
 
 	struct SSessionRoute
@@ -117,7 +119,8 @@ namespace ContentsRuntime::Routing
 		std::uint64_t routeGeneration = 0;
 		Core::FContentId contentId = Core::kInvalidContentId;
 		Core::FContentInstanceId contentInstanceId = Core::kInvalidContentInstanceId;
-		Threading::FContentThread* thread = nullptr;
+		std::uint32_t workerIndex = 0;
+		Threading::FContentThread* worker = nullptr;
 	};
 
 	struct FContentRuntime::SImpl
@@ -126,6 +129,7 @@ namespace ContentsRuntime::Routing
 		mutable std::shared_mutex lock;
 		std::unordered_map<Core::FContentInstanceId, SContentSlot> contentSlots;
 		std::unordered_map<Core::FContentId, Core::FContentInstanceId> defaultInstanceIdsByContentId;
+		std::vector<std::unique_ptr<Threading::FContentThread>> workers;
 		std::vector<SSessionRoute> sessionRoutes;
 		Core::SContentRuntimeConfig config{};
 		std::atomic<std::uint64_t> activeSessionCount = 0;
@@ -211,27 +215,63 @@ namespace ContentsRuntime::Routing
 		m_impl->sessionRoutes.clear();
 		m_impl->sessionRoutes.resize(sessionCapacity);
 		m_impl->activeSessionCount.store(0, std::memory_order_relaxed);
+
+		const std::uint32_t workerCount = std::max<std::uint32_t>(
+			1u,
+			std::min<std::uint32_t>(
+				std::max<std::uint32_t>(1u, m_impl->config.workerThreadCount),
+				static_cast<std::uint32_t>(std::max<std::size_t>(1, m_impl->contentSlots.size()))));
+		m_impl->workers.clear();
+		m_impl->workers.reserve(workerCount);
+		for (std::uint32_t workerIndex = 0; workerIndex < workerCount; ++workerIndex)
+		{
+			m_impl->workers.push_back(std::make_unique<Threading::FContentThread>(*this, m_impl->config, workerIndex));
+		}
+
+		std::vector<SContentSlot*> orderedSlots;
+		orderedSlots.reserve(m_impl->contentSlots.size());
 		for (auto& [contentInstanceId, slot] : m_impl->contentSlots)
 		{
 			(void)contentInstanceId;
-			slot.thread = std::make_unique<Threading::FContentThread>(*slot.content, *this, m_impl->config);
-			slot.thread->Start();
+			orderedSlots.push_back(&slot);
+		}
+
+		std::sort(
+			orderedSlots.begin(),
+			orderedSlots.end(),
+			[](const SContentSlot* lhs, const SContentSlot* rhs)
+			{
+				return lhs->contentInstanceId < rhs->contentInstanceId;
+			});
+
+		std::uint32_t nextWorkerIndex = 0;
+		for (SContentSlot* slot : orderedSlots)
+		{
+			Threading::FContentThread& worker = *m_impl->workers[nextWorkerIndex];
+			slot->workerIndex = nextWorkerIndex;
+			slot->worker = &worker;
+			worker.RegisterContent(*slot->content);
+			nextWorkerIndex = (nextWorkerIndex + 1) % workerCount;
+		}
+
+		for (auto& worker : m_impl->workers)
+		{
+			worker->Start();
 		}
 	}
 
 	void FContentRuntime::Stop()
 	{
-		std::unordered_map<Core::FContentInstanceId, std::unique_ptr<Threading::FContentThread>> threadsToStop;
+		std::vector<std::unique_ptr<Threading::FContentThread>> workersToStop;
 		{
 			std::unique_lock<std::shared_mutex> lock(m_impl->lock);
 			for (auto& [contentInstanceId, slot] : m_impl->contentSlots)
 			{
 				(void)contentInstanceId;
-				if (slot.thread != nullptr)
-				{
-					threadsToStop.emplace(contentInstanceId, std::move(slot.thread));
-				}
+				slot.worker = nullptr;
+				slot.workerIndex = 0;
 			}
+			workersToStop = std::move(m_impl->workers);
 			for (SSessionRoute& route : m_impl->sessionRoutes)
 			{
 				route = {};
@@ -240,10 +280,9 @@ namespace ContentsRuntime::Routing
 			m_impl->server = nullptr;
 		}
 
-		for (auto& [contentInstanceId, thread] : threadsToStop)
+		for (auto& worker : workersToStop)
 		{
-			(void)contentInstanceId;
-			thread->Stop();
+			worker->Stop();
 		}
 	}
 
@@ -273,9 +312,9 @@ namespace ContentsRuntime::Routing
 				contentStats.contentId = slot.contentId;
 				contentStats.contentInstanceId = contentInstanceId;
 				contentStats.activeSessionCount = sessionCounts[contentInstanceId];
-				if (slot.thread != nullptr)
+				if (slot.worker != nullptr)
 				{
-					contentStats.threadStats = slot.thread->GetStatsSnapshot();
+					contentStats.threadStats = slot.worker->GetStatsSnapshot(contentInstanceId);
 				}
 				else
 				{
@@ -322,7 +361,7 @@ namespace ContentsRuntime::Routing
 	bool FContentRuntime::EnterSessionToInstance(std::uint64_t sessionId, Core::FContentInstanceId initialContentInstanceId)
 	{
 		m_impl->enterSessionCallCount.fetch_add(1, std::memory_order_relaxed);
-		Threading::FContentThread* targetThread = nullptr;
+		Threading::FContentThread* targetWorker = nullptr;
 		std::uint64_t targetRouteGeneration = 0;
 		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
@@ -338,7 +377,7 @@ namespace ContentsRuntime::Routing
 			}
 
 			auto contentIt = m_impl->contentSlots.find(initialContentInstanceId);
-			if (contentIt == m_impl->contentSlots.end() || contentIt->second.thread == nullptr)
+			if (contentIt == m_impl->contentSlots.end() || contentIt->second.worker == nullptr)
 			{
 				return false;
 			}
@@ -354,20 +393,22 @@ namespace ContentsRuntime::Routing
 			route.routeGeneration = targetRouteGeneration;
 			route.contentId = contentIt->second.contentId;
 			route.contentInstanceId = initialContentInstanceId;
-			targetThread = contentIt->second.thread.get();
-			route.thread = targetThread;
+			route.workerIndex = contentIt->second.workerIndex;
+			targetWorker = contentIt->second.worker;
+			route.worker = targetWorker;
 		}
 
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
-		targetThread->EnqueueEnter({ sessionId, targetRouteGeneration });
+		targetWorker->EnqueueEnter({ sessionId, targetRouteGeneration, initialContentInstanceId });
 		return true;
 	}
 
 	void FContentRuntime::LeaveSession(std::uint64_t sessionId)
 	{
 		m_impl->leaveSessionCallCount.fetch_add(1, std::memory_order_relaxed);
-		Threading::FContentThread* targetThread = nullptr;
+		Threading::FContentThread* targetWorker = nullptr;
 		std::uint64_t routeGeneration = 0;
+		Core::FContentInstanceId currentContentInstanceId = Core::kInvalidContentInstanceId;
 		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
 		const auto lockWaitStart = std::chrono::steady_clock::now();
@@ -386,34 +427,33 @@ namespace ContentsRuntime::Routing
 			{
 				return;
 			}
-
-			const Core::FContentInstanceId currentContentInstanceId = route.contentInstanceId;
+			currentContentInstanceId = route.contentInstanceId;
 			routeGeneration = route.routeGeneration;
-			targetThread = route.thread;
+			targetWorker = route.worker;
 			route = {};
 			m_impl->activeSessionCount.fetch_sub(1, std::memory_order_relaxed);
 
-			if (targetThread == nullptr)
+			if (targetWorker == nullptr)
 			{
 				auto contentIt = m_impl->contentSlots.find(currentContentInstanceId);
 				if (contentIt != m_impl->contentSlots.end())
 				{
-					targetThread = contentIt->second.thread.get();
+					targetWorker = contentIt->second.worker;
 				}
 			}
 		}
 
-		if (targetThread != nullptr)
+		if (targetWorker != nullptr)
 		{
 			RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
-			targetThread->EnqueueLeave({ sessionId, routeGeneration });
+			targetWorker->EnqueueLeave({ sessionId, routeGeneration, currentContentInstanceId });
 		}
 	}
 
 	bool FContentRuntime::EnqueuePacket(std::uint64_t sessionId, std::uint16_t opcode, const char* payload, std::int32_t payloadLength)
 	{
 		m_impl->enqueuePacketCallCount.fetch_add(1, std::memory_order_relaxed);
-		Threading::FContentThread* targetThread = nullptr;
+		Threading::FContentThread* targetWorker = nullptr;
 		std::uint64_t routeGeneration = 0;
 		Core::FContentId targetContentId = Core::kInvalidContentId;
 		Core::FContentInstanceId targetContentInstanceId = Core::kInvalidContentInstanceId;
@@ -436,7 +476,7 @@ namespace ContentsRuntime::Routing
 			}
 
 			const SSessionRoute& route = m_impl->sessionRoutes[slotIndex];
-			if (route.sessionId != sessionId || route.thread == nullptr)
+			if (route.sessionId != sessionId || route.worker == nullptr)
 			{
 				m_impl->enqueueFailureCount.fetch_add(1, std::memory_order_relaxed);
 				if (m_impl->config.enableTraceLogging)
@@ -446,17 +486,17 @@ namespace ContentsRuntime::Routing
 						<< " opcode=" << opcode
 						<< " slotIndex=" << slotIndex
 						<< " routeSessionId=" << route.sessionId
-						<< " hasThread=" << (route.thread != nullptr ? 1 : 0);
+						<< " hasWorker=" << (route.worker != nullptr ? 1 : 0);
 					TraceRuntime(m_impl->config, sessionId, oss.str());
 				}
 				if (m_impl->config.failFastOnRuntimeError)
 				{
-					FailFastRuntime("ContentsRuntime enqueue failed: route mismatch or null thread.");
+					FailFastRuntime("ContentsRuntime enqueue failed: route mismatch or null worker.");
 				}
 				return false;
 			}
 
-			targetThread = route.thread;
+			targetWorker = route.worker;
 			routeGeneration = route.routeGeneration;
 			targetContentId = route.contentId;
 			targetContentInstanceId = route.contentInstanceId;
@@ -465,6 +505,7 @@ namespace ContentsRuntime::Routing
 		Core::FOwnedPacketEnvelope packet{};
 		packet.sessionId = sessionId;
 		packet.routeGeneration = routeGeneration;
+		packet.contentInstanceId = targetContentInstanceId;
 		packet.opcode = opcode;
 		if (payload != nullptr && payloadLength > 0)
 		{
@@ -484,7 +525,7 @@ namespace ContentsRuntime::Routing
 		}
 
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
-		targetThread->EnqueuePacket(std::move(packet));
+		targetWorker->EnqueuePacket(std::move(packet));
 		if (m_impl->config.enableTraceLogging)
 		{
 			std::ostringstream oss;
@@ -550,9 +591,10 @@ namespace ContentsRuntime::Routing
 		Core::FContentInstanceId targetContentInstanceId,
 		Core::FTransitionCompletionCallback onCompleted)
 	{
-		Threading::FContentThread* sourceThread = nullptr;
-		Threading::FContentThread* targetThread = nullptr;
+		Threading::FContentThread* sourceWorker = nullptr;
+		Threading::FContentThread* targetWorker = nullptr;
 		Core::FContentId targetContentId = Core::kInvalidContentId;
+		Core::FContentInstanceId sourceContentInstanceId = Core::kInvalidContentInstanceId;
 		std::uint64_t sourceRouteGeneration = 0;
 		std::uint64_t targetRouteGeneration = 0;
 		const std::uint32_t slotIndex = DecodeSessionSlotIndex(sessionId);
@@ -573,16 +615,16 @@ namespace ContentsRuntime::Routing
 			}
 
 			auto targetIt = m_impl->contentSlots.find(targetContentInstanceId);
-			if (targetIt == m_impl->contentSlots.end() || targetIt->second.thread == nullptr)
+			if (targetIt == m_impl->contentSlots.end() || targetIt->second.worker == nullptr)
 			{
 				if (m_impl->config.failFastOnRuntimeError)
 				{
-					FailFastRuntime("ContentsRuntime move failed: target content thread missing.");
+					FailFastRuntime("ContentsRuntime move failed: target content worker missing.");
 				}
 				return false;
 			}
 
-			targetThread = targetIt->second.thread.get();
+			targetWorker = targetIt->second.worker;
 			targetContentId = targetIt->second.contentId;
 
 			SSessionRoute& route = m_impl->sessionRoutes[slotIndex];
@@ -595,16 +637,17 @@ namespace ContentsRuntime::Routing
 				return false;
 			}
 
-			if (route.thread != nullptr)
+			sourceContentInstanceId = route.contentInstanceId;
+			if (route.worker != nullptr)
 			{
-				sourceThread = route.thread;
+				sourceWorker = route.worker;
 			}
 			else
 			{
 				auto sourceIt = m_impl->contentSlots.find(route.contentInstanceId);
-				if (sourceIt != m_impl->contentSlots.end() && sourceIt->second.thread != nullptr)
+				if (sourceIt != m_impl->contentSlots.end() && sourceIt->second.worker != nullptr)
 				{
-					sourceThread = sourceIt->second.thread.get();
+					sourceWorker = sourceIt->second.worker;
 				}
 			}
 
@@ -613,18 +656,19 @@ namespace ContentsRuntime::Routing
 			route.contentId = targetContentId;
 			route.contentInstanceId = targetContentInstanceId;
 			route.routeGeneration = targetRouteGeneration;
-			route.thread = targetThread;
+			route.workerIndex = targetIt->second.workerIndex;
+			route.worker = targetWorker;
 		}
 
 		m_impl->moveSessionCount.fetch_add(1, std::memory_order_relaxed);
 
-		if (sourceThread != nullptr)
+		if (sourceWorker != nullptr)
 		{
 			RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
-			sourceThread->EnqueueLeave({ sessionId, sourceRouteGeneration });
+			sourceWorker->EnqueueLeave({ sessionId, sourceRouteGeneration, sourceContentInstanceId });
 		}
 		RunRaceInjection(m_impl->config, m_impl->raceInjectionCounter);
-		targetThread->EnqueueEnter({ sessionId, targetRouteGeneration, nullptr, std::move(onCompleted) });
+		targetWorker->EnqueueEnter({ sessionId, targetRouteGeneration, targetContentInstanceId, nullptr, std::move(onCompleted) });
 		return true;
 	}
 

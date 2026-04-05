@@ -72,6 +72,7 @@ namespace ContentsRuntime::Core
 
 	struct SContentRuntimeConfig
 	{
+		std::uint32_t workerThreadCount = 1;
 		bool enableRaceInjection = false;
 		bool failFastOnRuntimeError = false;
 		bool enableTraceLogging = false;
@@ -85,6 +86,7 @@ namespace ContentsRuntime::Core
 	{
 		std::uint64_t sessionId = 0;
 		std::uint64_t routeGeneration = 0;
+		FContentInstanceId contentInstanceId = kInvalidContentInstanceId;
 		std::uint16_t opcode = 0;
 		std::vector<char> payload;
 	};
@@ -93,6 +95,7 @@ namespace ContentsRuntime::Core
 	{
 		std::uint64_t sessionId = 0;
 		std::uint64_t routeGeneration = 0;
+		FContentInstanceId contentInstanceId = kInvalidContentInstanceId;
 		std::shared_ptr<std::atomic<bool>> completionFlag;
 		std::function<void()> completionCallback;
 	};
