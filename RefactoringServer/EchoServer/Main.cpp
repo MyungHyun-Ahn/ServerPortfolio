@@ -442,6 +442,11 @@ namespace
 		runtimeOptions.enableFirstEchoAfterRoomChangeRaceInjection = configDocument.Debug.FirstEchoRaceInjectionEnabled;
 		runtimeOptions.firstEchoAfterRoomChangeRaceInjectionMode =
 			ToTransitionRaceMode(configDocument.Debug.FirstEchoRaceInjectionMode);
+		runtimeOptions.enableDelegateTestSleep = configDocument.Debug.DelegateTestEnabled;
+		runtimeOptions.delegateTestTargetRoomId = configDocument.Debug.DelegateTestTargetRoomId;
+		runtimeOptions.delegateTestSleepMs = std::max(0, configDocument.Debug.DelegateTestSleepMs);
+		runtimeOptions.delegateTestSleepEveryNFrames =
+			std::max(1, configDocument.Debug.DelegateTestSleepEveryNFrames);
 
 		contentRuntimeConfig.enableRaceInjection = configDocument.Debug.ContentsRaceInjectionEnabled;
 		contentRuntimeConfig.raceInjectionPeriod = std::max<std::uint32_t>(1u, configDocument.Debug.ContentsRaceInjectionPeriod);

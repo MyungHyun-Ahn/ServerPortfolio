@@ -27,6 +27,7 @@ namespace EchoServer::Contents
 			std::uint16_t opcode,
 			std::span<const char> payload,
 			ContentsRuntime::Bridge::IContentBridge& bridge) override;
+		void OnFrame(int delayFrame, ContentsRuntime::Bridge::IContentBridge& bridge) override;
 
 	private:
 		void HandleEchoRq(
@@ -51,6 +52,7 @@ namespace EchoServer::Contents
 		std::shared_ptr<FRoomRegistry> m_roomRegistry;
 		std::uint32_t m_roomId = 0;
 		SRuntimeOptions m_runtimeOptions;
+		std::uint64_t m_frameCount = 0;
 		std::unordered_map<std::uint64_t, std::uint64_t> m_sessionGenerations;
 		std::unordered_map<std::uint64_t, bool> m_injectFirstEchoAfterRoomChange;
 	};

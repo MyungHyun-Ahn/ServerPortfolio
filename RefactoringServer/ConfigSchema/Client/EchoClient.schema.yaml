@@ -15,6 +15,7 @@ EchoClient:
   PacketsPerSend: { type: int32, default: 1 }
   ReconnectProbabilityPercent: { type: int32, default: 0 }
   ReconnectDelayMs: { type: int32, default: 100 }
+  ConnectsPerSecond: { type: int32, default: 0 }
   WorkerThreadCount: { type: int32, default: 4 }
   RoomChangeProbabilityPercent: { type: int32, default: 25 }
   MaxRoomEnterRetryCount: { type: int32, default: 5 }

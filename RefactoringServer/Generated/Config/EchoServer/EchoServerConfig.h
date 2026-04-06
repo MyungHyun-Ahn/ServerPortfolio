@@ -101,6 +101,10 @@ namespace Generated::Config::EchoServer
 		std::uint32_t ContentsRaceInjectionPeriod = static_cast<std::uint32_t>(100);
 		EDebugContentsRaceInjectionMode ContentsRaceInjectionMode = EDebugContentsRaceInjectionMode::None;
 		bool ContentsFailFast = false;
+		bool DelegateTestEnabled = false;
+		std::uint32_t DelegateTestTargetRoomId = static_cast<std::uint32_t>(0);
+		std::int32_t DelegateTestSleepMs = static_cast<std::int32_t>(0);
+		std::int32_t DelegateTestSleepEveryNFrames = static_cast<std::int32_t>(1);
 	};
 
 	struct FEchoServerConfigDocument

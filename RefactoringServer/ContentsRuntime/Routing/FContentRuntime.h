@@ -2,6 +2,7 @@
 
 #include "ContentsRuntime/Bridge/IContentBridge.h"
 #include "ContentsRuntime/Core/ContentRuntimeTypes.h"
+#include "ContentsRuntime/Threading/FContentThread.h"
 
 #include <memory>
 
@@ -17,7 +18,8 @@ namespace ContentsRuntime::Core
 
 namespace ContentsRuntime::Routing
 {
-	class FContentRuntime final : public Bridge::IContentBridge
+	class FContentRuntime final
+		: public Bridge::IContentBridge
 	{
 	public:
 		FContentRuntime();

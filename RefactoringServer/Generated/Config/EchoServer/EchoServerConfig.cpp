@@ -127,7 +127,7 @@ namespace Generated::Config::EchoServer
 			return false;
 		}
 
-		constexpr std::array<std::string_view, 15> kDebugKnownKeys =
+		constexpr std::array<std::string_view, 19> kDebugKnownKeys =
 		{
 			"ManualDump",
 			"Headless",
@@ -143,7 +143,11 @@ namespace Generated::Config::EchoServer
 			"ContentsRaceInjectionEnabled",
 			"ContentsRaceInjectionPeriod",
 			"ContentsRaceInjectionMode",
-			"ContentsFailFast"
+			"ContentsFailFast",
+			"DelegateTestEnabled",
+			"DelegateTestTargetRoomId",
+			"DelegateTestSleepMs",
+			"DelegateTestSleepEveryNFrames"
 		};
 
 		if (!reader.ValidateKnownKeys("Debug", kDebugKnownKeys, outError))
@@ -327,6 +331,26 @@ namespace Generated::Config::EchoServer
 		}
 
 		if (!reader.ReadOptionalBool("Debug", "ContentsFailFast", outConfig.Debug.ContentsFailFast, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalBool("Debug", "DelegateTestEnabled", outConfig.Debug.DelegateTestEnabled, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalUInt32("Debug", "DelegateTestTargetRoomId", outConfig.Debug.DelegateTestTargetRoomId, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalInt32("Debug", "DelegateTestSleepMs", outConfig.Debug.DelegateTestSleepMs, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalInt32("Debug", "DelegateTestSleepEveryNFrames", outConfig.Debug.DelegateTestSleepEveryNFrames, outError))
 		{
 			return false;
 		}

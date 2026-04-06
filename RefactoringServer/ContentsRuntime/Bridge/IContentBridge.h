@@ -14,6 +14,8 @@ namespace NetworkLib::Packet::Serialization
 
 namespace ContentsRuntime::Bridge
 {
+	class IContentBridge;
+
 	class IContentBridge
 	{
 	public:

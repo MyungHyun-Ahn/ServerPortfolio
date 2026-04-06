@@ -1,11 +1,7 @@
 #pragma once
 
+#include "ContentsRuntime/Bridge/IContentBridge.h"
 #include "ContentsRuntime/Core/ContentRuntimeTypes.h"
-
-namespace ContentsRuntime::Bridge
-{
-	class IContentBridge;
-}
 
 namespace ContentsRuntime::Core
 {
@@ -17,18 +13,26 @@ namespace ContentsRuntime::Threading
 	class FContentThread
 	{
 	public:
-		FContentThread(Bridge::IContentBridge& bridge, const Core::SContentRuntimeConfig& config, std::uint32_t workerIndex);
+		FContentThread(
+			Bridge::IContentBridge& bridge,
+			const Core::SContentRuntimeConfig& config,
+			std::uint32_t workerIndex);
 		~FContentThread();
 
 		bool RegisterContent(Core::IContent& content);
 		void Start();
 		void Stop();
+
 		Core::SContentThreadStats GetStatsSnapshot(Core::FContentInstanceId contentInstanceId);
 		std::uint32_t GetWorkerIndex() const noexcept;
+		std::uint64_t GetApproxPendingWorkCount() const noexcept;
 
-		void EnqueueEnter(Core::SContentLifecycleEvent event);
-		void EnqueueLeave(Core::SContentLifecycleEvent event);
-		void EnqueuePacket(Core::FOwnedPacketEnvelope&& packet);
+		bool EnqueueEnter(Core::SContentLifecycleEvent event);
+		bool EnqueueLeave(Core::SContentLifecycleEvent event);
+		bool EnqueuePacket(Core::FOwnedPacketEnvelope packet);
+		bool EnqueueMoveTransition(
+			Core::SContentLifecycleEvent sourceLeaveEvent,
+			Core::SContentLifecycleEvent targetEnterEvent);
 
 	private:
 		struct SImpl;

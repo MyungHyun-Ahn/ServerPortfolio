@@ -40,6 +40,10 @@ namespace EchoServer::Contents
 		ETransitionRaceInjectionMode postRoomChangeResponseRaceInjectionMode = ETransitionRaceInjectionMode::Sleep0;
 		bool enableFirstEchoAfterRoomChangeRaceInjection = false;
 		ETransitionRaceInjectionMode firstEchoAfterRoomChangeRaceInjectionMode = ETransitionRaceInjectionMode::Sleep0;
+		bool enableDelegateTestSleep = false;
+		std::uint32_t delegateTestTargetRoomId = 0;
+		std::int32_t delegateTestSleepMs = 0;
+		std::int32_t delegateTestSleepEveryNFrames = 1;
 		std::shared_ptr<std::atomic<std::uint64_t>> tracedSessionId;
 	};
 }

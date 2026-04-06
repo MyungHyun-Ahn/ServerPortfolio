@@ -1,90 +1,174 @@
-# Content Worker Pool Review
+# Content Worker Pool / Mailbox Review
 
-## 1. 요약
-- 기존 `ContentsRuntime`는 `content instance = dedicated thread` 구조였다.
-- 이번 변경으로 `FContentRuntime`가 worker pool을 소유하고, 여러 content instance를 소수의 worker thread 위에 배치하도록 바뀌었다.
-- 현재 1차 배치 정책은 `round-robin` 고정 배치다.
+## 1. 목적
+- `ContentsRuntime`가 `content instance = dedicated thread` 구조에서 벗어나 `content-owned mailbox + worker executor` 구조로 바뀐 현재 동작을 정리한다.
+- 이 문서는 아래 질문에 답하는 것을 목표로 한다.
+  - runtime은 content를 어떻게 배치하는가
+  - worker는 실제로 무엇을 소유하는가
+  - `Enter / Leave / Packet`은 어디에 쌓이는가
+  - session move와 route commit은 어떤 순서로 일어나는가
 
-## 2. 왜 바꿨나
-- `Auth 1 + Lobby 1 + Room 80`이면 thread도 `82`개가 되는 구조였다.
-- 이 구조는 레거시 `CContentsThread` 기반 pool 모델과 달랐고, `NetworkLib` 성능 비교 결과에도 content thread 수가 큰 잡음으로 들어갔다.
-- 특히 10코어 머신에서 서버와 클라이언트를 같은 머신에 띄우면 room 수만큼 thread가 늘어나는 비용이 커졌다.
+## 2. 요약
+현재 구조의 핵심은 아래 한 줄이다.
+- queue 소유권은 worker가 아니라 content instance에 있다.
 
-## 3. 현재 구조
-### 3-1. runtime
-- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
-  - `SContentSlot`은 이제 dedicated thread 대신 `workerIndex`, `worker`를 가진다.
-  - `FContentRuntime::Start()`는 `workerThreadCount`만큼 worker를 만들고, 등록된 content instance를 정렬 후 `round-robin`으로 배치한다.
-  - session route도 `contentInstanceId + worker`를 함께 가진다.
+즉:
+- worker는 executor다
+- content instance는 mailbox owner다
 
-### 3-2. worker
-- [FContentThread.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.h)
+이 변경으로 예전 worker-global queue 기반 migration과 replay 문제가 크게 줄었다.
+
+## 3. 핵심 타입
+### FContentRuntime
+- 위치: [FContentRuntime.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.h)
+- 역할
+  - content registry
+  - session route table
+  - worker pool 관리
+  - enter / leave / move / packet 진입점 제공
+
+### FContentThread
+- 위치: [FContentThread.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.h)
+- 이름은 `Thread`지만 현재 의미는 worker executor다.
+- 여러 content instance의 mailbox를 소비한다.
+
+### SContentSlot
+- `contentId`
+- `contentInstanceId`
+- `content`
+- `workerIndex`
+- `worker`
+
+### SSessionRoute
+- `sessionId`
+- `routeGeneration`
+- `contentId`
+- `contentInstanceId`
+- `workerIndex`
+- `worker`
+- `moveState`
+- `pendingTarget*`
+- `pendingPackets`
+
+## 4. worker가 가진 것과 content가 가진 것
+### worker가 가진 것
+- OS thread 1개
+- ready content id queue
+- content registry
+- condition variable
+- pending work 총량 통계
+
+### content가 가진 것
+- mailbox
+- frame timing
+- per-content 통계
+- 자신의 `Enter / Leave / Packet` work item들
+
+### 중요
+- `enterQueueDepth`, `leaveQueueDepth`, `packetQueueDepth`는 별도 물리 큐가 아니다.
+- 실제 물리 큐는 content mailbox 하나고, 종류별 depth는 카운터다.
+
+## 5. mailbox 구조
 - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)
-  - 이름은 아직 `FContentThread`지만 의미는 `content worker thread`다.
-  - worker 하나가 여러 content instance를 `RegisterContent()`로 등록받는다.
-  - queue item에는 반드시 `contentInstanceId`가 같이 들어오고, worker는 자기 내부 registry에서 대상 content를 찾아 `Enter / Leave / Packet / Frame`를 처리한다.
-  - `GetStatsSnapshot(contentInstanceId)`도 worker가 content instance별 상태를 찾아 반환한다.
+- `SPerContentState` 안에 `SMailbox`가 있다.
+- `SMailbox`
+  - `std::mutex`
+  - `std::deque<SQueuedWorkItem*>`
+  - `readyQueued`
 
-### 3-3. envelope / lifecycle event
-- [ContentRuntimeTypes.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\ContentRuntimeTypes.h)
-  - `FOwnedPacketEnvelope`
-  - `SContentLifecycleEvent`
-  - 둘 다 `contentInstanceId`를 명시적으로 가진다.
-- 이제 queue item만 보고도 worker가 어떤 content instance를 처리해야 하는지 알 수 있다.
+동작:
+1. `Enter / Leave / Packet` enqueue 시 해당 content mailbox에 push
+2. mailbox가 처음 non-empty가 되면 `readyContentIds`에 그 content id를 한 번만 등록
+3. worker가 ready queue에서 content를 꺼내 mailbox를 batch로 소비
+4. 아직 남은 work가 있으면 그 content를 ready queue에 다시 등록
 
-## 4. 설정
-- [EchoServer.schema.yaml](D:\Project\ServerPortfolio\RefactoringServer\ConfigSchema\Server\EchoServer.schema.yaml)
-- [EchoServer.yaml](D:\Project\ServerPortfolio\RefactoringServer\Config\Server\EchoServer.yaml)
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 6. 배치 정책
+- `FContentRuntime::Start()`에서 worker를 만든다.
+- 등록된 content instance를 `contentInstanceId` 정렬 후 `round-robin`으로 배치한다.
+- 현재 배치는 단순하지만, 목적은 먼저 `instance-thread` 결합을 끊는 것이었다.
 
-새 설정:
-- `EchoServer.ContentsWorkerThreadCount`
-- CLI override: `--contents-worker-thread-count`
+## 7. enter / leave / packet 흐름
+### Enter
+1. `EnterSession()` 또는 `EnterSessionToInstance()`
+2. route 갱신
+3. target content mailbox에 `Enter` enqueue
 
-이 값은 `SContentRuntimeConfig.workerThreadCount`로 내려가고, content worker pool 크기를 결정한다.
+### Leave
+1. 현재 route 조회
+2. route slot 비우기
+3. source content mailbox에 `Leave` enqueue
 
-## 5. EchoServer 기준 흐름
-1. `Main.cpp`가 `ContentsWorkerThreadCount`를 읽어 `SContentRuntimeConfig.workerThreadCount`에 넣는다.
-2. `FContentRuntime::RegisterContent()`는 content instance를 slot에 등록만 한다.
-3. `FContentRuntime::Start()`가 worker pool을 만들고 instance를 `round-robin`으로 worker에 배치한다.
-4. 세션 라우트는 `contentInstanceId`와 그 instance가 속한 worker를 가리킨다.
-5. `EnqueuePacket`, `EnterSessionToInstance`, `MoveSessionToInstanceWithCompletion`, `LeaveSession`은 모두 해당 worker queue로 work item을 넣는다.
-6. worker는 queue item의 `contentInstanceId`를 보고 정확한 `IContent` 인스턴스에 dispatch한다.
+### Packet
+1. `EnqueuePacket()`에서 현재 route 조회
+2. 이동 중이 아니면 현재 content mailbox에 `Packet` enqueue
+3. 이동 중이면 session route의 `pendingPackets`에 hold
 
-## 6. 검증
-### 6-1. 빌드
-- `Debug x64` 솔루션 빌드 성공
+## 8. move 흐름
+### 공통
+- route는 move 시작 즉시 target으로 바꾸지 않는다.
+- 먼저 `Pending` 상태로 두고 target metadata만 route에 저장한다.
+- 이동 중 들어오는 packet은 old route로 보내지 않고 `pendingPackets`에 hold한다.
+- target enter completion 시 route commit 후 replay한다.
 
-### 6-2. 스레드 수 확인
-- 조건:
-  - `room-count=80`
-  - `worker-thread-count=2`
-  - `contents-worker-thread-count=4`
-- 서버 프로세스 thread count: `10`
-- 로그:
-  - [content_worker_pool_threadcount](D:\Project\ServerPortfolio\RefactoringServer\Out\content_worker_pool_threadcount)
+### same-worker fast-path
+- `sourceWorker == targetWorker`이면 [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)의 `EnqueueMoveTransition(...)`을 쓴다.
+- 현재 구현은 별도 transition queue 없이
+  - source leave
+  - source leave completion에서 target enter enqueue
+  - target enter completion에서 route commit
+순서를 보장한다.
 
-즉 `Room 80개 = thread 80개`가 아니라, room instance는 그대로 유지하면서 thread 수는 worker 수 기준으로 제한된다.
+이건 이전 same-worker backlog와 route 선반영 문제를 줄이기 위한 최소 안전 수정이다.
 
-### 6-3. 기능 스모크
-- `20 sessions / 10s` 성공
-  - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\content_worker_pool_smoke\client.log)
+## 9. frame 실행
+- `RegisterContent()` 시 `GetTargetFps()`를 읽어 `frameDuration`을 정한다.
+- worker는 due frame만 `OnFrame(delayFrame)`으로 실행한다.
+- frame이 느릴 경우 `worker slow frame` 로그와 `lastDelayFrame / maxDelayFrame` 통계가 쌓인다.
 
-### 6-4. 짧은 회귀
-- `100 sessions / 30s` 성공
-  - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\content_worker_pool_regression_100x30s\client.log)
-  - [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\content_worker_pool_regression_100x30s\server.log)
+## 10. 왜 이전 구조보다 나아졌는가
+- queue ownership이 content 쪽에 붙어 있어 move correctness를 설명하기 쉽다.
+- worker-global queue replay가 필요 없다.
+- same-worker와 cross-worker를 구분하더라도 핵심 queue는 동일하게 content mailbox다.
+- future migration이 필요해도 mailbox consumer ownership 전환 쪽으로 사고할 수 있다.
 
-관찰된 내용:
-- `ContentStats` 기준 `contents=82`를 유지한 채 동작했다.
-- `roomFrameTPS`는 약 `2400` 수준으로 유지됐다.
-- `roomQueue`는 `0`, `roomMaxQueue`는 `3` 수준이었다.
+## 11. 검증
+### 3분 런
+- [content_mailbox_250x3m_room90](D:\Project\ServerPortfolio\RefactoringServer\Out\content_mailbox_250x3m_room90)
+- 조건
+  - `250세션`
+  - `connectsPerSecond=10`
+  - `interval=0`
+  - `room-change=90%`
+  - `holdSeconds=180`
+- 결과
+  - 클라이언트 성공 종료
+  - `echo validation succeeded`
 
-## 7. 현재 한계
-- 배치 정책은 아직 `round-robin` 고정이다.
-- worker 이름은 아직 `FContentThread`라서 의미가 조금 옛 구조를 끌고 간다.
-- 동적 재배치, load-aware assignment, work stealing은 아직 없다.
+### 10분 런
+- [content_mailbox_250x10m_room90](D:\Project\ServerPortfolio\RefactoringServer\Out\content_mailbox_250x10m_room90)
+- 조건
+  - `IOCP`
+  - `Server Worker 4`
+  - `Contents Worker 4`
+  - `Client Worker 4`
+  - `250세션`
+  - `connectsPerSecond=10`
+  - `interval=0`
+  - `room-change=90%`
+  - `holdSeconds=600`
+  - `Room 77 OnFrame Sleep 15ms`
+- 결과
+  - 클라이언트 성공 종료
+  - `client.err.log` 비어 있음
+  - `server.err.log` 비어 있음
+  - 종료 시 `enqueueFailTPS=0`, `roomQueue=0`
 
-## 8. 결론
-- 1차 목표였던 `instance-thread 결합 해소`는 달성했다.
-- 이제 `ContentsRuntime`는 레거시의 content worker pool 모델에 더 가까운 구조가 되었고, 다음 `NetworkLib` 성능 비교는 이전보다 훨씬 덜 왜곡된 기준선 위에서 볼 수 있다.
+## 12. 남은 과제
+- bootstrap control path 우선순위 분리 필요 여부 검토
+- worker 배치 정책 고도화
+- 추가 content 타입 확장
+- mailbox 기반 future migration이 정말 필요한지 재평가
+
+## 13. 결론
+- `content worker pool` 전환의 진짜 핵심은 thread 수 감축만이 아니라 queue 소유권 이동이다.
+- 현재 `ContentsRuntime`는 `worker queue 중심`이 아니라 `content mailbox 중심` 구조로 이해하는 것이 맞다.

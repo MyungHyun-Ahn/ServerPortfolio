@@ -206,6 +206,38 @@ namespace EchoServer::Contents
 		}
 	}
 
+	void FEchoContent::OnFrame(const int delayFrame, ContentsRuntime::Bridge::IContentBridge&)
+	{
+		++m_frameCount;
+		if (!m_runtimeOptions.enableDelegateTestSleep ||
+			m_runtimeOptions.delegateTestTargetRoomId == 0 ||
+			m_runtimeOptions.delegateTestTargetRoomId != m_roomId ||
+			m_runtimeOptions.delegateTestSleepMs <= 0)
+		{
+			return;
+		}
+
+		const std::uint64_t framePeriod =
+			static_cast<std::uint64_t>(std::max(1, m_runtimeOptions.delegateTestSleepEveryNFrames));
+		if ((m_frameCount % framePeriod) != 0)
+		{
+			return;
+		}
+
+		if (ShouldTraceSession(m_runtimeOptions, 0))
+		{
+			std::ostringstream oss;
+			oss << "delegate test sleep injected. roomId=" << m_roomId
+				<< " contentInstanceId=" << m_contentInstanceId
+				<< " sleepMs=" << m_runtimeOptions.delegateTestSleepMs
+				<< " delayFrame=" << delayFrame
+				<< " frameCount=" << m_frameCount;
+			Log(Foundation::ELogLevel::Info, oss.str());
+		}
+
+		::Sleep(static_cast<DWORD>(m_runtimeOptions.delegateTestSleepMs));
+	}
+
 	void FEchoContent::HandleEchoRq(
 		std::uint64_t sessionId,
 		std::span<const char> payload,
@@ -379,10 +411,34 @@ namespace EchoServer::Contents
 		const auto registryRoomBefore = m_roomRegistry != nullptr ? m_roomRegistry->GetSessionRoomId(sessionId) : std::nullopt;
 		ContentsRuntime::Core::FContentInstanceId targetContentInstanceId = ContentsRuntime::Core::kInvalidContentInstanceId;
 		const std::uint64_t targetRouteGeneration = routeGeneration + 1;
+		if (m_runtimeOptions.logPackets || ShouldTraceSession(m_runtimeOptions, sessionId))
+		{
+			std::ostringstream oss;
+			oss << "room change request begin. sessionId=" << sessionId
+				<< " currentRoomId=" << m_roomId
+				<< " requestedTargetRoomId=" << requestPacket.targetRoomId
+				<< " contentInstanceId=" << m_contentInstanceId
+				<< " routeGeneration=" << routeGeneration
+				<< " targetRouteGeneration=" << targetRouteGeneration
+				<< " registryRoomBefore="
+				<< (registryRoomBefore.has_value() ? std::to_string(*registryRoomBefore) : std::string("none"));
+			Log(Foundation::ELogLevel::Info, oss.str());
+		}
+
 		ERoomFlowResultCode resultCode =
 			m_roomRegistry != nullptr
 				? m_roomRegistry->TryChangeRoom(sessionId, m_roomId, requestPacket.targetRoomId, targetRouteGeneration, targetContentInstanceId)
 				: ERoomFlowResultCode::InternalError;
+		if (m_runtimeOptions.logPackets || ShouldTraceSession(m_runtimeOptions, sessionId))
+		{
+			std::ostringstream oss;
+			oss << "room change registry result. sessionId=" << sessionId
+				<< " currentRoomId=" << m_roomId
+				<< " requestedTargetRoomId=" << requestPacket.targetRoomId
+				<< " targetContentInstanceId=" << targetContentInstanceId
+				<< " resultCode=" << ToString(resultCode);
+			Log(Foundation::ELogLevel::Info, oss.str());
+		}
 
 		if (resultCode == ERoomFlowResultCode::Success && !bridge.HasContentInstance(targetContentInstanceId))
 		{
@@ -393,8 +449,10 @@ namespace EchoServer::Contents
 			resultCode = ERoomFlowResultCode::MissingContentInstance;
 		}
 
-		if (resultCode == ERoomFlowResultCode::Success &&
-			!bridge.MoveSessionToInstanceWithCompletion(
+		bool moveAccepted = false;
+		if (resultCode == ERoomFlowResultCode::Success)
+		{
+			moveAccepted = bridge.MoveSessionToInstanceWithCompletion(
 				sessionId,
 				targetContentInstanceId,
 				[bridgePtr = &bridge,
@@ -404,6 +462,14 @@ namespace EchoServer::Contents
 				 targetRoomId = requestPacket.targetRoomId,
 				 sessionId]()
 				{
+					if (logger != nullptr && (runtimeOptions.logPackets || ShouldTraceSession(runtimeOptions, sessionId)))
+					{
+						std::ostringstream oss;
+						oss << "room change completion callback begin. sessionId=" << sessionId
+							<< " previousRoomId=" << previousRoomId
+							<< " targetRoomId=" << targetRoomId;
+						logger->Log(Foundation::ELogLevel::Info, "EchoServer", oss.str());
+					}
 					RunTransitionResponseRaceInjection(runtimeOptions);
 					Generated::Chat::FRoomChangeRp responsePacket;
 					responsePacket.previousRoomId = previousRoomId;
@@ -423,7 +489,22 @@ namespace EchoServer::Contents
 					{
 						RunRaceInjection(runtimeOptions.postRoomChangeResponseRaceInjectionMode);
 					}
-				}))
+				});
+
+			if (m_runtimeOptions.logPackets || ShouldTraceSession(m_runtimeOptions, sessionId))
+			{
+				std::ostringstream oss;
+				oss << "room change move request result. sessionId=" << sessionId
+					<< " currentRoomId=" << m_roomId
+					<< " requestedTargetRoomId=" << requestPacket.targetRoomId
+					<< " targetContentInstanceId=" << targetContentInstanceId
+					<< " targetRouteGeneration=" << targetRouteGeneration
+					<< " accepted=" << (moveAccepted ? 1 : 0);
+				Log(Foundation::ELogLevel::Info, oss.str());
+			}
+		}
+
+		if (resultCode == ERoomFlowResultCode::Success && !moveAccepted)
 		{
 			if (m_roomRegistry != nullptr)
 			{

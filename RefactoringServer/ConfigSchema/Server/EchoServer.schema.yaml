@@ -58,3 +58,7 @@ Debug:
     default: None
     values: [None, SwitchToThread, Sleep0, Yield]
   ContentsFailFast: { type: bool, default: false }
+  DelegateTestEnabled: { type: bool, default: false }
+  DelegateTestTargetRoomId: { type: uint32, default: 0 }
+  DelegateTestSleepMs: { type: int32, default: 0 }
+  DelegateTestSleepEveryNFrames: { type: int32, default: 1 }

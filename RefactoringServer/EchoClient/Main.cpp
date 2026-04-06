@@ -55,6 +55,7 @@ namespace
 		int packetsPerSend = 1;
 		int reconnectProbabilityPercent = 0;
 		int reconnectDelayMs = 100;
+		int connectsPerSecond = 0;
 		int workerThreadCount = 4;
 		int recvTimeoutMs = 0;
 		int roomListRecvTimeoutMs = -1;
@@ -172,6 +173,7 @@ namespace
 		outOptions.reconnectProbabilityPercent =
 			std::clamp(configDocument.EchoClient.ReconnectProbabilityPercent, 0, 100);
 		outOptions.reconnectDelayMs = std::max(0, configDocument.EchoClient.ReconnectDelayMs);
+		outOptions.connectsPerSecond = std::max(0, configDocument.EchoClient.ConnectsPerSecond);
 		outOptions.workerThreadCount = std::max(1, configDocument.EchoClient.WorkerThreadCount);
 		outOptions.roomChangeProbabilityPercent =
 			std::clamp(configDocument.EchoClient.RoomChangeProbabilityPercent, 0, 100);
@@ -329,6 +331,13 @@ namespace
 			else if (argument == "--reconnect-delay-ms" && argumentIndex + 1 < argc)
 			{
 				if (!TryParseInt(argv[++argumentIndex], outOptions.reconnectDelayMs) || outOptions.reconnectDelayMs < 0)
+				{
+					return false;
+				}
+			}
+			else if (argument == "--connects-per-second" && argumentIndex + 1 < argc)
+			{
+				if (!TryParseInt(argv[++argumentIndex], outOptions.connectsPerSecond) || outOptions.connectsPerSecond < 0)
 				{
 					return false;
 				}
@@ -1552,11 +1561,45 @@ namespace
 		WaitingEchoResponses,
 		WaitingRoomChangeList,
 		WaitingRoomChangeResponse,
+		WaitingConnect,
 		WaitingInterval,
 		WaitingReconnect,
 		Completed,
 		Failed
 	};
+
+	const char* ToString(const EClientSessionState state) noexcept
+	{
+		switch (state)
+		{
+		case EClientSessionState::None:
+			return "None";
+		case EClientSessionState::WaitingLoginResponse:
+			return "WaitingLoginResponse";
+		case EClientSessionState::WaitingRoomListForEnter:
+			return "WaitingRoomListForEnter";
+		case EClientSessionState::WaitingRoomEnterResponse:
+			return "WaitingRoomEnterResponse";
+		case EClientSessionState::WaitingEchoResponses:
+			return "WaitingEchoResponses";
+		case EClientSessionState::WaitingRoomChangeList:
+			return "WaitingRoomChangeList";
+		case EClientSessionState::WaitingRoomChangeResponse:
+			return "WaitingRoomChangeResponse";
+		case EClientSessionState::WaitingConnect:
+			return "WaitingConnect";
+		case EClientSessionState::WaitingInterval:
+			return "WaitingInterval";
+		case EClientSessionState::WaitingReconnect:
+			return "WaitingReconnect";
+		case EClientSessionState::Completed:
+			return "Completed";
+		case EClientSessionState::Failed:
+			return "Failed";
+		default:
+			return "Unknown";
+		}
+	}
 
 	enum class EClientIoOperation : std::uint8_t
 	{
@@ -1567,7 +1610,8 @@ namespace
 	enum class EClientCommandType : std::uint8_t
 	{
 		ContinueCycle = 0,
-		Reconnect
+		Reconnect,
+		Connect
 	};
 
 	struct SClientIocpSession;
@@ -1628,6 +1672,7 @@ namespace
 		std::chrono::steady_clock::time_point timeoutDeadline{};
 		std::chrono::steady_clock::time_point wakeTime{};
 		std::chrono::steady_clock::time_point deadline{};
+		bool holdDeadlineStarted = false;
 
 		SClientIocpSession();
 	};
@@ -1650,6 +1695,7 @@ namespace
 		void SchedulerLoop();
 		void WorkerLoop(FRttThreadLocalCollector& rttCollector);
 		void DrainCommands(FRttThreadLocalCollector& rttCollector);
+		void HandleConnectCommand(SClientIocpSession& session);
 		void HandleContinueCommand(SClientIocpSession& session);
 		void HandleReconnectCommand(SClientIocpSession& session);
 		void HandleIoFailure(
@@ -1765,22 +1811,36 @@ namespace
 				static_cast<std::uint32_t>(sessionIndex * 2654435761u));
 			session->recvContext.buffer.resize(static_cast<std::size_t>(std::max(1, m_options.recvBufferSize)));
 			session->inboundBuffer.reserve(static_cast<std::size_t>(std::max(1, m_options.recvBufferSize) * 2));
-			session->deadline =
-				std::chrono::steady_clock::now() +
-				std::chrono::seconds(m_options.holdSeconds > 0 ? m_options.holdSeconds : 0);
 			m_sessions.push_back(std::move(session));
 		}
 
 		StartWorkers();
 		m_schedulerThread = std::thread([this]() { SchedulerLoop(); });
 
-		for (const auto& session : m_sessions)
+		if (m_options.connectsPerSecond <= 0)
 		{
-			std::string errorMessage;
-			if (!ConnectSession(*session, errorMessage))
+			for (const auto& session : m_sessions)
 			{
-				FailSession(*session, errorMessage);
-				break;
+				std::string errorMessage;
+				if (!ConnectSession(*session, errorMessage))
+				{
+					FailSession(*session, errorMessage);
+					break;
+				}
+			}
+		}
+		else
+		{
+			const auto connectScheduleBaseTime = std::chrono::steady_clock::now();
+			for (std::size_t sessionIndex = 0; sessionIndex < m_sessions.size(); ++sessionIndex)
+			{
+				SClientIocpSession& session = *m_sessions[sessionIndex];
+				std::lock_guard<std::mutex> lock(session.mutex);
+				session.state = EClientSessionState::WaitingConnect;
+				session.wakeTime =
+					connectScheduleBaseTime +
+					std::chrono::microseconds(
+						static_cast<long long>((1000000ll * static_cast<long long>(sessionIndex)) / m_options.connectsPerSecond));
 			}
 		}
 
@@ -1899,6 +1959,13 @@ namespace
 			session.sendInFlight = false;
 			session.recvPosted = false;
 			ClearWaitStateLocked(session);
+			if (!session.holdDeadlineStarted)
+			{
+				session.deadline =
+					std::chrono::steady_clock::now() +
+					std::chrono::seconds(m_options.holdSeconds > 0 ? m_options.holdSeconds : 0);
+				session.holdDeadlineStarted = true;
+			}
 
 			if (!PostRecvLocked(session, outErrorMessage))
 			{
@@ -1948,15 +2015,18 @@ namespace
 				}
 
 				if (!session->commandPending &&
-					(session->state == EClientSessionState::WaitingInterval ||
+					(session->state == EClientSessionState::WaitingConnect ||
+						session->state == EClientSessionState::WaitingInterval ||
 						session->state == EClientSessionState::WaitingReconnect) &&
 					now >= session->wakeTime)
 				{
 					session->commandPending = true;
 					EnqueueCommand(
-						session->state == EClientSessionState::WaitingReconnect
-							? EClientCommandType::Reconnect
-							: EClientCommandType::ContinueCycle,
+						session->state == EClientSessionState::WaitingConnect
+							? EClientCommandType::Connect
+							: (session->state == EClientSessionState::WaitingReconnect
+								? EClientCommandType::Reconnect
+								: EClientCommandType::ContinueCycle),
 						session->sessionIndex);
 				}
 			}
@@ -2040,6 +2110,10 @@ namespace
 			SClientIocpSession& session = *m_sessions[static_cast<std::size_t>(command.sessionIndex)];
 			switch (command.type)
 			{
+			case EClientCommandType::Connect:
+				HandleConnectCommand(session);
+				break;
+
 			case EClientCommandType::ContinueCycle:
 				HandleContinueCommand(session);
 				break;
@@ -2048,6 +2122,24 @@ namespace
 				HandleReconnectCommand(session);
 				break;
 			}
+		}
+	}
+
+	void FIocpEchoClientRuntime::HandleConnectCommand(SClientIocpSession& session)
+	{
+		{
+			std::lock_guard<std::mutex> lock(session.mutex);
+			session.commandPending = false;
+			if (session.finalized || session.state != EClientSessionState::WaitingConnect)
+			{
+				return;
+			}
+		}
+
+		std::string errorMessage;
+		if (!ConnectSession(session, errorMessage))
+		{
+			FailSession(session, errorMessage);
 		}
 	}
 
@@ -3054,6 +3146,11 @@ namespace
 		session.timeoutStageName = stageName != nullptr ? stageName : "";
 		session.singlePendingRequest = pendingRequest;
 		RefreshWaitDeadlineLocked(session);
+		TraceSession(
+			m_options,
+			session.sessionIndex,
+			"wait state=" + std::string(ToString(state)) +
+				" stage=" + (session.timeoutStageName.empty() ? std::string("none") : session.timeoutStageName));
 	}
 
 	void FIocpEchoClientRuntime::ClearWaitStateLocked(SClientIocpSession& session)
@@ -3132,6 +3229,8 @@ namespace
 			return;
 		}
 
+		const std::string lastState = ToString(session.state);
+		const std::string lastStage = session.timeoutStageName.empty() ? std::string("none") : session.timeoutStageName;
 		session.finalized = true;
 		session.state = succeeded ? EClientSessionState::Completed : EClientSessionState::Failed;
 		session.commandPending = false;
@@ -3155,6 +3254,16 @@ namespace
 
 		session.result.succeeded = succeeded;
 		session.result.errorMessage = succeeded ? std::string() : errorMessage;
+		TraceSession(
+			m_options,
+			session.sessionIndex,
+			"finalize result=" + std::string(succeeded ? "success" : "failure") +
+				" lastState=" + lastState +
+				" lastStage=" + lastStage +
+				" roomEnterAttempts=" + std::to_string(session.roomEnterAttemptCount) +
+				" roomChangeAttempts=" + std::to_string(session.roomChangeAttemptCount) +
+				" receivedResponses=" + std::to_string(session.result.receivedResponseCount) +
+				(succeeded ? std::string() : " error=" + errorMessage));
 
 		{
 			std::lock_guard<std::mutex> completionLock(m_completionMutex);
@@ -3163,6 +3272,11 @@ namespace
 				if (m_runtimeError.empty())
 				{
 					m_runtimeError = errorMessage;
+					std::cerr << "[runtime] first failure. sessionIndex=" << session.sessionIndex
+						<< " lastState=" << lastState
+						<< " lastStage=" << lastStage
+						<< " receivedResponses=" << session.result.receivedResponseCount
+						<< " error=" << errorMessage << "\n";
 				}
 
 				m_abortRequested.store(true);
@@ -3267,6 +3381,7 @@ int main(int argc, char* argv[])
 		<< " intervalMs=" << options.intervalMs
 		<< " packetsPerSend=" << options.packetsPerSend
 		<< " reconnectProbabilityPercent=" << options.reconnectProbabilityPercent
+		<< " connectsPerSecond=" << options.connectsPerSecond
 		<< " roomChangeProbabilityPercent=" << options.roomChangeProbabilityPercent
 		<< " holdSeconds=" << options.holdSeconds << "\n";
 	return 0;
