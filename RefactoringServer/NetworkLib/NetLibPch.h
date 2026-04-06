@@ -46,6 +46,7 @@
 #include "Containers/FLockFreeStack.h"
 #include "Packet/Buffer/FPacketBuffer.h"
 #include "Packet/Buffer/FRecvBuffer.h"
+#include "Packet/Buffer/FSendSegmentPool.h"
 #include "Packet/Framing/PacketTypes.h"
 #include "Packet/View/FPacketView.h"
 #include "Packet/View/FBorrowedViewGuard.h"

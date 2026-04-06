@@ -8,6 +8,7 @@ namespace NetworkLib
 namespace NetworkLib::Packet::Buffer
 {
 	class FPacketBuffer;
+	class FSendBuffer;
 }
 
 namespace NetworkLib::Session
@@ -36,7 +37,7 @@ namespace NetworkLib::Core
 		struct SSendCommand
 		{
 			std::uint64_t sessionId = 0;
-			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer = nullptr;
+			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer = nullptr;
 			std::int32_t payloadLength = 0;
 		};
 
@@ -65,12 +66,12 @@ namespace NetworkLib::Core
 		bool SubmitSendDirect(
 			NetworkLib::Session::FRioSession& sessionContext,
 			std::uint64_t sessionId,
-			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer,
+			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer,
 			std::int32_t payloadLength);
 		bool EnqueueOwnerThreadSend(
 			std::uint64_t sessionId,
 			std::uint32_t ownerWorkerIndex,
-			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer,
+			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer,
 			std::int32_t payloadLength);
 		bool HasPendingSendCommands(std::uint32_t workerIndex) const;
 		bool AttachAcceptedSocket(SOCKET clientSocket);

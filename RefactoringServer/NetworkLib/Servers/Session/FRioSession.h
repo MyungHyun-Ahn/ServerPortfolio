@@ -2,6 +2,11 @@
 
 #include "Servers/Session/ISession.h"
 
+namespace NetworkLib::Packet::Buffer
+{
+	class FSendBuffer;
+}
+
 namespace NetworkLib::Session
 {
 	class FRioSession final : public ISession
@@ -33,8 +38,9 @@ namespace NetworkLib::Session
 
 		struct SSendRequestContext final : SRequestContext
 		{
-			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer = nullptr;
+			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer = nullptr;
 			RIO_BUFFERID bufferId = RIO_INVALID_BUFFERID;
+			bool ownsBufferRegistration = false;
 			RIO_BUF buffer{};
 		};
 

@@ -85,6 +85,8 @@
     <ClCompile Include="Containers\LockFreeSmoke.cpp" />
     <ClCompile Include="Crypto\FDefaultPacketCipher.cpp" />
     <ClCompile Include="Crypto\FNullPacketCipher.cpp" />
+    <ClCompile Include="Packet\Buffer\FSendBuffer.cpp" />
+    <ClCompile Include="Packet\Buffer\FSendSegmentPool.cpp" />
     <ClCompile Include="Packet\Framing\FDefaultPacketFramer.cpp" />
     <ClCompile Include="Servers\Core\FServerFactory.cpp" />
     <ClCompile Include="Servers\Core\FIocpServer.cpp" />
@@ -106,6 +108,7 @@
     <ClInclude Include="Packet\Buffer\FPacketBuffer.h" />
     <ClInclude Include="Packet\Buffer\FRecvBuffer.h" />
     <ClInclude Include="Packet\Buffer\FSendBuffer.h" />
+    <ClInclude Include="Packet\Buffer\FSendSegmentPool.h" />
     <ClInclude Include="Packet\Framing\ContentHeader.h" />
     <ClInclude Include="Packet\Framing\FDefaultPacketFramer.h" />
     <ClInclude Include="Packet\Framing\IPacketFramer.h" />

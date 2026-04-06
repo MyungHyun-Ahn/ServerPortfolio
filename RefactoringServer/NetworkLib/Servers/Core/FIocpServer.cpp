@@ -75,6 +75,12 @@ namespace NetworkLib::Core
 		m_packetCipher = m_serverConfig.packetCipher;
 		m_packetFramer = m_serverConfig.packetFramer;
 		FSendBuffer::ConfigurePageReuse(m_serverConfig.enablePageBufferReuse, m_serverConfig.pageBufferSize);
+		if (!FSendBuffer::InitializeSegmentPool(false, nullptr, m_serverConfig.maxSessionCount))
+		{
+			Log(Foundation::ELogLevel::Error, "Send segment pool initialization failed.");
+			m_isRunning = false;
+			return false;
+		}
 		FPacketBuffer::ConfigurePageReuse(
 			m_serverConfig.enablePageBufferReuse,
 			m_serverConfig.pageBufferSize);
@@ -182,6 +188,7 @@ namespace NetworkLib::Core
 
 		StopWorkers();
 		CloseAcceptContexts();
+		FSendBuffer::ShutdownSegmentPool(nullptr);
 
 		if (m_iocpHandle != nullptr)
 		{
