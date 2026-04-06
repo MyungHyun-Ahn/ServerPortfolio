@@ -14,6 +14,7 @@ namespace NetworkLib
 namespace ContentsRuntime::Core
 {
 	class IContent;
+	struct SContentExecutionState;
 }
 
 namespace ContentsRuntime::Routing
@@ -50,11 +51,24 @@ namespace ContentsRuntime::Routing
 			std::uint64_t sessionId,
 			Core::FContentInstanceId targetContentInstanceId,
 			Core::FTransitionCompletionCallback onCompleted) override;
+		bool RequestContentInstanceTransfer(
+			Core::FContentInstanceId contentInstanceId,
+			std::uint32_t targetWorkerIndex);
+		bool TryScheduleDelegateTransfer(
+			Core::FContentInstanceId contentInstanceId,
+			std::uint32_t sourceWorkerIndex);
+		bool TryScheduleWorkSteal(std::uint32_t idleWorkerIndex);
+		bool CommitRequestedTransferAtWorkBoundary(
+			Core::SContentExecutionState& executionState,
+			std::uint32_t sourceWorkerIndex);
 		bool DisconnectSession(std::uint64_t sessionId) override;
 		bool IsSessionAlive(std::uint64_t sessionId) const override;
 		bool HasContentInstance(Core::FContentInstanceId contentInstanceId) const override;
 		std::optional<Core::FContentId> GetCurrentContentId(std::uint64_t sessionId) const override;
 		std::optional<Core::FContentInstanceId> GetCurrentContentInstanceId(std::uint64_t sessionId) const override;
+
+	private:
+		bool HasPendingMoveForContentLocked(Core::FContentInstanceId contentInstanceId) const;
 
 	private:
 		struct SImpl;

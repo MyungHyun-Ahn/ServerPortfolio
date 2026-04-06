@@ -6,6 +6,7 @@
 namespace ContentsRuntime::Core
 {
 	class IContent;
+	struct SContentExecutionState;
 }
 
 namespace ContentsRuntime::Threading
@@ -19,7 +20,9 @@ namespace ContentsRuntime::Threading
 			std::uint32_t workerIndex);
 		~FContentThread();
 
-		bool RegisterContent(Core::IContent& content);
+		bool RegisterContent(Core::SContentExecutionState& executionState);
+		bool DetachContent(Core::FContentInstanceId contentInstanceId);
+		bool DetachContentForTransfer(Core::SContentExecutionState& executionState);
 		void Start();
 		void Stop();
 

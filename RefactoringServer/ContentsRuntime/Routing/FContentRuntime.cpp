@@ -2,6 +2,7 @@
 
 #include "ContentsRuntime/Routing/FContentRuntime.h"
 
+#include "ContentsRuntime/Core/ContentExecutionState.h"
 #include "ContentsRuntime/Core/IContent.h"
 #include "ContentsRuntime/Threading/FContentThread.h"
 #include "Servers/IServer.h"
@@ -56,6 +57,12 @@ namespace ContentsRuntime::Routing
 				std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count());
 		}
 
+		std::int64_t CurrentSteadyMilliseconds() noexcept
+		{
+			return std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now().time_since_epoch()).count();
+		}
+
 		std::uint32_t DecodeSessionSlotIndex(const std::uint64_t sessionId) noexcept
 		{
 			return static_cast<std::uint32_t>(sessionId & kSessionSlotMask);
@@ -102,6 +109,34 @@ namespace ContentsRuntime::Routing
 			}
 		}
 
+		bool IsOwnershipTransferAllowed(
+			const Core::SContentRuntimeConfig& config,
+			const Core::FContentId contentId) noexcept
+		{
+			if (!config.enableOwnershipTransferPolicy || contentId == Core::kInvalidContentId)
+			{
+				return false;
+			}
+
+			return std::find(
+				config.ownershipTransferAllowedContentIds.begin(),
+				config.ownershipTransferAllowedContentIds.end(),
+				contentId) != config.ownershipTransferAllowedContentIds.end();
+		}
+
+		bool HasCooldownElapsed(
+			const std::int64_t nowMs,
+			const std::int64_t lastEventMs,
+			const std::chrono::milliseconds cooldown) noexcept
+		{
+			if (lastEventMs <= 0)
+			{
+				return true;
+			}
+
+			return (nowMs - lastEventMs) >= cooldown.count();
+		}
+
 	}
 
 	struct SContentSlot
@@ -109,6 +144,7 @@ namespace ContentsRuntime::Routing
 		Core::FContentId contentId = Core::kInvalidContentId;
 		Core::FContentInstanceId contentInstanceId = Core::kInvalidContentInstanceId;
 		std::unique_ptr<Core::IContent> content;
+		std::unique_ptr<Core::SContentExecutionState> executionState;
 		std::uint32_t workerIndex = 0;
 		Threading::FContentThread* worker = nullptr;
 	};
@@ -197,6 +233,14 @@ namespace ContentsRuntime::Routing
 		SContentSlot slot{};
 		slot.contentId = contentId;
 		slot.contentInstanceId = contentInstanceId;
+		slot.executionState = std::make_unique<Core::SContentExecutionState>();
+		slot.executionState->content = content.get();
+		slot.executionState->contentId = contentId;
+		slot.executionState->contentInstanceId = contentInstanceId;
+		const std::uint32_t targetFps = std::max<std::uint32_t>(1u, content->GetTargetFps());
+		slot.executionState->frameDuration =
+			std::chrono::milliseconds(std::max<std::int64_t>(1, 1000 / static_cast<std::int64_t>(targetFps)));
+		slot.executionState->nextFrameTime = std::chrono::steady_clock::now() + slot.executionState->frameDuration;
 		slot.content = std::move(content);
 		m_impl->contentSlots.emplace(contentInstanceId, std::move(slot));
 		m_impl->defaultInstanceIdsByContentId.try_emplace(contentId, contentInstanceId);
@@ -257,13 +301,18 @@ namespace ContentsRuntime::Routing
 				return lhs->contentInstanceId < rhs->contentInstanceId;
 			});
 
+		const auto now = std::chrono::steady_clock::now();
 		std::uint32_t nextWorkerIndex = 0;
 		for (SContentSlot* slot : orderedSlots)
 		{
 			Threading::FContentThread& worker = *m_impl->workers[nextWorkerIndex];
 			slot->workerIndex = nextWorkerIndex;
 			slot->worker = &worker;
-			worker.RegisterContent(*slot->content);
+			if (slot->executionState != nullptr)
+			{
+				slot->executionState->nextFrameTime = now + slot->executionState->frameDuration;
+				worker.RegisterContent(*slot->executionState);
+			}
 			nextWorkerIndex = (nextWorkerIndex + 1) % workerCount;
 		}
 
@@ -647,6 +696,421 @@ namespace ContentsRuntime::Routing
 	bool FContentRuntime::MoveSessionToInstance(std::uint64_t sessionId, Core::FContentInstanceId targetContentInstanceId)
 	{
 		return MoveSessionToInstanceWithCompletion(sessionId, targetContentInstanceId, {});
+	}
+
+	bool FContentRuntime::HasPendingMoveForContentLocked(const Core::FContentInstanceId contentInstanceId) const
+	{
+		for (const SSessionRoute& route : m_impl->sessionRoutes)
+		{
+			if (route.sessionId == 0 || route.moveState != SSessionRoute::EMoveState::Pending)
+			{
+				continue;
+			}
+
+			if (route.contentInstanceId == contentInstanceId ||
+				route.pendingTargetContentInstanceId == contentInstanceId)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool FContentRuntime::RequestContentInstanceTransfer(
+		const Core::FContentInstanceId contentInstanceId,
+		const std::uint32_t targetWorkerIndex)
+	{
+		const std::int64_t nowMs = CurrentSteadyMilliseconds();
+		std::unique_lock<std::shared_mutex> lock(m_impl->lock);
+		const auto slotIt = m_impl->contentSlots.find(contentInstanceId);
+		if (slotIt == m_impl->contentSlots.end() ||
+			slotIt->second.executionState == nullptr ||
+			targetWorkerIndex >= m_impl->workers.size())
+		{
+			return false;
+		}
+
+		SContentSlot& slot = slotIt->second;
+		if (slot.worker == nullptr || slot.workerIndex == targetWorkerIndex)
+		{
+			return false;
+		}
+
+		Core::SContentExecutionState& executionState = *slot.executionState;
+		if (!IsOwnershipTransferAllowed(m_impl->config, executionState.contentId))
+		{
+			return false;
+		}
+
+		if (HasPendingMoveForContentLocked(contentInstanceId))
+		{
+			return false;
+		}
+
+		const std::int64_t lastRequestMs = executionState.lastTransferRequestMs.load(std::memory_order_relaxed);
+		const std::int64_t lastCommitMs = executionState.lastTransferCommitMs.load(std::memory_order_relaxed);
+		if (!HasCooldownElapsed(nowMs, lastRequestMs, m_impl->config.ownershipTransferRequestCooldown) ||
+			!HasCooldownElapsed(nowMs, lastCommitMs, m_impl->config.ownershipTransferCommitCooldown))
+		{
+			return false;
+		}
+
+		std::uint32_t expectedTargetWorkerIndex = Core::SContentExecutionState::kInvalidWorkerIndex;
+		if (!executionState.requestedTransferTargetWorkerIndex.compare_exchange_strong(
+			expectedTargetWorkerIndex,
+			targetWorkerIndex,
+			std::memory_order_relaxed))
+		{
+			return false;
+		}
+		executionState.lastTransferRequestMs.store(nowMs, std::memory_order_relaxed);
+		executionState.overloadSinceMs.store(0, std::memory_order_relaxed);
+		if (m_impl->config.enableTraceLogging)
+		{
+			std::ostringstream oss;
+			oss << "owner transfer requested. contentInstanceId=" << contentInstanceId
+				<< " sourceWorkerIndex=" << slot.workerIndex
+				<< " targetWorkerIndex=" << targetWorkerIndex;
+			TraceRuntime(m_impl->config, 0, oss.str());
+		}
+		return true;
+	}
+
+	bool FContentRuntime::TryScheduleDelegateTransfer(
+		const Core::FContentInstanceId contentInstanceId,
+		const std::uint32_t sourceWorkerIndex)
+	{
+		std::unique_lock<std::shared_mutex> lock(m_impl->lock);
+		if (!m_impl->config.enableOwnershipTransferPolicy || m_impl->workers.size() <= 1)
+		{
+			return false;
+		}
+
+		const auto slotIt = m_impl->contentSlots.find(contentInstanceId);
+		if (slotIt == m_impl->contentSlots.end() ||
+			slotIt->second.executionState == nullptr ||
+			slotIt->second.worker == nullptr ||
+			slotIt->second.workerIndex != sourceWorkerIndex)
+		{
+			return false;
+		}
+
+		SContentSlot& slot = slotIt->second;
+		Core::SContentExecutionState& executionState = *slot.executionState;
+		if (!IsOwnershipTransferAllowed(m_impl->config, executionState.contentId))
+		{
+			return false;
+		}
+
+		if (executionState.requestedTransferTargetWorkerIndex.load(std::memory_order_relaxed) !=
+			Core::SContentExecutionState::kInvalidWorkerIndex)
+		{
+			return false;
+		}
+
+		if (HasPendingMoveForContentLocked(contentInstanceId))
+		{
+			return false;
+		}
+
+		const std::int64_t nowMs = CurrentSteadyMilliseconds();
+		const std::int64_t lastRequestMs = executionState.lastTransferRequestMs.load(std::memory_order_relaxed);
+		const std::int64_t lastCommitMs = executionState.lastTransferCommitMs.load(std::memory_order_relaxed);
+		if (!HasCooldownElapsed(nowMs, lastRequestMs, m_impl->config.ownershipTransferRequestCooldown) ||
+			!HasCooldownElapsed(nowMs, lastCommitMs, m_impl->config.ownershipTransferCommitCooldown))
+		{
+			return false;
+		}
+
+		const std::uint64_t sourcePendingWorkCount = slot.worker->GetApproxPendingWorkCount();
+		if (sourcePendingWorkCount < m_impl->config.ownershipTransferSourcePendingWorkThreshold)
+		{
+			return false;
+		}
+
+		std::uint32_t targetWorkerIndex = Core::SContentExecutionState::kInvalidWorkerIndex;
+		std::uint64_t targetPendingWorkCount = std::numeric_limits<std::uint64_t>::max();
+		for (std::uint32_t workerIndex = 0; workerIndex < m_impl->workers.size(); ++workerIndex)
+		{
+			if (workerIndex == sourceWorkerIndex || m_impl->workers[workerIndex] == nullptr)
+			{
+				continue;
+			}
+
+			const std::uint64_t pendingWorkCount =
+				m_impl->workers[workerIndex]->GetApproxPendingWorkCount();
+			if (pendingWorkCount < targetPendingWorkCount)
+			{
+				targetPendingWorkCount = pendingWorkCount;
+				targetWorkerIndex = workerIndex;
+			}
+		}
+
+		if (targetWorkerIndex == Core::SContentExecutionState::kInvalidWorkerIndex)
+		{
+			return false;
+		}
+
+		if (sourcePendingWorkCount <=
+			targetPendingWorkCount + m_impl->config.ownershipTransferPendingWorkGapThreshold)
+		{
+			return false;
+		}
+
+		std::uint32_t expectedTargetWorkerIndex = Core::SContentExecutionState::kInvalidWorkerIndex;
+		if (!executionState.requestedTransferTargetWorkerIndex.compare_exchange_strong(
+			expectedTargetWorkerIndex,
+			targetWorkerIndex,
+			std::memory_order_relaxed))
+		{
+			return false;
+		}
+
+		executionState.lastTransferRequestMs.store(nowMs, std::memory_order_relaxed);
+		executionState.overloadSinceMs.store(0, std::memory_order_relaxed);
+		if (m_impl->config.enableTraceLogging)
+		{
+			std::ostringstream oss;
+			oss << "delegate request scheduled. contentInstanceId=" << contentInstanceId
+				<< " sourceWorkerIndex=" << sourceWorkerIndex
+				<< " sourcePendingWorkCount=" << sourcePendingWorkCount
+				<< " targetWorkerIndex=" << targetWorkerIndex
+				<< " targetPendingWorkCount=" << targetPendingWorkCount;
+			TraceRuntime(m_impl->config, 0, oss.str());
+		}
+		return true;
+	}
+
+	bool FContentRuntime::TryScheduleWorkSteal(const std::uint32_t idleWorkerIndex)
+	{
+		std::unique_lock<std::shared_mutex> lock(m_impl->lock);
+		if (!m_impl->config.enableOwnershipTransferPolicy ||
+			m_impl->workers.size() <= 1 ||
+			idleWorkerIndex >= m_impl->workers.size() ||
+			m_impl->workers[idleWorkerIndex] == nullptr)
+		{
+			return false;
+		}
+
+		const std::uint64_t idlePendingWorkCount =
+			m_impl->workers[idleWorkerIndex]->GetApproxPendingWorkCount();
+		if (idlePendingWorkCount != 0)
+		{
+			return false;
+		}
+
+		std::uint32_t sourceWorkerIndex = Core::SContentExecutionState::kInvalidWorkerIndex;
+		std::uint64_t sourcePendingWorkCount = 0;
+		for (std::uint32_t workerIndex = 0; workerIndex < m_impl->workers.size(); ++workerIndex)
+		{
+			if (workerIndex == idleWorkerIndex || m_impl->workers[workerIndex] == nullptr)
+			{
+				continue;
+			}
+
+			const std::uint64_t pendingWorkCount =
+				m_impl->workers[workerIndex]->GetApproxPendingWorkCount();
+			if (pendingWorkCount > sourcePendingWorkCount)
+			{
+				sourcePendingWorkCount = pendingWorkCount;
+				sourceWorkerIndex = workerIndex;
+			}
+		}
+
+		if (sourceWorkerIndex == Core::SContentExecutionState::kInvalidWorkerIndex ||
+			sourcePendingWorkCount < m_impl->config.ownershipTransferSourcePendingWorkThreshold ||
+			sourcePendingWorkCount <=
+				idlePendingWorkCount + m_impl->config.ownershipTransferPendingWorkGapThreshold)
+		{
+			return false;
+		}
+
+		const std::int64_t nowMs = CurrentSteadyMilliseconds();
+		SContentSlot* candidateSlot = nullptr;
+		std::uint64_t candidateQueueDepth = 0;
+		for (auto& [contentInstanceId, slot] : m_impl->contentSlots)
+		{
+			(void)contentInstanceId;
+			if (slot.executionState == nullptr ||
+				slot.worker == nullptr ||
+				slot.workerIndex != sourceWorkerIndex)
+			{
+				continue;
+			}
+
+			Core::SContentExecutionState& executionState = *slot.executionState;
+			if (!IsOwnershipTransferAllowed(m_impl->config, executionState.contentId))
+			{
+				continue;
+			}
+
+			if (executionState.requestedTransferTargetWorkerIndex.load(std::memory_order_relaxed) !=
+				Core::SContentExecutionState::kInvalidWorkerIndex)
+			{
+				continue;
+			}
+
+			if (HasPendingMoveForContentLocked(slot.contentInstanceId))
+			{
+				continue;
+			}
+
+			const std::int64_t lastRequestMs = executionState.lastTransferRequestMs.load(std::memory_order_relaxed);
+			const std::int64_t lastCommitMs = executionState.lastTransferCommitMs.load(std::memory_order_relaxed);
+			if (!HasCooldownElapsed(nowMs, lastRequestMs, m_impl->config.ownershipTransferRequestCooldown) ||
+				!HasCooldownElapsed(nowMs, lastCommitMs, m_impl->config.ownershipTransferCommitCooldown))
+			{
+				continue;
+			}
+
+			const std::uint64_t queueDepth =
+				executionState.enterQueueDepth.load(std::memory_order_relaxed) +
+				executionState.leaveQueueDepth.load(std::memory_order_relaxed) +
+				executionState.packetQueueDepth.load(std::memory_order_relaxed);
+			if (queueDepth < m_impl->config.ownershipTransferContentQueueDepthThreshold)
+			{
+				continue;
+			}
+
+			if (queueDepth > candidateQueueDepth)
+			{
+				candidateQueueDepth = queueDepth;
+				candidateSlot = &slot;
+			}
+		}
+
+		if (candidateSlot == nullptr || candidateSlot->executionState == nullptr)
+		{
+			return false;
+		}
+
+		Core::SContentExecutionState& executionState = *candidateSlot->executionState;
+		std::uint32_t expectedTargetWorkerIndex = Core::SContentExecutionState::kInvalidWorkerIndex;
+		if (!executionState.requestedTransferTargetWorkerIndex.compare_exchange_strong(
+			expectedTargetWorkerIndex,
+			idleWorkerIndex,
+			std::memory_order_relaxed))
+		{
+			return false;
+		}
+
+		executionState.lastTransferRequestMs.store(nowMs, std::memory_order_relaxed);
+		executionState.overloadSinceMs.store(0, std::memory_order_relaxed);
+		if (m_impl->config.enableTraceLogging)
+		{
+			std::ostringstream oss;
+			oss << "work steal request scheduled. contentInstanceId=" << candidateSlot->contentInstanceId
+				<< " sourceWorkerIndex=" << sourceWorkerIndex
+				<< " sourcePendingWorkCount=" << sourcePendingWorkCount
+				<< " targetWorkerIndex=" << idleWorkerIndex
+				<< " candidateQueueDepth=" << candidateQueueDepth;
+			TraceRuntime(m_impl->config, 0, oss.str());
+		}
+		return true;
+	}
+
+	bool FContentRuntime::CommitRequestedTransferAtWorkBoundary(
+		Core::SContentExecutionState& executionState,
+		const std::uint32_t sourceWorkerIndex)
+	{
+		const std::uint32_t targetWorkerIndex =
+			executionState.requestedTransferTargetWorkerIndex.load(std::memory_order_relaxed);
+		if (targetWorkerIndex == Core::SContentExecutionState::kInvalidWorkerIndex)
+		{
+			return false;
+		}
+
+		std::unique_lock<std::shared_mutex> lock(m_impl->lock);
+		const auto slotIt = m_impl->contentSlots.find(executionState.contentInstanceId);
+		if (slotIt == m_impl->contentSlots.end() ||
+			slotIt->second.executionState.get() != &executionState ||
+			targetWorkerIndex >= m_impl->workers.size())
+		{
+			return false;
+		}
+
+		SContentSlot& slot = slotIt->second;
+		Threading::FContentThread* const sourceWorker = slot.worker;
+		Threading::FContentThread* const targetWorker = m_impl->workers[targetWorkerIndex].get();
+		if (sourceWorker == nullptr || targetWorker == nullptr || slot.workerIndex != sourceWorkerIndex)
+		{
+			return false;
+		}
+
+		if (HasPendingMoveForContentLocked(executionState.contentInstanceId))
+		{
+			return false;
+		}
+
+		if (targetWorkerIndex == sourceWorkerIndex)
+		{
+			executionState.requestedTransferTargetWorkerIndex.store(
+				Core::SContentExecutionState::kInvalidWorkerIndex,
+				std::memory_order_relaxed);
+			return false;
+		}
+
+		if (m_impl->config.enableTraceLogging)
+		{
+			std::ostringstream oss;
+			oss << "owner transfer begin. contentInstanceId=" << executionState.contentInstanceId
+				<< " sourceWorkerIndex=" << sourceWorkerIndex
+				<< " targetWorkerIndex=" << targetWorkerIndex;
+			TraceRuntime(m_impl->config, 0, oss.str());
+		}
+
+		if (!sourceWorker->DetachContentForTransfer(executionState))
+		{
+			return false;
+		}
+
+		if (!targetWorker->RegisterContent(executionState))
+		{
+			sourceWorker->RegisterContent(executionState);
+			return false;
+		}
+
+		slot.workerIndex = targetWorkerIndex;
+		slot.worker = targetWorker;
+		executionState.ownerWorkerIndex.store(targetWorkerIndex, std::memory_order_relaxed);
+		executionState.requestedTransferTargetWorkerIndex.store(
+			Core::SContentExecutionState::kInvalidWorkerIndex,
+			std::memory_order_relaxed);
+		executionState.lastTransferCommitMs.store(CurrentSteadyMilliseconds(), std::memory_order_relaxed);
+		executionState.overloadSinceMs.store(0, std::memory_order_relaxed);
+
+		for (SSessionRoute& route : m_impl->sessionRoutes)
+		{
+			if (route.sessionId == 0)
+			{
+				continue;
+			}
+
+			if (route.contentInstanceId == executionState.contentInstanceId)
+			{
+				route.workerIndex = targetWorkerIndex;
+				route.worker = targetWorker;
+			}
+
+			if (route.moveState == SSessionRoute::EMoveState::Pending &&
+				route.pendingTargetContentInstanceId == executionState.contentInstanceId)
+			{
+				route.pendingTargetWorkerIndex = targetWorkerIndex;
+				route.pendingTargetWorker = targetWorker;
+			}
+		}
+
+		if (m_impl->config.enableTraceLogging)
+		{
+			std::ostringstream oss;
+			oss << "owner transfer commit. contentInstanceId=" << executionState.contentInstanceId
+				<< " sourceWorkerIndex=" << sourceWorkerIndex
+				<< " targetWorkerIndex=" << targetWorkerIndex;
+			TraceRuntime(m_impl->config, 0, oss.str());
+		}
+
+		return true;
 	}
 
 	bool FContentRuntime::MoveSessionToInstanceWithCompletion(

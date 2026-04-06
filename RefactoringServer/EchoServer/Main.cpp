@@ -452,6 +452,10 @@ namespace
 		contentRuntimeConfig.raceInjectionPeriod = std::max<std::uint32_t>(1u, configDocument.Debug.ContentsRaceInjectionPeriod);
 		contentRuntimeConfig.raceInjectionMode = ToContentsRaceMode(configDocument.Debug.ContentsRaceInjectionMode);
 		contentRuntimeConfig.failFastOnRuntimeError = configDocument.Debug.ContentsFailFast;
+		contentRuntimeConfig.enableOwnershipTransferPolicy = true;
+		contentRuntimeConfig.ownershipTransferAllowedContentIds = {
+			EchoServer::Contents::kRoomContentId
+		};
 
 		outRequestManualDump = configDocument.Debug.ManualDump;
 		outRunHeadless = configDocument.Debug.Headless;
