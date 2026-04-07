@@ -953,6 +953,10 @@ int main(int argc, char* argv[])
 				<< " wsaRecvTPS=" << wsaRecvTps
 				<< " queuedSendBuffers=" << currentStats.queuedSendBufferCount
 				<< " maxQueuedSendBuffers=" << currentStats.maxObservedQueuedSendBufferCount
+				<< " totalSendRingUsedBytes=" << currentStats.totalSendRingUsedBytes
+				<< " totalSendRingInFlightBytes=" << currentStats.totalSendRingInFlightBytes
+				<< " maxSessionSendRingUsedBytes=" << currentStats.maxCurrentSendRingUsedBytes
+				<< " maxObservedSessionSendRingUsedBytes=" << currentStats.maxObservedSendRingUsedBytes
 				<< " sessionPool=" << currentStats.sessionPoolUsage << "/" << currentStats.sessionPoolCapacity
 				<< " sendBufferPool=" << currentStats.sendBufferPoolUsage << "/" << currentStats.sendBufferPoolCapacity
 				<< " packetBufferPool=" << currentStats.packetBufferPoolUsage << "/" << currentStats.packetBufferPoolCapacity

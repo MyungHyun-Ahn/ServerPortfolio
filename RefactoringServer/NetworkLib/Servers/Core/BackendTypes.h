@@ -62,6 +62,10 @@ namespace NetworkLib::Core
 		std::uint64_t wsaSendCallCount = 0;
 		std::uint64_t queuedSendBufferCount = 0;
 		std::uint64_t maxObservedQueuedSendBufferCount = 0;
+		std::uint64_t totalSendRingUsedBytes = 0;
+		std::uint64_t totalSendRingInFlightBytes = 0;
+		std::uint32_t maxCurrentSendRingUsedBytes = 0;
+		std::uint32_t maxObservedSendRingUsedBytes = 0;
 		std::uint32_t sessionPoolCapacity = 0;
 		std::uint32_t sessionPoolUsage = 0;
 		std::uint32_t sendBufferPoolCapacity = 0;

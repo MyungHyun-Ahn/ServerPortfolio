@@ -78,6 +78,13 @@ function Update-ServerConfigYaml
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "EchoServer" -Key "SocketSendBufferBytes" -Value $SocketSendBufferBytes
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "EchoServer" -Key "LogOutputDirectory" -Value ('"{0}"' -f $LogOutputDirectory.Replace('\', '/'))
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "Headless" -Value "true"
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "BootstrapTrace" -Value "false"
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "LogPackets" -Value "false"
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "TransitionRaceInjectionEnabled" -Value "false"
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "PostRoomChangeRaceInjectionEnabled" -Value "false"
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "FirstEchoRaceInjectionEnabled" -Value "false"
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "ContentsRaceInjectionEnabled" -Value "false"
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "DelegateTestEnabled" -Value "false"
     return $yaml
 }
 
@@ -104,6 +111,7 @@ function Update-ClientConfigYaml
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "RecvTimeoutMs" -Value $RecvTimeoutMs
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "RoomListRecvTimeoutMs" -Value $RoomListRecvTimeoutMs
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "EchoRecvTimeoutMs" -Value $EchoRecvTimeoutMs
+    $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "BootstrapTrace" -Value "false"
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "RttFlushIntervalSeconds" -Value $RttFlushIntervalSeconds
     $yaml = Set-YamlScalarValue -Content $yaml -SectionName "Debug" -Key "RttCsvPath" -Value ("'{0}'" -f $RttCsvPath.Replace('\', '/'))
     return $yaml
@@ -249,7 +257,7 @@ else
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $labelSuffix = if ([string]::IsNullOrWhiteSpace($OutputLabel)) { "" } else { "_$OutputLabel" }
-$sequenceDirectory = Join-Path $outDirectory ("sndbuf_ab_1h_{0}{1}" -f $timestamp, $labelSuffix)
+$sequenceDirectory = Join-Path $outDirectory ("sndbuf_ab_{0}s_{1}{2}" -f $HoldSeconds, $timestamp, $labelSuffix)
 New-Item -ItemType Directory -Force -Path $sequenceDirectory | Out-Null
 
 $summaryRows = New-Object System.Collections.Generic.List[psobject]

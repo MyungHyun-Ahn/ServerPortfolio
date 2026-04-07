@@ -52,3 +52,9 @@
 - packet/config 스키마를 한 번에 갱신할 때 사용:
   - [Generate-Codegen.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Codegen.ps1)
   - [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Codegen.cmd)
+
+## 7. NetworkLib Performance 추가 문서
+- [016_rio-direct-ring-observability.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\007_networklib-performance\016_rio-direct-ring-observability.md)
+  - `RIO Direct` send ring 사용량 통계와 stall 해석 지표 추가 계획
+- [017_rio-direct-failure-path-lock-scope.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\007_networklib-performance\017_rio-direct-failure-path-lock-scope.md)
+  - `RIO Direct` 비정상 경로에서 lock 범위를 줄이는 정리 계획

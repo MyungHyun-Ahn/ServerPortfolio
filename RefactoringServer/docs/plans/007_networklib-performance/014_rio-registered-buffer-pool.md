@@ -1,270 +1,113 @@
 # RIO Registered Buffer Pool 전환 계획
 
 ## 1. 목적
-- 현재 `FRioServer` send path는 패킷마다 `RIORegisterBuffer -> RIOSend -> RIODeregisterBuffer`를 수행한다.
-- 이를 `공용 offset 기반 send segment pool` 구조로 바꾸고, `RIO`일 때만 region에 register metadata를 붙이는 방향으로 전환한다.
-- 목표는 `RIO` send hot path의 등록/해제 오버헤드를 제거하고, 장기적으로 `IOCP`와 `RIO`가 같은 send memory 모델을 공유하게 만드는 것이다.
+- 현재 `RIO` send 경로의 `per-send register/deregister`를 제거한다.
+- 가능한 범위에서 backend 간 send memory 모델을 정리한다.
+- 장기적으로 `RIO`에서는 이 registered memory를 `session-local send ring`의 backing store로 사용한다.
 
 ## 2. 현재 상태
-### 2-1. recv
-- recv는 세션 생성 시 staging buffer를 `RIORegisterBuffer` 한 번만 수행하고 재사용한다.
-- 즉 recv 쪽은 이미 `pre-registered buffer` 구조에 가깝다.
+- `recv`는 세션 생성 시 staging buffer를 한 번 register하고 재사용하는 구조다.
+- `send`는 기존에 요청마다 `RIORegisterBuffer -> RIOSend -> RIODeregisterBuffer`를 수행하는 구조였다.
+- 현재 send segment pool 도입으로 이 hot path 등록/해제 비용은 많이 줄었지만, 최종 형태는 아직 아니다.
 
-### 2-2. send
-- send는 현재 요청마다 `FPacketBuffer` 메모리를 직접 `RIORegisterBuffer` 한다.
-- send completion 시 `RIODeregisterBuffer`를 수행한다.
-- 즉 현재 send는 `registered buffer pool`이 아니라 `per-send register/deregister` 구조다.
+## 3. 수정된 방향
 
-### 2-3. 현재 문제
-- `RIORegisterBuffer / RIODeregisterBuffer` 호출이 send hot path에 들어간다.
-- 작은 payload가 자주 나갈수록 등록/해제 오버헤드 비중이 커진다.
-- 현재 `FPacketBuffer`, `FSendBuffer`의 page reuse는 `std::vector` capacity 재사용일 뿐, offset 기반 slice allocator는 아니다.
-
-## 3. 목표 구조
-- 공용 send memory pool은 `64 KiB 고정 region`을 여러 개 들고 있는 `offset 기반 segment pool`로 만든다.
-- 각 region은 같은 버킷의 고정 크기 slot으로 나뉜다.
-- `IOCP`
-  - 공용 pool에서 받은 slice를 그대로 `WSABUF`로 사용한다.
-- `RIO`
-  - 같은 region을 미리 `RIORegisterBuffer` 하고, send 시 `BufferId + Offset + Length`만 사용한다.
-- send completion이 오면 slice를 pool에 반환한다.
-- 즉 `메모리 풀은 공용`, `RIO register metadata는 backend 전용`으로 분리한다.
-
-## 4. 설계 방향
-### 4-1. 공용 구성요소
-- 새 구성요소 예시:
-  - `FSendSegmentPool`
-  - `FSendSegmentRegion`
-  - `FSendSegmentSlice`
-  - `FRioRegisteredRegionMetadata`
-- region 공통 메타:
-  - `char* base`
-  - `std::size_t capacity`
-  - `bucketClass`
-  - `slotSize`
-  - `slotCount`
-- `RIO` backend인 경우에만 region마다
-  - `RIO_BUFFERID bufferId`
-를 추가로 가진다.
-
-### 4-2. send slice 단위
-- send 1건은 region 전체를 쓰지 않고 `slice` 하나만 점유한다.
-- `IOCP`
-  - `WSABUF.buf = region.base + slice.offset`
-  - `WSABUF.len = actual length`
-- `RIO`
-  - `RIO_BUF.BufferId = region.bufferId`
-  - `RIO_BUF.Offset = slice.offset`
-  - `RIO_BUF.Length = actual length`
-로 구성한다.
-
-### 4-3. 복사 전략
-- 현재 `FPacketBuffer` payload는 일반 메모리에 있으므로, send slice로 1회 복사해야 한다.
-- 1차 구조는
-  - `PacketBuffer -> Send Segment Slice` 1회 복사
-  - backend별 send submit
-로 간다.
-- 1차 목표는 `register/deregister 제거`와 `공용 send memory 모델` 도입이다.
-- `copy elimination`은 후속 최적화로 본다.
-
-### 4-4. owner-thread / direct 공용화
-- `RioSendDispatchMode: Direct | OwnerThread` 여부와 무관하게 실제 submit 경로는 동일한 slice 기반 send 함수를 사용한다.
-- 차이는 `누가 submit을 호출하느냐`만 다르게 둔다.
-- 장기적으로 `IOCP`도 같은 공용 send segment pool을 사용하도록 맞춘다.
-
-## 5. 세부 구조
-### 5-1. region 크기
-- region/page 크기는 `64 KiB`로 고정한다.
-- 이유:
-  - region lifetime 관리가 단순하다.
-  - bucket별 slot 개수 계산이 쉽다.
-  - RIO register metadata 추적이 단순하다.
-  - 디버깅과 통계 수집이 쉽다.
-
-### 5-2. slot allocator
-- `고정 크기 slot allocator`를 채택한다.
-- 가변 allocator는 1차에서 도입하지 않는다.
-- size bucket 예시:
+### 3-1. RIO 최종형은 packet-size bucket allocator가 아니다
+- `RIO`가 최종적으로 `session-local send ring`으로 가면
   - `256`
   - `512`
   - `1024`
   - `2048`
   - `4096`
   - `8192`
-- 각 bucket은 자기 전용 `64 KiB region`들을 가진다.
-- 각 region은 같은 size class slot만 포함한다.
-- 예:
-  - `256B bucket`의 `64 KiB region`은 `256`개 slot
-  - `1024B bucket`의 `64 KiB region`은 `64`개 slot
-  - `4096B bucket`의 `64 KiB region`은 `16`개 slot
+같은 packet-size bucket은 `RIO` steady-state send path의 핵심 추상화가 아니다.
+- 핵심은:
+  - 세션마다 고정 크기의 registered region 하나를 갖고
+  - 그 영역을 contiguous ring buffer처럼 쓰는 구조다.
 
-### 5-3. contention 완화
-- 1차는 `TLS 메모리 풀처럼 버킷 기반`으로 간다.
-- 핵심은 `같은 bucket 안에서만 alloc/free`가 일어나게 하는 것이다.
-- 1차 구조:
-  - bucket별 free-list
-  - bucket별 region 목록
-  - bucket별 thread-safe alloc/free
-- 즉 `global pool + per-region lock`이 아니라, `bucket 중심 구조`를 기본으로 둔다.
-- `worker-local free list`는 2차 최적화로 보류한다.
-- 이유:
-  - completion이 다른 worker에서 올 수 있으므로, 1차는 remote free correctness를 먼저 단순하게 보장해야 한다.
-  - 따라서 1차는 `bucket별 global free-list` 또는 `bucket별 striped free-list`를 사용한다.
-- 같은 bucket이라면 다른 free-list로 반환돼도 correctness상 문제 없도록 설계한다.
+### 3-2. bucket 기반이 남는 곳
+- packet-size bucket은 여전히 다음 용도로는 의미가 있다.
+  - `IOCP` send segment allocation
+  - 공용 fallback send memory
+  - oversized packet fallback
+- 하지만 `RIO` session send ring 자체에는 필수 요소가 아니다.
 
-### 5-4. send request context
-- 현재 `SSendRequestContext`는 `packetBuffer`, `bufferId`, `RIO_BUF`를 가진다.
-- 전환 후에는
-  - `packetBuffer`
-  - `bucketClass`
-  - `regionIndex`
-  - `slotIndex`
-  - `sliceOffset`
-  - backend별 send view(`WSABUF` 또는 `RIO_BUF`)
-를 들고 completion 시 slice를 반환한다.
-- `RIO` completion에서는 `RIODeregisterBuffer`를 더 이상 호출하지 않는다.
+## 4. 목표 구조
 
-## 6. API / 설정 계획
-### 6-1. 설정
-- 예시:
-  - `UseSendSegmentPool: true | false`
-  - `SendSegmentRegionSizeBytes = 65536`
-  - `SendSegmentRegionCountPerBucket`
-  - `SendSegmentBucketClassBytes`
-  - `RioRegisterSendSegments: true | false`
+### 4-1. 세션별 registered ring region
+- 각 `RIO` 세션은 고정 크기의 registered send region 하나를 가진다.
+- 기본 크기는 `64 KiB`로 둔다.
+- 이 region을 ring buffer처럼 사용한다.
+- 패킷은 offset을 계산해서 그 ring에 append된다.
+- flush 시에는 이 ring 내부의 contiguous 구간 하나를 `RIO_BUF`로 만들어 보낸다.
 
-### 6-2. rollout
-- 1차는 기존 경로를 남겨둔다.
-- 설정 또는 내부 enum으로
-  - `LegacyVectorSendBuffer`
-  - `SendSegmentPool`
-를 선택 가능하게 두고 A/B 검증한다.
+### 4-2. register 수명 모델
+- send ring은 `FRioSession` 풀 객체가 생성될 때, 또는 풀 확장 시점에 register한다.
+- 세션이 풀로 돌아갈 때는 deregister하지 않는다.
+- 풀 반환 시에는 다음 상태만 초기화한다.
+  - offset
+  - in-flight 상태
+  - pending flush 상태
+- `RIODeregisterBuffer`는 다음 시점에만 수행한다.
+  - 서버 종료
+  - 또는 미래 단계의 pool shrink / destroy
 
-## 7. PacketGenerator 연계
-### 7-1. 기본 방향
-- bucket 선택 기준은 `최종 encoded size`다.
-- packet schema / generated serializer 단계에서 `최대 encoded size` 규칙을 같이 가져간다.
+즉 register 비용은 steady-state send traffic이 아니라, 풀 확장 횟수에 비례하게 만든다.
 
-### 7-2. packet size 메타 규칙
-- packet 정의 파일에 `PacketSize` 또는 `MaxEncodedSizeBytes`를 명시할 수 있게 한다.
-- packet이 전부 고정 길이 필드로만 구성된 경우:
-  - 사용자가 size를 입력하지 않아도 generator가 자동 계산한다.
-- packet에 가변 길이 필드가 하나라도 포함된 경우:
-  - 예: `string`, `vector`, `bytes`, 가변 배열
-  - 사용자가 최대 size를 명시하지 않으면 generator 단계에서 오류를 발생시킨다.
+### 4-3. backend별 역할
+- `RIO`
+  - 세션별 고정 크기 registered region 사용
+  - `BufferId + Offset + Length`
+  - contiguous flush만 허용
+- `IOCP`
+  - 현재 send 경로를 유지
+  - 필요하면 별도 pooled send buffer 또는 공용 fallback memory를 유지
 
-### 7-3. generator 결과
-- generated packet/type에는 아래 메타를 같이 만든다.
-  - `static constexpr std::size_t kFixedEncodedSizeBytes`
-  - 또는
-  - `static constexpr std::size_t kMaxEncodedSizeBytes`
-- 고정 길이 packet은 `kFixedEncodedSizeBytes == kMaxEncodedSizeBytes`로 취급한다.
-- 가변 길이 packet은 반드시 `kMaxEncodedSizeBytes`가 존재해야 한다.
+## 5. Ring Buffer가 가득 찼을 때 대응
+- ring이 가득 찼다고 해서 in-flight 구간을 덮어쓰거나 두 번째 send를 동시에 걸면 안 된다.
+- 현재 정책은 `64 KiB` ring이 정상 크기 패킷 append를 더 이상 수용하지 못하면 이를 `send stall`로 간주한다.
+- 즉 ring full은 정상적인 backpressure 상황이 아니라 비정상 상황으로 본다.
 
-### 7-4. serializer 단계 검증
-- 검사는 enqueue 직전이 아니라 `serializer/build` 단계에서 수행한다.
-- 흐름:
-1. packet serialize/build
-2. 실제 encoded size 계산
-3. `actualEncodedSize <= kMaxEncodedSizeBytes` 검증
-4. 통과 시 bucket 선택
-- 검증 실패 시:
+처리 규칙:
+1. in-flight 바이트는 절대 overwrite하지 않는다.
+2. 세션당 두 번째 `RIOSend`는 절대 걸지 않는다.
+3. `8 KiB` 이하의 정상 패킷조차 ring에 더 못 들어가면 `send stall`로 판정한다.
+4. `send stall` 발생 시 로그를 남기고 해당 세션을 종료하거나 fail-fast 한다.
+
+즉 1차 구현에서는 retry/backpressure보다 비정상 탐지와 단순한 종료 정책을 우선한다.
+
+## 6. 패킷 크기 정책
+- `RIO` send ring 기준 최대 패킷 크기는 `8 KiB`로 둔다.
+- 이는 `PacketGenerator`의 `MaxEncodedSizeBytes`와 같은 기준으로 맞춘다.
+- `8 KiB`를 넘는 패킷은 정상 범위 밖으로 보고:
   - debug에서는 assert 또는 강한 진단
-  - runtime에서는 로그 + send enqueue 실패 반환
+  - runtime에서는 로그 + send 실패
+로 처리한다.
 
-### 7-5. bucket 선택
-- serializer가 최종 encoded size를 반환하면,
-- send segment pool은 그 값을 기준으로 가장 가까운 상위 bucket을 선택한다.
-- 예:
-  - `180B -> 256B`
-  - `900B -> 1024B`
-  - `3000B -> 4096B`
-- `kMaxEncodedSizeBytes`가 가장 큰 pool bucket보다 크면:
-  - 별도 large packet 정책
-  - 또는 기존 경로 fallback
-중 하나를 선택해야 한다.
+즉 `RIO` steady-state 경로는 다음 두 값을 고정 전제로 둔다.
+- 세션당 send ring: `64 KiB`
+- 최대 패킷 크기: `8 KiB`
 
-## 8. observability
-- 서버 통계에 아래 항목 추가
-  - `sendSegmentRegionCount`
-  - `sendSegmentBytesTotal`
-  - `sendSegmentBytesInUse`
-  - `sendSegmentAllocFailCount`
-  - `sendSegmentFallbackCount`
-  - `sendSegmentPoolUsagePercent`
-  - `rioRegisteredRegionCount`
-- 로그
-  - region 등록 실패
-  - slice 부족
-  - fallback 사용
+## 7. 왜 이 구조가 단순한가
+- `RIO` steady-state send path에서 packet-size bucket lookup이 사라진다.
+- packet마다 slot allocator를 태우지 않아도 된다.
+- 다음 구조와 잘 맞는다.
+  - `OwnerThread` serialize
+  - `Direct` append + 짧은 session lock
+  - 세션당 단일 in-flight send
 
-## 9. 실패 시 동작
-- 1차는 send slice를 못 구하면 두 선택지가 있다.
-1. 기존 `per-send register` 경로로 fallback
-2. send 실패로 처리
+## 8. 실제 의미
+- 이 문서는 이제 단순한 “registered pool” 문서가 아니다.
+- 의미는 다음과 같다.
+  - 단기: 현재 registered send memory 구조를 안정화
+  - 다음 단계: `RIO`를 `session-local fixed-size registered ring`으로 진화
+- 즉 registered buffer pool은 최종 목표가 아니라, ring 설계의 기반 메모리 모델이다.
 
-- 1차 rollout은 fallback을 유지하는 쪽이 안전하다.
-- 이후 안정화되면 fallback 제거 여부를 다시 판단한다.
+## 9. 성공 기준
+- `RIO` steady-state send path에서 per-send register/deregister 제거
+- 세션별 고정 크기 registered ring region 확보
+- 이후 `RIO send hot path reduction` 단계로 자연스럽게 연결
 
-## 10. 구현 단계
-### 10-1. 1단계
-- 공용 `FSendSegmentPool` 추가
-- `64 KiB` region/page allocator 구현
-- bucket별 고정 slot allocator 구현
-- backend 공통 send memory 모델 도입
-- `RIO`일 때만 region allocate + `RIORegisterBuffer`
-
-### 10-2. 2단계
-- send slice allocate / release 구현
-- `SSendRequestContext`를 slice 반환형으로 변경
-- `SubmitSendDirect()`를 `SendSegmentPool` 경로로 연결
-
-### 10-3. 3단계
-- `OwnerThread` 경로도 같은 slice allocator 사용
-- stats/log 추가
-- `IOCP`도 같은 공용 send segment slice를 사용하도록 맞춘다.
-
-### 10-4. 4단계
-- `PacketGenerator` size 메타 추가
-- generator의 자동 계산 / 명시 강제 규칙 추가
-- serializer 단계 size 검증 연결
-
-### 10-5. 5단계
-- A/B 벤치마크
-  - `LegacyVectorSendBuffer`
-  - `SendSegmentPool`
-- 조건:
-  - `Direct`
-  - `OwnerThread`
-  - `interval=0`
-  - `room-change=10%`
-  - 최신 `ContentsRuntime` 기준
-
-## 11. 검증 항목
-- correctness
-  - send 누락 없음
-  - completion 후 slice 이중 반환 없음
-  - session close 중 completion 정리 정상
-  - schema에 가변 길이 필드가 있는데 최대 size 미명시 시 generator가 실패하는지 확인
-  - serializer 단계 size 초과 검증이 정상 동작하는지 확인
-- 안정성
-  - 장시간 soak에서 alloc fail/fallback 패턴 확인
-  - `RIO` region 등록/해제 수명 정상
-  - `IOCP`와 `RIO`가 같은 공용 slice allocator 위에서 정상 동작하는지 확인
-- 성능
-  - `avg sendTPS`
-  - `avg sendBps`
-  - CPU
-  - tail RTT
-
-## 12. 위험 요소
-- 공용 region lifetime 관리가 잘못되면 use-after-free가 된다.
-- slice 재사용 타이밍이 completion보다 빠르면 데이터 오염이 난다.
-- bucket class가 payload 분포와 안 맞으면 내부 낭비가 커질 수 있다.
-- fallback 경로와 pool 경로를 동시에 두는 동안 분기 복잡도가 올라간다.
-- packet schema의 size 메타와 실제 serializer 결과가 어긋나면 false positive / false negative 검사가 생길 수 있다.
-
-## 13. 결론
-- 현재 `RIO` send는 `RegisteredBufferPool` 구조가 아니고, `IOCP`/`RIO` 모두 offset 기반 공용 send memory 모델도 없다.
-- 다음 단계는 `64 KiB region + bucket별 고정 slot allocator` 기반의 공용 `send segment pool`을 도입하고, `RIO`일 때만 해당 region에 register metadata를 붙이는 것이다.
-- 1차 목표는 `공용 offset 기반 send memory 모델 + RIO register/deregister 제거`, 2차 목표는 `bucket contention과 copy 비용 튜닝`이다.
+## 10. 결론
+- 최종 `RIO` send 설계의 핵심은 packet-size bucket allocator가 아니다.
+- 올바른 장기 모델은 `세션마다 고정 크기 registered send ring 하나`를 갖는 구조다.

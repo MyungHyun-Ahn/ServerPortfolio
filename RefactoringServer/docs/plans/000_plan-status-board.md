@@ -53,4 +53,7 @@
   - `IocpSendBuf0`
   - `Rio Direct`
   - `Rio OwnerThread`
+- 다음 작업:
+  - [016_rio-direct-ring-observability.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\007_networklib-performance\016_rio-direct-ring-observability.md)
+  - [017_rio-direct-failure-path-lock-scope.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\007_networklib-performance\017_rio-direct-failure-path-lock-scope.md)
 - 현재 다음 병목은 `RIO send hot path` 오버헤드다.

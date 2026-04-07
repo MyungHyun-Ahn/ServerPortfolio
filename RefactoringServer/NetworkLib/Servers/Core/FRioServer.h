@@ -8,7 +8,6 @@ namespace NetworkLib
 namespace NetworkLib::Packet::Buffer
 {
 	class FPacketBuffer;
-	class FSendBuffer;
 }
 
 namespace NetworkLib::Session
@@ -37,8 +36,6 @@ namespace NetworkLib::Core
 		struct SSendCommand
 		{
 			std::uint64_t sessionId = 0;
-			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer = nullptr;
-			std::int32_t payloadLength = 0;
 		};
 
 		struct SRioWorker
@@ -48,8 +45,8 @@ namespace NetworkLib::Core
 			std::thread thread;
 			std::atomic<std::uint32_t> activeSessionCount = 0;
 			std::atomic<std::uint32_t> maxObservedSendCommandCount = 0;
-			std::mutex sendCommandMutex;
-			std::deque<SSendCommand> sendCommands;
+			std::atomic<std::uint32_t> queuedSendCommandCount = 0;
+			NetworkLib::Containers::FLockFreeQueue<std::uint64_t> sendCommands;
 		};
 
 	private:
@@ -63,16 +60,23 @@ namespace NetworkLib::Core
 		void AcceptLoop();
 		void WorkerLoop(std::uint32_t workerIndex);
 		void DrainSendCommands(std::uint32_t workerIndex);
-		bool SubmitSendDirect(
+		bool DrainOwnerThreadSendQueue(NetworkLib::Session::FRioSession& sessionContext);
+		bool AppendPacketToSendRing(
 			NetworkLib::Session::FRioSession& sessionContext,
+			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer,
 			std::uint64_t sessionId,
-			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer,
-			std::int32_t payloadLength);
+			bool lockSendRing);
+		bool PostSend(
+			NetworkLib::Session::FRioSession& sessionContext,
+			std::uint64_t sessionId);
+		bool SubmitPreparedSend(
+			NetworkLib::Session::FRioSession& sessionContext,
+			std::uint64_t sessionId);
 		bool EnqueueOwnerThreadSend(
+			NetworkLib::Session::FRioSession& sessionContext,
+			NetworkLib::Packet::Buffer::FPacketBuffer* packetBuffer,
 			std::uint64_t sessionId,
-			std::uint32_t ownerWorkerIndex,
-			NetworkLib::Packet::Buffer::FSendBuffer* sendBuffer,
-			std::int32_t payloadLength);
+			std::uint32_t ownerWorkerIndex);
 		bool HasPendingSendCommands(std::uint32_t workerIndex) const;
 		bool AttachAcceptedSocket(SOCKET clientSocket);
 		bool PostRecv(NetworkLib::Session::FRioSession& sessionContext);
