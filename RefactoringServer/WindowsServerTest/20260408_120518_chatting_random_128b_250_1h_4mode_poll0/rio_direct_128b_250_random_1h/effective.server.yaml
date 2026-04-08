@@ -1,0 +1,47 @@
+# Generated from ConfigSchema/Server/ChattingServer.schema.yaml
+# Edit schema defaults and regenerate with Generate-Configs.cmd.
+
+ChattingServer:
+  # Allowed: Iocp, Rio, BoostAsio
+  Backend: Rio
+  # Allowed: Direct, OwnerThread
+  RioSendDispatchMode: Direct
+  BindIp: 127.0.0.1
+  Port: 19100
+  WorkerThreadCount: 4
+  MaxSessionCount: 384
+  RecvBufferSize: 1024
+  SocketSendBufferBytes: -1
+  RioSendRingSizeBytes: 65536
+  # Allowed: Debug, Info, Warn, Error
+  LogMinimumLevel: Info
+  LogOutputDirectory: "C:/Users/psa/Desktop/Test/RefactoringServer/Out/bench/20260408_120518_chatting_random_128b_250_1h_4mode_poll0/rio_direct_128b_250_random_1h/server_logs"
+  LogConsoleEnabled: true
+  LogFileEnabled: true
+  LogIncludeThreadId: true
+  PacketKey: 55
+  EnablePagePool: true
+  PageSize: 4096
+  ContentsWorkerThreadCount: 4
+  RoomCount: 20
+  RoomCapacity: 256
+  MaxChatPayloadBytes: 256
+
+Debug:
+  ManualDump: false
+  Headless: true
+  BootstrapTrace: false
+  TraceUserId: 0
+  LogPackets: false
+  TransitionRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  TransitionRaceInjectionMode: None
+  PostRoomChangeRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  PostRoomChangeRaceInjectionMode: None
+  ContentsRaceInjectionEnabled: false
+  ContentsRaceInjectionPeriod: 100
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  ContentsRaceInjectionMode: None
+  ContentsFailFast: false
+

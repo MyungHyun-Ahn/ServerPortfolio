@@ -1,0 +1,53 @@
+# Generated from ConfigSchema/Server/EchoServer.schema.yaml
+# Package template for Echo RIO cache ping-pong comparison.
+
+EchoServer:
+  # Allowed: Iocp, Rio, BoostAsio
+  Backend: Rio
+  # Allowed: Direct, OwnerThread
+  RioSendDispatchMode: __RIO_SEND_DISPATCH_MODE__
+  BindIp: 127.0.0.1
+  Port: __PORT__
+  WorkerThreadCount: __WORKER_THREAD_COUNT__
+  MaxSessionCount: 512
+  RecvBufferSize: 1024
+  SocketSendBufferBytes: 0
+  # Allowed: Debug, Info, Warn, Error
+  LogMinimumLevel: Info
+  LogOutputDirectory: "__LOG_OUTPUT_DIRECTORY__"
+  LogConsoleEnabled: true
+  LogFileEnabled: true
+  LogIncludeThreadId: true
+  PacketKey: 55
+  EnablePagePool: true
+  PageSize: 4096
+  ContentsWorkerThreadCount: __WORKER_THREAD_COUNT__
+  SendThreadCount: 1
+  ResponsesPerThread: 1
+  RoomCount: __ROOM_COUNT__
+  RoomCapacity: __ROOM_CAPACITY__
+
+Debug:
+  ManualDump: false
+  Headless: true
+  BootstrapTrace: false
+  TraceUserId: 0
+  LogPackets: false
+  TransitionRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  TransitionRaceInjectionMode: None
+  PostRoomChangeRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  PostRoomChangeRaceInjectionMode: None
+  FirstEchoRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  FirstEchoRaceInjectionMode: None
+  ContentsRaceInjectionEnabled: false
+  ContentsRaceInjectionPeriod: 100
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  ContentsRaceInjectionMode: None
+  ContentsFailFast: false
+  DelegateTestEnabled: false
+  DelegateTestTargetRoomId: 77
+  DelegateTestSleepMs: 15
+  DelegateTestSleepEveryNFrames: 1
