@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Generated/Packets/Chat/ChatPacketHandler.h"
+#include "Generated/Packets/Chatting/ChattingPacketHandler.h"
 #include "Generated/Packets/Echo/EchoPacketHandler.h"
 #include "Generated/Packets/Login/LoginPacketHandler.h"
 #include "Packet/View/FPacketView.h"
@@ -16,6 +17,11 @@ namespace Generated
 		void SetChatHandler(Chat::IChatPacketDispatcher* handler) noexcept
 		{
 			m_chatHandler = handler;
+		}
+
+		void SetChattingHandler(Chatting::IChattingPacketDispatcher* handler) noexcept
+		{
+			m_chattingHandler = handler;
 		}
 
 		void SetEchoHandler(Echo::IEchoPacketDispatcher* handler) noexcept
@@ -44,6 +50,20 @@ namespace Generated
 				return m_chatHandler != nullptr ? m_chatHandler->DispatchPacket(server, sessionId, packetView) : false;
 			case Chat::FRoomChangeRp::kOpcode:
 				return m_chatHandler != nullptr ? m_chatHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chatting::FRoomListRq::kOpcode:
+				return m_chattingHandler != nullptr ? m_chattingHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chatting::FRoomListRp::kOpcode:
+				return m_chattingHandler != nullptr ? m_chattingHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chatting::FRoomChangeRq::kOpcode:
+				return m_chattingHandler != nullptr ? m_chattingHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chatting::FRoomChangeRp::kOpcode:
+				return m_chattingHandler != nullptr ? m_chattingHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chatting::FChattingRq::kOpcode:
+				return m_chattingHandler != nullptr ? m_chattingHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chatting::FChattingRp::kOpcode:
+				return m_chattingHandler != nullptr ? m_chattingHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Chatting::FBroadcast::kOpcode:
+				return m_chattingHandler != nullptr ? m_chattingHandler->DispatchPacket(server, sessionId, packetView) : false;
 			case Echo::FEchoRq::kOpcode:
 				return m_echoHandler != nullptr ? m_echoHandler->DispatchPacket(server, sessionId, packetView) : false;
 			case Echo::FEchoRp::kOpcode:
@@ -61,6 +81,7 @@ namespace Generated
 
 	private:
 		Chat::IChatPacketDispatcher* m_chatHandler = nullptr;
+		Chatting::IChattingPacketDispatcher* m_chattingHandler = nullptr;
 		Echo::IEchoPacketDispatcher* m_echoHandler = nullptr;
 		Login::ILoginPacketDispatcher* m_loginHandler = nullptr;
 	};

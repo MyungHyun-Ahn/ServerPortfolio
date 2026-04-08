@@ -127,6 +127,7 @@ internal static class PacketSchemaSetValidator
                 ValidateEndpointOpcode(message.Rq, document.Content, message.Name, "Rq", usedOpcodes);
                 ValidateEndpointOpcode(message.Rp, document.Content, message.Name, "Rp", usedOpcodes);
                 ValidateEndpointOpcode(message.Noti, document.Content, message.Name, "Noti", usedOpcodes);
+                ValidateEndpointOpcode(message.Broadcast, document.Content, message.Name, "Broadcast", usedOpcodes);
             }
         }
     }
@@ -161,6 +162,8 @@ internal sealed class PacketSchemaMessage
     public PacketSchemaEndpoint? Rp { get; set; }
 
     public PacketSchemaEndpoint? Noti { get; set; }
+
+    public PacketSchemaEndpoint? Broadcast { get; set; }
 }
 
 internal sealed class PacketSchemaEndpoint
@@ -201,19 +204,27 @@ internal static class PacketSchemaValidator
 
             bool hasRq = message.Rq != null;
             bool hasRp = message.Rp != null;
+            bool hasNoti = message.Noti != null;
+            bool hasBroadcast = message.Broadcast != null;
             if (hasRq != hasRp)
             {
                 throw new InvalidOperationException($"Message '{message.Name}' must define both Rq and Rp together: {schemaPath}");
             }
 
-            if (!hasRq && message.Noti == null)
+            if (!hasRq && !hasNoti && !hasBroadcast)
             {
-                throw new InvalidOperationException($"Message '{message.Name}' must define either Rq/Rp pair or Noti: {schemaPath}");
+                throw new InvalidOperationException($"Message '{message.Name}' must define either Rq/Rp pair, Noti, or Broadcast: {schemaPath}");
+            }
+
+            if (hasNoti && hasBroadcast)
+            {
+                throw new InvalidOperationException($"Message '{message.Name}' cannot define both Noti and Broadcast: {schemaPath}");
             }
 
             ValidateEndpoint(message.Rq, "Rq", message.Name, usedOpcodes, schemaPath);
             ValidateEndpoint(message.Rp, "Rp", message.Name, usedOpcodes, schemaPath);
             ValidateEndpoint(message.Noti, "Noti", message.Name, usedOpcodes, schemaPath);
+            ValidateEndpoint(message.Broadcast, "Broadcast", message.Name, usedOpcodes, schemaPath);
         }
     }
 
@@ -481,6 +492,7 @@ internal static class CppPacketGenerator
             AppendPacketClass(builder, message.Name, "Rq", message.Rq);
             AppendPacketClass(builder, message.Name, "Rp", message.Rp);
             AppendPacketClass(builder, message.Name, "Noti", message.Noti);
+            AppendPacketClass(builder, message.Name, "Broadcast", message.Broadcast);
         }
 
         builder.AppendLine("}");
@@ -512,6 +524,7 @@ internal static class CppPacketGenerator
             AppendHandlerDeclaration(builder, message.Name, "Rq", message.Rq);
             AppendHandlerDeclaration(builder, message.Name, "Rp", message.Rp);
             AppendHandlerDeclaration(builder, message.Name, "Noti", message.Noti);
+            AppendHandlerDeclaration(builder, message.Name, "Broadcast", message.Broadcast);
         }
 
         builder.AppendLine("\t};");
@@ -536,6 +549,7 @@ internal static class CppPacketGenerator
             AppendDispatchCase(builder, message.Name, "Rq", message.Rq);
             AppendDispatchCase(builder, message.Name, "Rp", message.Rp);
             AppendDispatchCase(builder, message.Name, "Noti", message.Noti);
+            AppendDispatchCase(builder, message.Name, "Broadcast", message.Broadcast);
         }
 
         builder.AppendLine("\t\t\tdefault:");
@@ -549,6 +563,7 @@ internal static class CppPacketGenerator
             AppendNoOpHandler(builder, message.Name, "Rq", message.Rq);
             AppendNoOpHandler(builder, message.Name, "Rp", message.Rp);
             AppendNoOpHandler(builder, message.Name, "Noti", message.Noti);
+            AppendNoOpHandler(builder, message.Name, "Broadcast", message.Broadcast);
         }
 
         builder.AppendLine("\tprotected:");
@@ -632,7 +647,7 @@ internal static class CppPacketGenerator
             return;
         }
 
-        string className = $"F{messageName}{kindSuffix}";
+        string className = BuildClassName(messageName, kindSuffix);
         bool containsBorrowedViews = EndpointContainsBorrowedViews(endpoint);
         builder.AppendLine($"\tclass {className} final : public NetworkLib::Packet::Serialization::IContentPacket");
         builder.AppendLine("\t{");
@@ -768,8 +783,9 @@ internal static class CppPacketGenerator
             return;
         }
 
-        string className = $"F{messageName}{kindSuffix}";
-        builder.AppendLine($"\t\tvirtual bool Handle{messageName}{kindSuffix}(NetworkLib::IServer& server, std::uint64_t sessionId, const {className}& packet) = 0;");
+        string className = BuildClassName(messageName, kindSuffix);
+        string handlerMethodName = BuildHandlerMethodName(messageName, kindSuffix);
+        builder.AppendLine($"\t\tvirtual bool {handlerMethodName}(NetworkLib::IServer& server, std::uint64_t sessionId, const {className}& packet) = 0;");
     }
 
     private static void AppendNoOpHandler(StringBuilder builder, string messageName, string kindSuffix, PacketSchemaEndpoint? endpoint)
@@ -779,8 +795,9 @@ internal static class CppPacketGenerator
             return;
         }
 
-        string className = $"F{messageName}{kindSuffix}";
-        builder.AppendLine($"\t\tbool Handle{messageName}{kindSuffix}(NetworkLib::IServer&, std::uint64_t, const {className}&) override");
+        string className = BuildClassName(messageName, kindSuffix);
+        string handlerMethodName = BuildHandlerMethodName(messageName, kindSuffix);
+        builder.AppendLine($"\t\tbool {handlerMethodName}(NetworkLib::IServer&, std::uint64_t, const {className}&) override");
         builder.AppendLine("\t\t{");
         builder.AppendLine("\t\t\treturn false;");
         builder.AppendLine("\t\t}");
@@ -794,7 +811,8 @@ internal static class CppPacketGenerator
             return;
         }
 
-        string className = $"F{messageName}{kindSuffix}";
+        string className = BuildClassName(messageName, kindSuffix);
+        string handlerMethodName = BuildHandlerMethodName(messageName, kindSuffix);
         builder.AppendLine($"\t\t\tcase {className}::kOpcode:");
         builder.AppendLine("\t\t\t\t{");
         builder.AppendLine($"\t\t\t\t\t{className} packet;");
@@ -808,7 +826,7 @@ internal static class CppPacketGenerator
         builder.AppendLine("\t\t\t\t\t\treturn false;");
         builder.AppendLine("\t\t\t\t\t}");
         builder.AppendLine();
-        builder.AppendLine($"\t\t\t\t\treturn Handle{messageName}{kindSuffix}(server, sessionId, packet);");
+        builder.AppendLine($"\t\t\t\t\treturn {handlerMethodName}(server, sessionId, packet);");
         builder.AppendLine("\t\t\t\t}");
     }
 
@@ -817,9 +835,10 @@ internal static class CppPacketGenerator
         string memberName = $"m_{ToMemberName(document.Content)}Handler";
         foreach (PacketSchemaMessage message in document.Messages)
         {
-            AppendRouterDispatchCase(builder, $"{document.Content}::F{message.Name}Rq", message.Rq, memberName);
-            AppendRouterDispatchCase(builder, $"{document.Content}::F{message.Name}Rp", message.Rp, memberName);
-            AppendRouterDispatchCase(builder, $"{document.Content}::F{message.Name}Noti", message.Noti, memberName);
+            AppendRouterDispatchCase(builder, BuildQualifiedClassName(document.Content, message.Name, "Rq"), message.Rq, memberName);
+            AppendRouterDispatchCase(builder, BuildQualifiedClassName(document.Content, message.Name, "Rp"), message.Rp, memberName);
+            AppendRouterDispatchCase(builder, BuildQualifiedClassName(document.Content, message.Name, "Noti"), message.Noti, memberName);
+            AppendRouterDispatchCase(builder, BuildQualifiedClassName(document.Content, message.Name, "Broadcast"), message.Broadcast, memberName);
         }
     }
 
@@ -842,6 +861,29 @@ internal static class CppPacketGenerator
         }
 
         return char.ToLowerInvariant(contentName[0]) + contentName[1..];
+    }
+
+    private static string BuildClassName(string messageName, string kindSuffix)
+    {
+        return kindSuffix switch
+        {
+            "Broadcast" => $"F{messageName}",
+            _ => $"F{messageName}{kindSuffix}"
+        };
+    }
+
+    private static string BuildQualifiedClassName(string contentName, string messageName, string kindSuffix)
+    {
+        return $"{contentName}::{BuildClassName(messageName, kindSuffix)}";
+    }
+
+    private static string BuildHandlerMethodName(string messageName, string kindSuffix)
+    {
+        return kindSuffix switch
+        {
+            "Broadcast" => $"Handle{messageName}",
+            _ => $"Handle{messageName}{kindSuffix}"
+        };
     }
 
     private static bool EndpointContainsBorrowedViews(PacketSchemaEndpoint endpoint)
