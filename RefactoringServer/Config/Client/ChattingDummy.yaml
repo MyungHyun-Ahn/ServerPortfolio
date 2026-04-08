@@ -12,6 +12,7 @@ ChattingDummy:
   RunSeconds: 60
   SendIntervalMs: 1000
   PayloadSizeBytes: 1024
+  HiMode: false
   # Allowed: Random, RoundRobin, Hotspot
   RoomSelectionMode: Random
   HotspotRoomIds: 77

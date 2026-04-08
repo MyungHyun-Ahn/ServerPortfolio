@@ -58,6 +58,7 @@ namespace
 		int runSeconds = 60;
 		int sendIntervalMs = 1000;
 		int payloadSizeBytes = 1024;
+		bool hiMode = false;
 		Generated::Config::ChattingDummy::ERoomSelectionMode roomSelectionMode =
 			Generated::Config::ChattingDummy::ERoomSelectionMode::Random;
 		std::vector<std::uint32_t> hotspotRoomIds;
@@ -233,6 +234,7 @@ namespace
 		outOptions.runSeconds = std::max(1, configDocument.ChattingDummy.RunSeconds);
 		outOptions.sendIntervalMs = std::max(0, configDocument.ChattingDummy.SendIntervalMs);
 		outOptions.payloadSizeBytes = std::max(1, configDocument.ChattingDummy.PayloadSizeBytes);
+		outOptions.hiMode = configDocument.ChattingDummy.HiMode;
 		outOptions.roomSelectionMode = configDocument.ChattingDummy.RoomSelectionMode;
 		outOptions.hotspotRoomIds = ParseRoomIdCsv(configDocument.ChattingDummy.HotspotRoomIds);
 		outOptions.hotspotBiasPercent = std::clamp(configDocument.ChattingDummy.HotspotBiasPercent, 0, 100);
@@ -279,8 +281,13 @@ namespace
 		return config;
 	}
 
-	std::vector<std::uint8_t> BuildPayloadPattern(const int payloadSizeBytes)
+	std::vector<std::uint8_t> BuildPayloadPattern(const int payloadSizeBytes, const bool hiMode)
 	{
+		if (hiMode)
+		{
+			return { static_cast<std::uint8_t>('h'), static_cast<std::uint8_t>('i') };
+		}
+
 		std::vector<std::uint8_t> payload(static_cast<std::size_t>(std::max(1, payloadSizeBytes)));
 		for (std::size_t index = 0; index < payload.size(); ++index)
 		{
@@ -419,7 +426,7 @@ namespace
 		: m_options(options)
 		, m_rttMetricsRuntime(rttMetricsRuntime)
 		, m_clientNetwork(BuildClientNetworkConfig(options))
-		, m_payloadPattern(BuildPayloadPattern(options.payloadSizeBytes))
+		, m_payloadPattern(BuildPayloadPattern(options.payloadSizeBytes, options.hiMode))
 	{
 		m_slots.reserve(static_cast<std::size_t>(std::max(1, options.sessionCount)));
 		for (int sessionIndex = 0; sessionIndex < std::max(1, options.sessionCount); ++sessionIndex)

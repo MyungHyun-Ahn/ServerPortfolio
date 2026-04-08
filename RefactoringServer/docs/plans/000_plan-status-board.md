@@ -22,19 +22,23 @@
 | `009` | ChattingServer | In Progress | `ChattingServer` packet/flow 계약, `ClientNetworkLib`, `ChattingDummyClient` 1차 구현 완료. 다음은 반복 실험 자동화를 위한 `011_benchmark_runner` 연결 |
 | `010` | WorldServer | Needs Follow-up | cell 기반 월드와 task graph는 별도 우선순위 과제로 분리 |
 | `011` | BenchmarkRunner | Needs Follow-up | `PowerShell + YAML manifest` 기반 범용 벤치마크 실행기 추가 예정. 1차는 `ChattingScenario`부터 시작 |
+| `012` | Login Platform / WinForms Prototype | In Progress | `ChattingClientWinForms` 1차 프로토타입 추가 완료. 현재는 permissive login + mock register 기준이며, 다음은 `Node.js LoginServer + Redis + MySQL` 연동 |
 
 ## 3. 현재 우선순위
-1. `007_networklib-performance`
-   - `RIO send hot path` 오버헤드 감소
-   - `SSendRequestContext`, `RIOSend` batching, submit lock 정리
+1. `012_login-platform`
+   - `C# WinForms` 로그인/회원가입/룸 선택/채팅 프로토타입 후속 안정화
+   - 2차는 `Node.js + Redis + MySQL` 외부 인증 연동
 2. `009_chatting_server`
-   - `ChattingServer` packet/flow 계약 정리
-   - `ClientNetworkLib`, `ChattingDummyClient` 후속 검증
-   - 큰 패킷 / room fan-out 검증 경로 다듬기
+   - `ChattingServer` packet/flow 계약 유지
+   - `WinForms` 프로토타입이 붙을 수 있도록 packet/로그인 확장 경로 정리
+   - 큰 패킷 / room fan-out 검증 경로는 기존 더미 클라이언트와 병행 유지
 3. `011_benchmark_runner`
    - `PowerShell + YAML manifest` 기반 반복 실행기 추가
    - `ChattingServer / ChattingDummyClient` 시나리오를 범용 runner 구조에 연결
-4. `006_packet-schema-tooling`
+4. `007_networklib-performance`
+   - `RIO send hot path` 오버헤드 감소
+   - `SSendRequestContext`, `RIOSend` batching, submit lock 정리
+5. `006_packet-schema-tooling`
    - `broadcast` packet schema / generator contract 추가
 
 ## 4. ContentsRuntime 메모
@@ -60,5 +64,7 @@
 ## 6. Chatting / BenchmarkRunner 메모
 - `ChattingServer`는 큰 패킷과 room fan-out 비교용 샘플 서버다.
 - `ChattingDummyClient`는 `Login -> RoomList -> RoomChange -> Chatting -> Broadcast 검증` 상태 머신으로 동작한다.
+- 새 사용자용 `C# WinForms ChattingClient` 1차 프로토타입을 추가했고, 초기 로그인/회원가입은 mock 성공 기준으로 동작한다.
+- 외부 인증은 이후 `Node.js LoginServer + Redis chat ticket + MySQL AccountDB` 구조로 분리한다.
 - 다음 단계는 사람 손으로 모드를 바꿔 실행하는 대신, `PowerShell` 기반 범용 `BenchmarkRunner`로 반복 실험을 자동화하는 것이다.
 - `BenchmarkRunner`는 1차로 `ChattingScenario`를 지원하고, 이후 `Echo`와 다른 더미 테스트에도 재사용 가능한 구조를 목표로 한다.

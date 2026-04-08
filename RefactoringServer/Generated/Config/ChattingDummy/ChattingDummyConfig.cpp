@@ -38,7 +38,7 @@ namespace Generated::Config::ChattingDummy
 			return false;
 		}
 
-		constexpr std::array<std::string_view, 20> kChattingDummyKnownKeys =
+		constexpr std::array<std::string_view, 21> kChattingDummyKnownKeys =
 		{
 			"ServerIp",
 			"Port",
@@ -50,6 +50,7 @@ namespace Generated::Config::ChattingDummy
 			"RunSeconds",
 			"SendIntervalMs",
 			"PayloadSizeBytes",
+			"HiMode",
 			"RoomSelectionMode",
 			"HotspotRoomIds",
 			"HotspotBiasPercent",
@@ -113,6 +114,11 @@ namespace Generated::Config::ChattingDummy
 		}
 
 		if (!reader.ReadOptionalInt32("ChattingDummy", "PayloadSizeBytes", outConfig.ChattingDummy.PayloadSizeBytes, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalBool("ChattingDummy", "HiMode", outConfig.ChattingDummy.HiMode, outError))
 		{
 			return false;
 		}

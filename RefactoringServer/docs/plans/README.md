@@ -10,6 +10,7 @@ Scope: Planning history index
 
 ## 1. 현재 대표 계획 문서
 - 전체 우선순위와 진행 상태: [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)
+- `Node.js LoginServer`와 `WinForms` 프로토타입: [001_nodejs-loginserver-and-winforms-chatting-prototype-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\012_login-platform\001_nodejs-loginserver-and-winforms-chatting-prototype-plan.md)
 - `NetworkLib` 성능과 RIO send path: [019_networklib-diagnostics-runtime-architecture.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\007_networklib-performance\019_networklib-diagnostics-runtime-architecture.md)
 - `ContentsRuntime` 현재 구조 축: [012_mailbox-owner-transfer-work-stealing-and-delegate.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime\012_mailbox-owner-transfer-work-stealing-and-delegate.md)
 - `ChattingServer` 패킷/흐름: [002_chattingserver-packet-and-flow-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\009_chatting_server\002_chattingserver-packet-and-flow-plan.md)
@@ -28,6 +29,7 @@ Scope: Planning history index
 - [009_chatting_server](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\009_chatting_server)
 - [010_worldserver](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\010_worldserver)
 - [011_benchmark_runner](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\011_benchmark_runner)
+- [012_login-platform](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\012_login-platform)
 
 ## 3. 사용 원칙
 - 최신 기준은 먼저 `docs/current`에서 확인한다.
