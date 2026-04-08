@@ -22,6 +22,7 @@ Scope: Review history index
 - `Containers`: [004_containers](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\004_containers)
 - `Diagnostics`: [005_diagnostics](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\005_diagnostics)
 - `Logging`: [006_logging](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\006_logging)
+- `LoginServer`: [007_loginserver](/e:/Procademy/myPortfolio/ServerPortfolio/RefactoringServer/docs/reviews/007_loginserver)
 
 ## 3. 사용 원칙
 - 포트폴리오 관점 요약은 먼저 [portfolio/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\portfolio\README.md)에서 본다.

@@ -24,5 +24,6 @@ namespace Connector
 	{
 		SRedisConnectionConfig connection;
 		std::string keyPrefix = "chat:ticket:";
+		std::string activeLoginKeyPrefix = "chat:active-login:";
 	};
 }

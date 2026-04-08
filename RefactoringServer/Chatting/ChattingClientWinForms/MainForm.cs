@@ -606,9 +606,14 @@ internal sealed class MainForm : Form
 
     private void HandleConnectionStateChanged(bool connected)
     {
+        bool wasLoggedIn = m_loginAccepted;
         if (!connected)
         {
             ResetSessionState(clearChatLog: false);
+            if (wasLoggedIn)
+            {
+                AppendSystemMessage("ChattingServer connection closed. If the same account logged in elsewhere, this session may have been replaced.");
+            }
         }
 
         m_connectionStatusValueLabel.Text = connected ? "Connected" : "Disconnected";

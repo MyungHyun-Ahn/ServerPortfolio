@@ -170,6 +170,7 @@ namespace ChattingServer::Contents
 		Connector::SConsumedChatTicket consumedTicket{};
 		std::string authError;
 		bool success = false;
+		std::optional<std::uint64_t> previousSessionId;
 		if (m_chatTicketStore == nullptr)
 		{
 			authError = "chat ticket store is not configured.";
@@ -179,24 +180,49 @@ namespace ChattingServer::Contents
 			success = m_chatTicketStore->TryConsumeChatTicket(requestPacket.ticket, consumedTicket, authError);
 		}
 
-		if (success && consumedTicket.valid && consumedTicket.userId != 0 && m_userRegistry != nullptr)
-		{
-			m_userRegistry->UpsertUser(sessionId, consumedTicket.userId);
-		}
-
 		if (success && (!consumedTicket.valid || consumedTicket.userId == 0))
 		{
 			success = false;
 			authError = "chat ticket payload is invalid.";
 		}
 
+		if (success && m_userRegistry != nullptr)
+		{
+			previousSessionId = m_userRegistry->GetSessionId(consumedTicket.userId);
+		}
+
 		if (success && !bridge.MoveSession(sessionId, kLobbyContentId))
 		{
 			success = false;
 			authError = "move to lobby content failed.";
-			if (m_userRegistry != nullptr)
+		}
+
+		if (success && m_userRegistry != nullptr)
+		{
+			m_userRegistry->UpsertUser(sessionId, consumedTicket.userId);
+		}
+
+		if (success &&
+			previousSessionId.has_value() &&
+			*previousSessionId != sessionId &&
+			bridge.IsSessionAlive(*previousSessionId))
+		{
+			if (!bridge.DisconnectSession(*previousSessionId))
 			{
-				m_userRegistry->RemoveUser(sessionId);
+				std::ostringstream disconnectOss;
+				disconnectOss << "duplicate login disconnect failed. userId=" << consumedTicket.userId
+					<< " previousSessionId=" << *previousSessionId
+					<< " replacementSessionId=" << sessionId;
+				Log(Foundation::ELogLevel::Warn, disconnectOss.str());
+			}
+			else
+			{
+				std::ostringstream disconnectOss;
+				disconnectOss << "duplicate login replaced existing session. userId=" << consumedTicket.userId
+					<< " previousSessionId=" << *previousSessionId
+					<< " replacementSessionId=" << sessionId
+					<< " loginVersion=" << consumedTicket.loginVersion;
+				Log(Foundation::ELogLevel::Info, disconnectOss.str());
 			}
 		}
 
@@ -243,7 +269,8 @@ namespace ChattingServer::Contents
 
 		std::ostringstream oss;
 		oss << "login auth succeeded. sessionId=" << sessionId
-			<< " userId=" << consumedTicket.userId;
+			<< " userId=" << consumedTicket.userId
+			<< " loginVersion=" << consumedTicket.loginVersion;
 		Log(Foundation::ELogLevel::Info, oss.str());
 	}
 

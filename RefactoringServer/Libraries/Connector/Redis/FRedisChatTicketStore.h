@@ -26,6 +26,7 @@ namespace Connector
 	private:
 		bool EnsureConnected(std::string& outError);
 		std::string BuildTicketKey(std::string_view ticket) const;
+		std::string BuildActiveLoginKey(std::uint32_t userId) const;
 
 	private:
 		mutable std::mutex m_mutex;

@@ -10,13 +10,15 @@ export interface IssuedChatTicket {
   chatServer: ChatServerEndpoint;
 }
 
+const kActiveLoginKeyPrefix = "chat:active-login:";
+
 export class ChatTicketService {
   public async issueTicket(account: AuthenticatedAccount): Promise<IssuedChatTicket> {
     const ticket = randomUUID();
     const redisClient = await getRedisClient();
+    const loginVersion = await redisClient.incr(this.buildActiveLoginKey(account.userId));
 
-    // 현재 ChattingServer Redis consume 구현은 value 전체를 userId 문자열로 해석한다.
-    await redisClient.set(this.buildTicketKey(ticket), account.userId.toString(), {
+    await redisClient.set(this.buildTicketKey(ticket), this.buildTicketPayload(account.userId, loginVersion), {
       EX: appEnv.ticket.ttlSeconds,
     });
 
@@ -32,5 +34,13 @@ export class ChatTicketService {
 
   private buildTicketKey(ticket: string): string {
     return `${appEnv.ticket.keyPrefix}${ticket}`;
+  }
+
+  private buildActiveLoginKey(userId: number): string {
+    return `${kActiveLoginKeyPrefix}${userId}`;
+  }
+
+  private buildTicketPayload(userId: number, loginVersion: number): string {
+    return `${userId}:${loginVersion}`;
   }
 }

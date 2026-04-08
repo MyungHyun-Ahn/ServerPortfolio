@@ -9,6 +9,7 @@ namespace Connector
 	struct SConsumedChatTicket
 	{
 		std::uint32_t userId = 0;
+		std::uint64_t loginVersion = 0;
 		bool valid = false;
 	};
 
