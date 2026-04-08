@@ -51,6 +51,12 @@ namespace Generated::Config::ChattingServer
 		Yield
 	};
 
+	enum class ELoginAuthMode
+	{
+		Disabled,
+		Redis
+	};
+
 	struct SChattingServerConfig
 	{
 		EBackend Backend = EBackend::Iocp;
@@ -93,10 +99,22 @@ namespace Generated::Config::ChattingServer
 		bool ContentsFailFast = false;
 	};
 
+	struct SChattingServerLoginAuthConfig
+	{
+		ELoginAuthMode Mode = ELoginAuthMode::Disabled;
+		std::string RedisHost = "127.0.0.1";
+		std::uint16_t RedisPort = static_cast<std::uint16_t>(6379);
+		std::string RedisPassword = "";
+		std::int32_t RedisDatabase = static_cast<std::int32_t>(0);
+		std::uint32_t RedisConnectTimeoutMs = static_cast<std::uint32_t>(3000);
+		std::string RedisKeyPrefix = "chat:ticket:";
+	};
+
 	struct FChattingServerConfigDocument
 	{
 		SChattingServerConfig ChattingServer;
 		SChattingServerDebugConfig Debug;
+		SChattingServerLoginAuthConfig LoginAuth;
 	};
 
 	class FChattingServerConfigLoader

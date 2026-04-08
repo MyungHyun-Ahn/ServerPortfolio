@@ -45,3 +45,13 @@ Debug:
   ContentsRaceInjectionMode: None
   ContentsFailFast: false
 
+LoginAuth:
+  # Allowed: Disabled, Redis
+  Mode: Disabled
+  RedisHost: 127.0.0.1
+  RedisPort: 6379
+  RedisPassword: ""
+  RedisDatabase: 0
+  RedisConnectTimeoutMs: 3000
+  RedisKeyPrefix: "chat:ticket:"
+

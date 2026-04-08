@@ -66,6 +66,14 @@ namespace Generated::Config::ChattingServer
 		}
 	};
 
+	constexpr std::array<Foundation::Config::SConfigEnumValue<ELoginAuthMode>, 2> kLoginAuthModeEnumValues =
+	{
+		{
+			{ "Disabled", ELoginAuthMode::Disabled },
+			{ "Redis", ELoginAuthMode::Redis }
+		}
+	};
+
 	bool FChattingServerConfigLoader::LoadFromFile(const std::filesystem::path& filePath, FChattingServerConfigDocument& outConfig, std::string& outError)
 	{
 		Foundation::Config::SConfigDocument document{};
@@ -76,10 +84,11 @@ namespace Generated::Config::ChattingServer
 
 		Foundation::Config::FConfigValueReader reader(document);
 
-		constexpr std::array<std::string_view, 2> kKnownSections =
+		constexpr std::array<std::string_view, 3> kKnownSections =
 		{
 			"ChattingServer",
-			"Debug"
+			"Debug",
+			"LoginAuth"
 		};
 
 		if (!reader.ValidateKnownSections(kKnownSections, outError))
@@ -135,6 +144,22 @@ namespace Generated::Config::ChattingServer
 		};
 
 		if (!reader.ValidateKnownKeys("Debug", kDebugKnownKeys, outError))
+		{
+			return false;
+		}
+
+		constexpr std::array<std::string_view, 7> kLoginAuthKnownKeys =
+		{
+			"Mode",
+			"RedisHost",
+			"RedisPort",
+			"RedisPassword",
+			"RedisDatabase",
+			"RedisConnectTimeoutMs",
+			"RedisKeyPrefix"
+		};
+
+		if (!reader.ValidateKnownKeys("LoginAuth", kLoginAuthKnownKeys, outError))
 		{
 			return false;
 		}
@@ -305,6 +330,41 @@ namespace Generated::Config::ChattingServer
 		}
 
 		if (!reader.ReadOptionalBool("Debug", "ContentsFailFast", outConfig.Debug.ContentsFailFast, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalEnum("LoginAuth", "Mode", kLoginAuthModeEnumValues, outConfig.LoginAuth.Mode, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalString("LoginAuth", "RedisHost", outConfig.LoginAuth.RedisHost, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalUInt16("LoginAuth", "RedisPort", outConfig.LoginAuth.RedisPort, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalString("LoginAuth", "RedisPassword", outConfig.LoginAuth.RedisPassword, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalInt32("LoginAuth", "RedisDatabase", outConfig.LoginAuth.RedisDatabase, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalUInt32("LoginAuth", "RedisConnectTimeoutMs", outConfig.LoginAuth.RedisConnectTimeoutMs, outError))
+		{
+			return false;
+		}
+
+		if (!reader.ReadOptionalString("LoginAuth", "RedisKeyPrefix", outConfig.LoginAuth.RedisKeyPrefix, outError))
 		{
 			return false;
 		}

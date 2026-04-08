@@ -74,6 +74,10 @@ namespace Generated
 				return m_loginHandler != nullptr ? m_loginHandler->DispatchPacket(server, sessionId, packetView) : false;
 			case Login::FLoginRp::kOpcode:
 				return m_loginHandler != nullptr ? m_loginHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Login::FLoginAuthRq::kOpcode:
+				return m_loginHandler != nullptr ? m_loginHandler->DispatchPacket(server, sessionId, packetView) : false;
+			case Login::FLoginAuthRp::kOpcode:
+				return m_loginHandler != nullptr ? m_loginHandler->DispatchPacket(server, sessionId, packetView) : false;
 			default:
 				return false;
 			}

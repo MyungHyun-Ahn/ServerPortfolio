@@ -53,3 +53,15 @@ Debug:
     default: None
     values: [None, SwitchToThread, Sleep0, Yield]
   ContentsFailFast: { type: bool, default: false }
+
+LoginAuth:
+  Mode:
+    type: enum
+    default: Disabled
+    values: [Disabled, Redis]
+  RedisHost: { type: string, default: 127.0.0.1 }
+  RedisPort: { type: uint16, default: 6379 }
+  RedisPassword: { type: string, default: "" }
+  RedisDatabase: { type: int32, default: 0 }
+  RedisConnectTimeoutMs: { type: uint32, default: 3000 }
+  RedisKeyPrefix: { type: string, default: "chat:ticket:" }

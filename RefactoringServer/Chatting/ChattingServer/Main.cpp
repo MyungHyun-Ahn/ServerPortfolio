@@ -7,6 +7,10 @@
 #include "Foundation/Logging/ILogger.h"
 #include "ContentsRuntime/Core/FContentInstanceIdAllocator.h"
 #include "ContentsRuntime/Routing/FContentRuntime.h"
+#include "Connector/Config/RedisChatTicketStoreTypes.h"
+#include "Connector/Interfaces/IChatTicketStore.h"
+#include "Connector/Redis/FDisabledChatTicketStore.h"
+#include "Connector/Redis/FRedisChatTicketStore.h"
 #include "Crypto/FDefaultPacketCipher.h"
 #include "ChattingServer/Contents/Auth/FAuthContent.h"
 #include "ChattingServer/Contents/ContentTypes.h"
@@ -36,6 +40,18 @@
 
 namespace
 {
+	enum class ELoginAuthMode
+	{
+		Disabled,
+		Redis
+	};
+
+	struct SLoginAuthRuntimeConfig
+	{
+		ELoginAuthMode mode = ELoginAuthMode::Disabled;
+		Connector::SRedisChatTicketStoreConfig redis;
+	};
+
 	bool ShouldTraceSession(
 		const ChattingServer::Contents::SRuntimeOptions& runtimeOptions,
 		const std::uint64_t sessionId) noexcept
@@ -311,6 +327,19 @@ namespace
 		return Foundation::ELogLevel::Info;
 	}
 
+	ELoginAuthMode ToLoginAuthMode(const Generated::Config::ChattingServer::ELoginAuthMode mode) noexcept
+	{
+		switch (mode)
+		{
+		case Generated::Config::ChattingServer::ELoginAuthMode::Disabled:
+			return ELoginAuthMode::Disabled;
+		case Generated::Config::ChattingServer::ELoginAuthMode::Redis:
+			return ELoginAuthMode::Redis;
+		}
+
+		return ELoginAuthMode::Disabled;
+	}
+
 	ChattingServer::Contents::SRuntimeOptions::ETransitionRaceInjectionMode ToTransitionRaceMode(
 		const Generated::Config::ChattingServer::EDebugTransitionRaceInjectionMode raceMode) noexcept
 	{
@@ -372,6 +401,7 @@ namespace
 		std::uint32_t& outPacketKey,
 		bool& outRequestManualDump,
 		bool& outRunHeadless,
+		SLoginAuthRuntimeConfig& outLoginAuthConfig,
 		ChattingServer::Contents::SRuntimeOptions& runtimeOptions,
 		ContentsRuntime::Core::SContentRuntimeConfig& contentRuntimeConfig,
 		std::string& outError)
@@ -448,6 +478,13 @@ namespace
 
 		outRequestManualDump = configDocument.Debug.ManualDump;
 		outRunHeadless = configDocument.Debug.Headless;
+		outLoginAuthConfig.mode = ToLoginAuthMode(configDocument.LoginAuth.Mode);
+		outLoginAuthConfig.redis.connection.host = configDocument.LoginAuth.RedisHost;
+		outLoginAuthConfig.redis.connection.port = configDocument.LoginAuth.RedisPort;
+		outLoginAuthConfig.redis.connection.password = configDocument.LoginAuth.RedisPassword;
+		outLoginAuthConfig.redis.connection.database = configDocument.LoginAuth.RedisDatabase;
+		outLoginAuthConfig.redis.connection.connectTimeoutMs = configDocument.LoginAuth.RedisConnectTimeoutMs;
+		outLoginAuthConfig.redis.keyPrefix = configDocument.LoginAuth.RedisKeyPrefix;
 		return true;
 	}
 
@@ -456,14 +493,17 @@ namespace
 	public:
 		FChattingServerApplication(
 			std::shared_ptr<Foundation::ILogger> logger,
+			SLoginAuthRuntimeConfig loginAuthConfig,
 			ChattingServer::Contents::SRuntimeOptions runtimeOptions,
 			ContentsRuntime::Core::SContentRuntimeConfig contentRuntimeConfig)
 			: m_logger(std::move(logger))
+			, m_loginAuthConfig(std::move(loginAuthConfig))
 			, m_runtimeOptions(runtimeOptions)
 		{
 			m_contentRuntime.SetConfig(contentRuntimeConfig);
 			m_roomRegistry = std::make_shared<ChattingServer::Contents::FRoomRegistry>();
 			m_userRegistry = std::make_shared<ChattingServer::Contents::FUserRegistry>();
+			m_chatTicketStore = CreateChatTicketStore();
 			ContentsRuntime::Core::FContentInstanceIdAllocator contentInstanceIdAllocator;
 			const ContentsRuntime::Core::FContentInstanceId authContentInstanceId =
 				contentInstanceIdAllocator.Allocate(ChattingServer::Contents::kAuthContentId);
@@ -503,6 +543,7 @@ namespace
 					m_logger,
 					authContentInstanceId,
 					m_userRegistry,
+					m_chatTicketStore,
 					m_runtimeOptions));
 			m_contentRuntime.RegisterContent(
 				std::make_unique<ChattingServer::Contents::FLobbyContent>(
@@ -548,6 +589,7 @@ namespace
 
 			if (ShouldTraceSession(m_runtimeOptions, sessionId) &&
 				(packetView.opcode == Generated::Login::FLoginRq::kOpcode ||
+				 packetView.opcode == Generated::Login::FLoginAuthRq::kOpcode ||
 				 packetView.opcode == Generated::Chatting::FRoomListRq::kOpcode ||
 				 packetView.opcode == Generated::Chatting::FRoomChangeRq::kOpcode ||
 				 packetView.opcode == Generated::Chatting::FChattingRq::kOpcode))
@@ -592,6 +634,20 @@ namespace
 		}
 
 	private:
+		std::shared_ptr<Connector::IChatTicketStore> CreateChatTicketStore()
+		{
+			switch (m_loginAuthConfig.mode)
+			{
+			case ELoginAuthMode::Redis:
+				Log(Foundation::ELogLevel::Info, "login auth mode=Redis.");
+				return std::make_shared<Connector::FRedisChatTicketStore>(m_loginAuthConfig.redis);
+			case ELoginAuthMode::Disabled:
+			default:
+				Log(Foundation::ELogLevel::Info, "login auth mode=Disabled.");
+				return std::make_shared<Connector::FDisabledChatTicketStore>();
+			}
+		}
+
 		void Log(Foundation::ELogLevel logLevel, const std::string& message) const
 		{
 			if (m_logger != nullptr)
@@ -604,6 +660,8 @@ namespace
 		std::shared_ptr<Foundation::ILogger> m_logger;
 		std::shared_ptr<ChattingServer::Contents::FRoomRegistry> m_roomRegistry;
 		std::shared_ptr<ChattingServer::Contents::FUserRegistry> m_userRegistry;
+		std::shared_ptr<Connector::IChatTicketStore> m_chatTicketStore;
+		SLoginAuthRuntimeConfig m_loginAuthConfig;
 		ChattingServer::Contents::SRuntimeOptions m_runtimeOptions;
 		ContentsRuntime::Routing::FContentRuntime m_contentRuntime;
 	};
@@ -615,6 +673,7 @@ int main(int argc, char* argv[])
 	std::uint32_t packetKey = 0x37;
 	bool requestManualDump = false;
 	bool runHeadless = false;
+	SLoginAuthRuntimeConfig loginAuthConfig{};
 	ChattingServer::Contents::SRuntimeOptions runtimeOptions{};
 	ContentsRuntime::Core::SContentRuntimeConfig contentRuntimeConfig{};
 	const std::filesystem::path executableDirectory = GetExecutableDirectory();
@@ -635,6 +694,7 @@ int main(int argc, char* argv[])
 			packetKey,
 			requestManualDump,
 			runHeadless,
+			loginAuthConfig,
 			runtimeOptions,
 			contentRuntimeConfig,
 			configErrorMessage))
@@ -865,7 +925,7 @@ int main(int argc, char* argv[])
 		return dumpWritten ? 0 : 1;
 	}
 
-	FChattingServerApplication chattingApplication(compositeLogger, runtimeOptions, contentRuntimeConfig);
+	FChattingServerApplication chattingApplication(compositeLogger, loginAuthConfig, runtimeOptions, contentRuntimeConfig);
 	std::unique_ptr<NetworkLib::IServer> server = NetworkLib::Core::FServerFactory::Create(serverConfig.backendKind);
 	if (server == nullptr)
 	{
