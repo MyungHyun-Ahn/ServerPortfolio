@@ -132,7 +132,7 @@
   - `Models/*.cs`
 
 ### 9.2 Node.js LoginServer
-- `RefactoringServer/Services/LoginServer/`
+- `RefactoringServer/LoginServer/`
   - `package.json`
   - `src/app.ts`
   - `src/routes/auth.ts`
@@ -257,7 +257,7 @@
 9. 최소 예외 처리와 연결 끊김 복구 메시지 추가
 
 ## 16. Node.js LoginServer 구현 순서
-1. `Services/LoginServer` 스캐폴드
+1. `LoginServer` 스캐폴드
 2. `MySQL`, `Redis` 연결 모듈 추가
 3. `register/login` mock API 먼저 추가
 4. `accounts` schema 적용

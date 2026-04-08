@@ -11,6 +11,7 @@
 ## 1. 우선 확인 문서
 - 전체 우선순위와 진행 상태: [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)
 - `Node.js LoginServer`와 `WinForms` 프로토타입: [001_nodejs-loginserver-and-winforms-chatting-prototype-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\012_login-platform\001_nodejs-loginserver-and-winforms-chatting-prototype-plan.md)
+- `Node.js LoginServer` 우선 구현과 `WinForms` 외부 인증 전환: [002_nodejs-loginserver-first-and-winforms-auth-integration-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\012_login-platform\002_nodejs-loginserver-first-and-winforms-auth-integration-plan.md)
 - `Connector` 라이브러리 경계와 `Redis/MySQL` 정리 방향: [001_connector-library-layout-and-integration-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\013_connector_library\001_connector-library-layout-and-integration-plan.md)
 - `NetworkLib` 성능과 RIO send path: [019_networklib-diagnostics-runtime-architecture.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\007_networklib-performance\019_networklib-diagnostics-runtime-architecture.md)
 - `ContentsRuntime` 현재 구조 축: [012_mailbox-owner-transfer-work-stealing-and-delegate.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\008_contents-runtime\012_mailbox-owner-transfer-work-stealing-and-delegate.md)
