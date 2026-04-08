@@ -1,0 +1,9 @@
+﻿start=2026-04-07 19:22:32
+expected_end=2026-04-07 21:22:32
+server_pid=5928
+client_pid=10608
+server_config=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\iocp_sndbuf_default\EchoServer.IocpSendBufDefault.yaml
+client_config=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\iocp_sndbuf_default\EchoClient.IocpSendBufDefault.yaml
+server_log=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\iocp_sndbuf_default\server.log
+client_log=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\iocp_sndbuf_default\client.log
+rtt_csv=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\iocp_sndbuf_default\rtt.csv

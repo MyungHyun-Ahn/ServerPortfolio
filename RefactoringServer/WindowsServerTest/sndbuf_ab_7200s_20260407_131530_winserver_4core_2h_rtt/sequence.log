@@ -1,0 +1,13 @@
+﻿start=2026-04-07 13:15:30
+session_count=250
+hold_seconds=7200
+interval_ms=0
+room_count=80
+room_capacity=4
+room_change_probability_percent=
+recv_timeout_ms=30000
+room_list_recv_timeout_ms=30000
+echo_recv_timeout_ms=30000
+worker_thread_count=4
+max_session_count=512
+mode_order=RioDirect,RioOwnerThread,IocpSendBuf0,IocpSendBufDefault

@@ -1,0 +1,9 @@
+﻿start=2026-04-07 15:17:37
+expected_end=2026-04-07 17:17:37
+server_pid=6628
+client_pid=5516
+server_config=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\rio_owner\EchoServer.RioOwnerThread.yaml
+client_config=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\rio_owner\EchoClient.RioOwnerThread.yaml
+server_log=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\rio_owner\server.log
+client_log=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\rio_owner\client.log
+rtt_csv=C:\Users\psa\Desktop\winserver_4core_4mode_2h_rtt_20260407_124419\Out\sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt\rio_owner\rtt.csv

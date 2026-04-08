@@ -1,0 +1,55 @@
+﻿# Generated from ConfigSchema/Server/EchoServer.schema.yaml
+# Edit schema defaults and regenerate with Generate-Configs.cmd.
+
+EchoServer:
+  # Allowed: Iocp, Rio, BoostAsio
+  Backend: Iocp
+  # Allowed: Direct, OwnerThread
+  RioSendDispatchMode: Direct
+  BindIp: 127.0.0.1
+  Port: 19000
+  WorkerThreadCount: 4
+  MaxSessionCount: 512
+  RecvBufferSize: 1024
+  SocketSendBufferBytes: -1
+  # Allowed: Debug, Info, Warn, Error
+  LogMinimumLevel: Info
+  LogOutputDirectory: "C:/Users/psa/Desktop/winserver_4core_4mode_2h_rtt_20260407_124419/Out/sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt/iocp_sndbuf_default"
+  LogConsoleEnabled: true
+  LogFileEnabled: true
+  LogIncludeThreadId: true
+  PacketKey: 55
+  EnablePagePool: true
+  PageSize: 4096
+  ContentsWorkerThreadCount: 4
+  SendThreadCount: 1
+  ResponsesPerThread: 1
+  RoomCount: 80
+  RoomCapacity: 4
+
+Debug:
+  ManualDump: false
+  Headless: true
+  BootstrapTrace: false
+  TraceUserId: 0
+  LogPackets: false
+  TransitionRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  TransitionRaceInjectionMode: None
+  PostRoomChangeRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  PostRoomChangeRaceInjectionMode: None
+  FirstEchoRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  FirstEchoRaceInjectionMode: None
+  ContentsRaceInjectionEnabled: false
+  ContentsRaceInjectionPeriod: 100
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  ContentsRaceInjectionMode: None
+  ContentsFailFast: false
+  DelegateTestEnabled: false
+  DelegateTestTargetRoomId: 77
+  DelegateTestSleepMs: 15
+  DelegateTestSleepEveryNFrames: 1
+
+

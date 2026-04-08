@@ -1,0 +1,39 @@
+﻿# Generated from ConfigSchema/Client/EchoClient.schema.yaml
+# Edit schema defaults and regenerate with Generate-Configs.cmd.
+
+EchoClient:
+  ServerIp: 127.0.0.1
+  Port: 19000
+  LoginUserIdBase: 1000
+  SessionCount: 250
+  RequestCount: 1
+  PayloadSize: 16
+  SendChunkSize: 0
+  SendChunkDelayMs: 0
+  RecvBufferSize: 32
+  ResponseThreadCount: 1
+  ResponsesPerThread: 1
+  HoldSeconds: 7200
+  IntervalMs: 0
+  PacketsPerSend: 1
+  ReconnectProbabilityPercent: 0
+  ReconnectDelayMs: 100
+  ConnectsPerSecond: 10
+  WorkerThreadCount: 4
+  RoomChangeProbabilityPercent: 0
+  MaxRoomEnterRetryCount: 50
+  MaxRoomChangeRetryCount: 30
+  EnablePagePool: true
+  PageSize: 4096
+
+Debug:
+  Quiet: false
+  BootstrapTrace: false
+  TraceSessionIndex: 0
+  RecvTimeoutMs: 30000
+  RoomListRecvTimeoutMs: 30000
+  EchoRecvTimeoutMs: 30000
+  RttCsvPath: 'C:/Users/psa/Desktop/winserver_4core_4mode_2h_rtt_20260407_124419/Out/sndbuf_ab_7200s_20260407_131530_winserver_4core_2h_rtt/iocp_sndbuf_0/rtt.csv'
+  RttFlushIntervalSeconds: 60
+
+
