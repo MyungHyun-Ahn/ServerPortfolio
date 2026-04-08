@@ -33,6 +33,14 @@ namespace NetworkLib::Core
 		inline constexpr ULONG kMaxOutstandingSend = 8;
 		inline constexpr ULONG kMaxSendDataBuffers = 1;
 
+		using FSteadyClock = std::chrono::steady_clock;
+
+		std::uint64_t ToNanoseconds(const FSteadyClock::duration duration) noexcept
+		{
+			return static_cast<std::uint64_t>(
+				std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count());
+		}
+
 		bool ApplyAcceptedSocketSendBufferOption(
 			const SServerConfig& serverConfig,
 			const SOCKET clientSocket,
@@ -83,6 +91,7 @@ namespace NetworkLib::Core
 		m_logger = m_serverConfig.logger;
 		m_packetCipher = m_serverConfig.packetCipher;
 		m_packetFramer = m_serverConfig.packetFramer;
+		m_monitoring.Reset();
 		FPacketBuffer::ConfigurePageReuse(
 			m_serverConfig.enablePageBufferReuse,
 			m_serverConfig.pageBufferSize);
@@ -145,7 +154,8 @@ namespace NetworkLib::Core
 			oss << "RIO server started. ip=" << m_serverConfig.bindIp
 				<< " port=" << m_serverConfig.port
 				<< " workers=" << m_workers.size()
-				<< " maxSessions=" << m_serverConfig.maxSessionCount;
+				<< " maxSessions=" << m_serverConfig.maxSessionCount
+				<< " sendRingBytes=" << m_serverConfig.rioSendRingSizeBytes;
 			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 		m_applicationHandler->OnServerStarted(*this);
@@ -237,8 +247,7 @@ namespace NetworkLib::Core
 					sessionContext->GetOwnerWorkerIndex())
 				: (AppendPacketToSendRing(*sessionContext, packetBuffer, sessionId, true) &&
 					PostSend(*sessionContext, sessionId));
-		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
-		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(bodyLength > 0 ? bodyLength : 0), std::memory_order_relaxed);
+		m_monitoring.OnSendPacket(static_cast<std::uint64_t>(bodyLength > 0 ? bodyLength : 0));
 		ReleaseSession(sessionContext);
 		return sendResult;
 	}
@@ -263,26 +272,14 @@ namespace NetworkLib::Core
 
 	SServerStats FRioServer::GetStatsSnapshot() const
 	{
-		SServerStats stats{};
-		stats.activeSessionCount = m_activeSessionCount.load(std::memory_order_relaxed);
-		stats.acceptedSessionCount = m_acceptedSessionCount.load(std::memory_order_relaxed);
-		stats.receivedPacketCount = m_receivedPacketCount.load(std::memory_order_relaxed);
-		stats.sentPacketCount = m_sentPacketCount.load(std::memory_order_relaxed);
-		stats.receivedByteCount = m_receivedByteCount.load(std::memory_order_relaxed);
-		stats.sentByteCount = m_sentByteCount.load(std::memory_order_relaxed);
-		stats.sessionPoolCapacity = static_cast<std::uint32_t>(FRioSession::GetPoolCapacity());
-		stats.sessionPoolUsage = static_cast<std::uint32_t>(FRioSession::GetPoolUsage());
-		stats.sendBufferPoolCapacity = 0;
-		stats.sendBufferPoolUsage = 0;
-		stats.packetBufferPoolCapacity = static_cast<std::uint32_t>(FPacketBuffer::GetPoolCapacity());
-		stats.packetBufferPoolUsage = static_cast<std::uint32_t>(FPacketBuffer::GetPoolUsage());
+		NetworkLib::Diagnostics::SServerMonitoringSnapshotInput snapshotInput{};
+		snapshotInput.pools.sessionPoolCapacity = static_cast<std::uint32_t>(FRioSession::GetPoolCapacity());
+		snapshotInput.pools.sessionPoolUsage = static_cast<std::uint32_t>(FRioSession::GetPoolUsage());
+		snapshotInput.pools.sendBufferPoolCapacity = 0;
+		snapshotInput.pools.sendBufferPoolUsage = 0;
+		snapshotInput.pools.packetBufferPoolCapacity = static_cast<std::uint32_t>(FPacketBuffer::GetPoolCapacity());
+		snapshotInput.pools.packetBufferPoolUsage = static_cast<std::uint32_t>(FPacketBuffer::GetPoolUsage());
 
-		std::uint64_t queuedSendBufferCount = 0;
-		std::uint64_t maxObservedQueuedSendBufferCount = 0;
-		std::uint64_t totalSendRingUsedBytes = 0;
-		std::uint64_t totalSendRingInFlightBytes = 0;
-		std::uint32_t maxCurrentSendRingUsedBytes = 0;
-		std::uint32_t maxObservedSendRingUsedBytes = 0;
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
 			FRioSession* sessionContext = m_sessionSlots[slotIndex].load(std::memory_order_relaxed);
@@ -291,26 +288,20 @@ namespace NetworkLib::Core
 				continue;
 			}
 
-			queuedSendBufferCount += sessionContext->GetQueuedSendBufferCount();
-			maxObservedQueuedSendBufferCount = std::max<std::uint64_t>(
-				maxObservedQueuedSendBufferCount,
+			snapshotInput.session.queuedSendBufferCount += sessionContext->GetQueuedSendBufferCount();
+			snapshotInput.session.maxObservedQueuedSendBufferCount = std::max<std::uint64_t>(
+				snapshotInput.session.maxObservedQueuedSendBufferCount,
 				sessionContext->GetMaxObservedQueuedSendBufferCount());
-			totalSendRingUsedBytes += sessionContext->GetSendRingUsedBytes();
-			totalSendRingInFlightBytes += sessionContext->GetSendRingInFlightBytes();
-			maxCurrentSendRingUsedBytes = std::max<std::uint32_t>(
-				maxCurrentSendRingUsedBytes,
+			snapshotInput.session.totalSendRingUsedBytes += sessionContext->GetSendRingUsedBytes();
+			snapshotInput.session.totalSendRingInFlightBytes += sessionContext->GetSendRingInFlightBytes();
+			snapshotInput.session.maxCurrentSendRingUsedBytes = std::max<std::uint32_t>(
+				snapshotInput.session.maxCurrentSendRingUsedBytes,
 				sessionContext->GetSendRingUsedBytes());
-			maxObservedSendRingUsedBytes = std::max<std::uint32_t>(
-				maxObservedSendRingUsedBytes,
+			snapshotInput.session.maxObservedSendRingUsedBytes = std::max<std::uint32_t>(
+				snapshotInput.session.maxObservedSendRingUsedBytes,
 				sessionContext->GetMaxObservedSendRingUsedBytes());
 		}
-		stats.queuedSendBufferCount = queuedSendBufferCount;
-		stats.maxObservedQueuedSendBufferCount = maxObservedQueuedSendBufferCount;
-		stats.totalSendRingUsedBytes = totalSendRingUsedBytes;
-		stats.totalSendRingInFlightBytes = totalSendRingInFlightBytes;
-		stats.maxCurrentSendRingUsedBytes = maxCurrentSendRingUsedBytes;
-		stats.maxObservedSendRingUsedBytes = maxObservedSendRingUsedBytes;
-		return stats;
+		return m_monitoring.BuildSnapshot(snapshotInput);
 	}
 
 	bool FRioServer::InitializeWinsock()
@@ -732,7 +723,7 @@ namespace NetworkLib::Core
 
 				DrainSendCommands(workerIndex);
 				if (!m_isRunning.load(std::memory_order_acquire) &&
-					m_activeSessionCount.load(std::memory_order_acquire) == 0 &&
+					m_monitoring.GetActiveSessionCount(std::memory_order_acquire) == 0 &&
 					FRioSession::GetPoolUsage() == 0 &&
 					!HasPendingSendCommands(workerIndex))
 				{
@@ -851,6 +842,8 @@ namespace NetworkLib::Core
 		SAppendFailureContext failureContext{};
 		auto appendOperation = [&]()
 		{
+			m_monitoring.GetRioSendMetrics().RecordSendRingTouch(sessionContext);
+
 			if (sessionContext.IsClosing())
 			{
 				failureContext.reason = EAppendFailureReason::Closing;
@@ -864,6 +857,7 @@ namespace NetworkLib::Core
 				return;
 			}
 
+			const auto prepareStart = FSteadyClock::now();
 			std::uint8_t randomKey = 0;
 			if (m_packetCipher != nullptr)
 			{
@@ -897,6 +891,8 @@ namespace NetworkLib::Core
 
 			const std::size_t payloadLength = payloadBuffer.size();
 			const std::size_t packetLength = headerLength + payloadLength;
+			m_monitoring.GetRioSendMetrics().RecordSendPrepareSample(
+				ToNanoseconds(FSteadyClock::now() - prepareStart));
 			failureContext.packetBytes = packetLength;
 			if (packetLength == 0)
 			{
@@ -929,8 +925,15 @@ namespace NetworkLib::Core
 
 		if (lockSendRing)
 		{
-			std::scoped_lock<std::mutex> sendRingLock(sessionContext.GetSendRingMutex());
+			const auto waitStart = FSteadyClock::now();
+			std::unique_lock<std::mutex> sendRingLock(sessionContext.GetSendRingMutex());
+			const auto lockAcquired = FSteadyClock::now();
 			appendOperation();
+			const auto lockReleased = FSteadyClock::now();
+			sendRingLock.unlock();
+			m_monitoring.GetRioSendMetrics().RecordDirectSendRingLockSample(
+				ToNanoseconds(lockAcquired - waitStart),
+				ToNanoseconds(lockReleased - lockAcquired));
 		}
 		else
 		{
@@ -973,7 +976,7 @@ namespace NetworkLib::Core
 			std::ostringstream oss;
 			oss << "RIO send stall detected because session send ring was full. sessionId="
 				<< sessionId
-				<< " ringBytes=" << FRioSession::kSendRingSizeBytes
+				<< " ringBytes=" << sessionContext.GetSendRingCapacityBytes()
 				<< " packetBytes=" << failureContext.packetBytes
 				<< " usedBytes=" << failureContext.usedBytes
 				<< " freeBytes=" << failureContext.freeBytes
@@ -995,12 +998,21 @@ namespace NetworkLib::Core
 		bool preparedSend = false;
 		if (m_serverConfig.rioSendDispatchMode == ERioSendDispatchMode::Direct)
 		{
-			std::scoped_lock<std::mutex> sendRingLock(sessionContext.GetSendRingMutex());
+			const auto waitStart = FSteadyClock::now();
+			std::unique_lock<std::mutex> sendRingLock(sessionContext.GetSendRingMutex());
+			const auto lockAcquired = FSteadyClock::now();
+			m_monitoring.GetRioSendMetrics().RecordSendRingTouch(sessionContext);
 			preparedSend = sessionContext.TryPrepareNextSend();
+			const auto lockReleased = FSteadyClock::now();
+			sendRingLock.unlock();
+			m_monitoring.GetRioSendMetrics().RecordDirectSendRingLockSample(
+				ToNanoseconds(lockAcquired - waitStart),
+				ToNanoseconds(lockReleased - lockAcquired));
 		}
 
 		else
 		{
+			m_monitoring.GetRioSendMetrics().RecordSendRingTouch(sessionContext);
 			preparedSend = sessionContext.TryPrepareNextSend();
 		}
 
@@ -1200,7 +1212,10 @@ namespace NetworkLib::Core
 			generation,
 			workerIndex,
 			recvBufferCapacity,
-			recvStagingCapacity);
+			recvStagingCapacity,
+			static_cast<std::size_t>(std::max<std::uint32_t>(
+				static_cast<std::uint32_t>(FRioSession::kMaxSendPacketSizeBytes),
+				m_serverConfig.rioSendRingSizeBytes)));
 
 		if (!newSessionContext->EnsureSendRingRegistered(m_rioFunctionTable))
 		{
@@ -1266,8 +1281,7 @@ namespace NetworkLib::Core
 			Log(Foundation::ELogLevel::Info, oss.str());
 		}
 		m_workers[workerIndex]->activeSessionCount.fetch_add(1, std::memory_order_relaxed);
-		m_activeSessionCount.fetch_add(1, std::memory_order_relaxed);
-		m_acceptedSessionCount.fetch_add(1, std::memory_order_relaxed);
+		m_monitoring.OnSessionAccepted();
 		m_applicationHandler->OnClientConnected(newSessionContext->GetSessionId());
 		if (!PostRecv(*newSessionContext))
 		{
@@ -1386,7 +1400,7 @@ namespace NetworkLib::Core
 			return;
 		}
 
-		m_receivedByteCount.fetch_add(completionResult.BytesTransferred, std::memory_order_relaxed);
+		m_monitoring.OnReceiveBytes(completionResult.BytesTransferred);
 		if (!sessionContext.CopyReceivedDataFromStaging(completionResult.BytesTransferred))
 		{
 			Log(Foundation::ELogLevel::Warn, "RIO recv staging copy failed.");
@@ -1439,7 +1453,7 @@ namespace NetworkLib::Core
 					*this,
 					sessionContext.GetSessionId(),
 					contentPacketView);
-				m_receivedPacketCount.fetch_add(1, std::memory_order_relaxed);
+				m_monitoring.OnReceivePacket();
 
 				const std::size_t consumedPacketSize =
 					sizeof(SPacketHeader) + static_cast<std::size_t>(packetView.payloadLength);
@@ -1479,11 +1493,20 @@ namespace NetworkLib::Core
 
 		if (m_serverConfig.rioSendDispatchMode == ERioSendDispatchMode::Direct)
 		{
-			std::scoped_lock<std::mutex> sendRingLock(sessionContext.GetSendRingMutex());
+			const auto waitStart = FSteadyClock::now();
+			std::unique_lock<std::mutex> sendRingLock(sessionContext.GetSendRingMutex());
+			const auto lockAcquired = FSteadyClock::now();
+			m_monitoring.GetRioSendMetrics().RecordSendRingTouch(sessionContext);
 			sessionContext.CompleteCurrentSend();
+			const auto lockReleased = FSteadyClock::now();
+			sendRingLock.unlock();
+			m_monitoring.GetRioSendMetrics().RecordDirectSendRingLockSample(
+				ToNanoseconds(lockAcquired - waitStart),
+				ToNanoseconds(lockReleased - lockAcquired));
 		}
 		else
 		{
+			m_monitoring.GetRioSendMetrics().RecordSendRingTouch(sessionContext);
 			sessionContext.CompleteCurrentSend();
 		}
 
@@ -1512,7 +1535,7 @@ namespace NetworkLib::Core
 		}
 
 		m_sessionSlots[sessionContext.GetSlotIndex()].store(nullptr);
-		m_activeSessionCount.fetch_sub(1, std::memory_order_relaxed);
+		m_monitoring.OnSessionClosed();
 		if (sessionContext.GetOwnerWorkerIndex() < m_workers.size())
 		{
 			m_workers[sessionContext.GetOwnerWorkerIndex()]->activeSessionCount.fetch_sub(1, std::memory_order_relaxed);

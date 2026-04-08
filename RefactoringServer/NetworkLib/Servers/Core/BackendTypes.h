@@ -42,6 +42,7 @@ namespace NetworkLib::Core
 		std::uint32_t maxSessionCount = 64;
 		std::uint32_t recvBufferSize = 1024;
 		std::int32_t socketSendBufferBytes = -1;
+		std::uint32_t rioSendRingSizeBytes = 64u * 1024u;
 		bool enablePageBufferReuse = true;
 		std::uint32_t pageBufferSize = 4096;
 		Foundation::SLogConfig logConfig{};
@@ -66,6 +67,16 @@ namespace NetworkLib::Core
 		std::uint64_t totalSendRingInFlightBytes = 0;
 		std::uint32_t maxCurrentSendRingUsedBytes = 0;
 		std::uint32_t maxObservedSendRingUsedBytes = 0;
+		std::uint64_t rioSendPrepareCount = 0;
+		std::uint64_t rioSendPrepareTotalNs = 0;
+		std::uint64_t rioSendPrepareMaxNs = 0;
+		std::uint64_t rioSendRingTouchCount = 0;
+		std::uint64_t rioSendRingCrossThreadTouchCount = 0;
+		std::uint64_t rioDirectSendRingLockCount = 0;
+		std::uint64_t rioDirectSendRingLockWaitTotalNs = 0;
+		std::uint64_t rioDirectSendRingLockWaitMaxNs = 0;
+		std::uint64_t rioDirectSendRingLockHoldTotalNs = 0;
+		std::uint64_t rioDirectSendRingLockHoldMaxNs = 0;
 		std::uint32_t sessionPoolCapacity = 0;
 		std::uint32_t sessionPoolUsage = 0;
 		std::uint32_t sendBufferPoolCapacity = 0;

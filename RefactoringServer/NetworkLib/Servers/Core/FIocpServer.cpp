@@ -74,6 +74,7 @@ namespace NetworkLib::Core
 		m_logger = m_serverConfig.logger;
 		m_packetCipher = m_serverConfig.packetCipher;
 		m_packetFramer = m_serverConfig.packetFramer;
+		m_monitoring.Reset();
 		FSendBuffer::ConfigurePageReuse(m_serverConfig.enablePageBufferReuse, m_serverConfig.pageBufferSize);
 		if (!FSendBuffer::InitializeSegmentPool(false, nullptr, m_serverConfig.maxSessionCount))
 		{
@@ -267,8 +268,7 @@ namespace NetworkLib::Core
 			std::vector<char> payloadBuffer = packet.MoveBuffer();
 			sessionContext->EnqueueSendBuffer(FSendBuffer::Create(std::move(payloadBuffer)));
 		}
-		m_sentPacketCount.fetch_add(1, std::memory_order_relaxed);
-		m_sentByteCount.fetch_add(static_cast<std::uint64_t>(bodyLength > 0 ? bodyLength : 0), std::memory_order_relaxed);
+		m_monitoring.OnSendPacket(static_cast<std::uint64_t>(bodyLength > 0 ? bodyLength : 0));
 		PostSend(*sessionContext);
 
 		ReleaseSession(sessionContext);
@@ -295,24 +295,14 @@ namespace NetworkLib::Core
 
 	SServerStats FIocpServer::GetStatsSnapshot() const
 	{
-		SServerStats stats{};
-		stats.activeSessionCount = m_activeSessionCount.load(std::memory_order_relaxed);
-		stats.acceptedSessionCount = m_acceptedSessionCount.load(std::memory_order_relaxed);
-		stats.receivedPacketCount = m_receivedPacketCount.load(std::memory_order_relaxed);
-		stats.sentPacketCount = m_sentPacketCount.load(std::memory_order_relaxed);
-		stats.receivedByteCount = m_receivedByteCount.load(std::memory_order_relaxed);
-		stats.sentByteCount = m_sentByteCount.load(std::memory_order_relaxed);
-		stats.wsaRecvCallCount = m_wsaRecvCallCount.load(std::memory_order_relaxed);
-		stats.wsaSendCallCount = m_wsaSendCallCount.load(std::memory_order_relaxed);
-		stats.sessionPoolCapacity = static_cast<std::uint32_t>(FIocpSession::GetPoolCapacity());
-		stats.sessionPoolUsage = static_cast<std::uint32_t>(FIocpSession::GetPoolUsage());
-		stats.sendBufferPoolCapacity = static_cast<std::uint32_t>(FSendBuffer::GetPoolCapacity());
-		stats.sendBufferPoolUsage = static_cast<std::uint32_t>(FSendBuffer::GetPoolUsage());
-		stats.packetBufferPoolCapacity = static_cast<std::uint32_t>(FPacketBuffer::GetPoolCapacity());
-		stats.packetBufferPoolUsage = static_cast<std::uint32_t>(FPacketBuffer::GetPoolUsage());
+		NetworkLib::Diagnostics::SServerMonitoringSnapshotInput snapshotInput{};
+		snapshotInput.pools.sessionPoolCapacity = static_cast<std::uint32_t>(FIocpSession::GetPoolCapacity());
+		snapshotInput.pools.sessionPoolUsage = static_cast<std::uint32_t>(FIocpSession::GetPoolUsage());
+		snapshotInput.pools.sendBufferPoolCapacity = static_cast<std::uint32_t>(FSendBuffer::GetPoolCapacity());
+		snapshotInput.pools.sendBufferPoolUsage = static_cast<std::uint32_t>(FSendBuffer::GetPoolUsage());
+		snapshotInput.pools.packetBufferPoolCapacity = static_cast<std::uint32_t>(FPacketBuffer::GetPoolCapacity());
+		snapshotInput.pools.packetBufferPoolUsage = static_cast<std::uint32_t>(FPacketBuffer::GetPoolUsage());
 
-		std::uint64_t queuedSendBufferCount = 0;
-		std::uint64_t maxObservedQueuedSendBufferCount = 0;
 		for (std::uint32_t slotIndex = 0; slotIndex < m_serverConfig.maxSessionCount; ++slotIndex)
 		{
 			FIocpSession* sessionContext = m_sessionSlots[slotIndex].load(std::memory_order_relaxed);
@@ -321,14 +311,12 @@ namespace NetworkLib::Core
 				continue;
 			}
 
-			queuedSendBufferCount += sessionContext->GetQueuedSendBufferCount();
-			maxObservedQueuedSendBufferCount = std::max<std::uint64_t>(
-				maxObservedQueuedSendBufferCount,
+			snapshotInput.session.queuedSendBufferCount += sessionContext->GetQueuedSendBufferCount();
+			snapshotInput.session.maxObservedQueuedSendBufferCount = std::max<std::uint64_t>(
+				snapshotInput.session.maxObservedQueuedSendBufferCount,
 				sessionContext->GetMaxObservedQueuedSendBufferCount());
 		}
-		stats.queuedSendBufferCount = queuedSendBufferCount;
-		stats.maxObservedQueuedSendBufferCount = maxObservedQueuedSendBufferCount;
-		return stats;
+		return m_monitoring.BuildSnapshot(snapshotInput);
 	}
 
 	bool FIocpServer::InitializeWinsock()
@@ -679,7 +667,7 @@ namespace NetworkLib::Core
 
 			if (ioContext->ioType == FIocpSession::EIoType::Recv)
 			{
-				m_receivedByteCount.fetch_add(transferredBytes, std::memory_order_relaxed);
+				m_monitoring.OnReceiveBytes(transferredBytes);
 				if (!sessionContext->CommitRecvBytes(transferredBytes))
 				{
 					Log(Foundation::ELogLevel::Warn, "Recv buffer overflow detected.");
@@ -733,7 +721,7 @@ namespace NetworkLib::Core
 							*this,
 							sessionContext->GetSessionId(),
 							contentPacketView);
-						m_receivedPacketCount.fetch_add(1, std::memory_order_relaxed);
+						m_monitoring.OnReceivePacket();
 
 						const std::size_t consumedPacketSize =
 							sizeof(SPacketHeader) + static_cast<std::size_t>(packetView.payloadLength);
@@ -788,7 +776,7 @@ bool FIocpServer::PostRecv(FIocpSession& sessionContext)
 			return false;
 		}
 		sessionContext.AcquireRef();
-		m_wsaRecvCallCount.fetch_add(1, std::memory_order_relaxed);
+		m_monitoring.OnWsaRecvCall();
 
 		const int recvResult = WSARecv(sessionContext.GetSocket(), recvBuffers, recvBufferCount, &recvBytes, &recvFlags, &recvContext.overlapped, nullptr);
 		if (recvResult == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
@@ -855,7 +843,7 @@ bool FIocpServer::PostSend(FIocpSession& sessionContext)
 			DWORD sentBytes = 0;
 			DWORD sendFlags = 0;
 			const std::vector<WSABUF>& sendBuffers = sessionContext.GetSendWsabufs();
-			m_wsaSendCallCount.fetch_add(1, std::memory_order_relaxed);
+			m_monitoring.OnWsaSendCall();
 			const int sendResult = WSASend(
 				sessionContext.GetSocket(),
 				const_cast<WSABUF*>(sendBuffers.data()),
@@ -894,7 +882,7 @@ bool FIocpServer::PostSend(FIocpSession& sessionContext)
 		closesocket(sessionContext.GetSocket());
 		sessionContext.SetSocket(INVALID_SOCKET);
 		m_sessionSlots[sessionContext.GetSlotIndex()].store(nullptr);
-		m_activeSessionCount.fetch_sub(1, std::memory_order_relaxed);
+		m_monitoring.OnSessionClosed();
 		{
 			std::ostringstream oss;
 			oss << "Session closed. sessionId=" << sessionContext.GetSessionId();
@@ -1012,8 +1000,7 @@ bool FIocpServer::PostSend(FIocpSession& sessionContext)
 			oss << "Client connected. sessionId=" << newSessionContext->GetSessionId();
 			Log(Foundation::ELogLevel::Info, oss.str());
 		}
-		m_activeSessionCount.fetch_add(1, std::memory_order_relaxed);
-		m_acceptedSessionCount.fetch_add(1, std::memory_order_relaxed);
+		m_monitoring.OnSessionAccepted();
 		m_applicationHandler->OnClientConnected(newSessionContext->GetSessionId());
 		if (!PostRecv(*newSessionContext))
 		{

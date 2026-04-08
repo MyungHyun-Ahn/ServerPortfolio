@@ -80,7 +80,8 @@ namespace NetworkLib::Session
 		std::uint32_t generation,
 		std::uint32_t ownerWorkerIndex,
 		std::size_t recvBufferCapacity,
-		std::size_t recvStagingCapacity) noexcept
+		std::size_t recvStagingCapacity,
+		std::size_t sendRingCapacityBytes) noexcept
 	{
 		m_socket = socket;
 		m_sessionId = sessionId;
@@ -98,8 +99,10 @@ namespace NetworkLib::Session
 		m_observedSendRingUsedBytes.store(0);
 		m_observedSendRingInFlightBytes.store(0);
 		m_maxObservedSendRingUsedBytes.store(0);
+		m_lastObservedSendRingTouchThreadId.store(0);
 		m_recvBuffer.Initialize(recvBufferCapacity);
 		m_recvStagingBuffer.assign(recvStagingCapacity, 0);
+		m_sendRingCapacityBytes = std::max<std::size_t>(kMaxSendPacketSizeBytes, sendRingCapacityBytes);
 		m_recvRequestContext = {};
 		m_recvRequestContext.requestKind = ERequestKind::Recv;
 		m_recvRequestContext.ownerSession = this;
@@ -128,8 +131,10 @@ namespace NetworkLib::Session
 		m_observedSendRingUsedBytes.store(0);
 		m_observedSendRingInFlightBytes.store(0);
 		m_maxObservedSendRingUsedBytes.store(0);
+		m_lastObservedSendRingTouchThreadId.store(0);
 		m_recvBuffer.Clear();
 		m_recvStagingBuffer.clear();
+		m_sendRingCapacityBytes = kDefaultSendRingSizeBytes;
 		m_recvRequestContext = {};
 		m_recvRequestContext.requestKind = ERequestKind::Recv;
 		m_recvRequestContext.ownerSession = this;
@@ -306,11 +311,18 @@ namespace NetworkLib::Session
 		return m_sendRingMutex;
 	}
 
+	bool FRioSession::ObserveSendRingTouch(const std::uint32_t threadId) noexcept
+	{
+		const std::uint32_t previousThreadId =
+			m_lastObservedSendRingTouchThreadId.exchange(threadId, std::memory_order_relaxed);
+		return previousThreadId != 0 && previousThreadId != threadId;
+	}
+
 	bool FRioSession::EnsureSendRingRegistered(const RIO_EXTENSION_FUNCTION_TABLE& rioFunctionTable) noexcept
 	{
-		if (m_sendRingBuffer.size() != kSendRingSizeBytes)
+		if (m_sendRingBuffer.size() != m_sendRingCapacityBytes)
 		{
-			m_sendRingBuffer.assign(kSendRingSizeBytes, 0);
+			m_sendRingBuffer.assign(m_sendRingCapacityBytes, 0);
 		}
 
 		if (m_sendRingBufferId != RIO_INVALID_BUFFERID)
@@ -356,12 +368,12 @@ namespace NetworkLib::Session
 		const std::size_t payloadLength) noexcept
 	{
 		const std::size_t totalLength = headerLength + payloadLength;
-		if (totalLength == 0 || totalLength > kSendRingSizeBytes)
+		if (totalLength == 0 || totalLength > m_sendRingCapacityBytes)
 		{
 			return false;
 		}
 
-		if ((kSendRingSizeBytes - m_sendRingUsedBytes) < totalLength)
+		if ((m_sendRingCapacityBytes - m_sendRingUsedBytes) < totalLength)
 		{
 			return false;
 		}
@@ -388,7 +400,7 @@ namespace NetworkLib::Session
 		}
 
 		const std::size_t contiguousLength =
-			std::min<std::size_t>(m_sendRingUsedBytes, kSendRingSizeBytes - m_sendRingReadOffset);
+			std::min<std::size_t>(m_sendRingUsedBytes, m_sendRingCapacityBytes - m_sendRingReadOffset);
 		if (contiguousLength == 0)
 		{
 			return false;
@@ -409,7 +421,7 @@ namespace NetworkLib::Session
 			return;
 		}
 
-		m_sendRingReadOffset = (m_sendRingReadOffset + m_sendRingInFlightBytes) % kSendRingSizeBytes;
+		m_sendRingReadOffset = (m_sendRingReadOffset + m_sendRingInFlightBytes) % m_sendRingCapacityBytes;
 		m_sendRingUsedBytes -= m_sendRingInFlightBytes;
 		m_sendRingInFlightBytes = 0;
 		m_sendRequestContext.buffer = RIO_BUF{};
@@ -495,9 +507,14 @@ namespace NetworkLib::Session
 	std::uint32_t FRioSession::GetSendRingFreeBytes() const noexcept
 	{
 		const std::uint32_t usedBytes = GetSendRingUsedBytes();
-		return usedBytes >= kSendRingSizeBytes
+		return usedBytes >= m_sendRingCapacityBytes
 			? 0u
-			: static_cast<std::uint32_t>(kSendRingSizeBytes - usedBytes);
+			: static_cast<std::uint32_t>(m_sendRingCapacityBytes - usedBytes);
+	}
+
+	std::uint32_t FRioSession::GetSendRingCapacityBytes() const noexcept
+	{
+		return static_cast<std::uint32_t>(m_sendRingCapacityBytes);
 	}
 
 	std::uint32_t FRioSession::GetMaxObservedSendRingUsedBytes() const noexcept
@@ -573,14 +590,14 @@ namespace NetworkLib::Session
 		}
 
 		const std::size_t tailLength =
-			std::min<std::size_t>(length, kSendRingSizeBytes - m_sendRingWriteOffset);
+			std::min<std::size_t>(length, m_sendRingCapacityBytes - m_sendRingWriteOffset);
 		std::memcpy(m_sendRingBuffer.data() + m_sendRingWriteOffset, data, tailLength);
 		if (length > tailLength)
 		{
 			std::memcpy(m_sendRingBuffer.data(), data + tailLength, length - tailLength);
 		}
 
-		m_sendRingWriteOffset = (m_sendRingWriteOffset + length) % kSendRingSizeBytes;
+		m_sendRingWriteOffset = (m_sendRingWriteOffset + length) % m_sendRingCapacityBytes;
 		m_sendRingUsedBytes += length;
 	}
 }

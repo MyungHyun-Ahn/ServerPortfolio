@@ -925,6 +925,26 @@ int main(int argc, char* argv[])
 			const std::uint64_t sendBytesPerSec = currentStats.sentByteCount - previousStats.sentByteCount;
 			const std::uint64_t wsaRecvTps = currentStats.wsaRecvCallCount - previousStats.wsaRecvCallCount;
 			const std::uint64_t wsaSendTps = currentStats.wsaSendCallCount - previousStats.wsaSendCallCount;
+			const double rioPrepareAvgNs =
+				currentStats.rioSendPrepareCount == 0
+				? 0.0
+				: static_cast<double>(currentStats.rioSendPrepareTotalNs) /
+					static_cast<double>(currentStats.rioSendPrepareCount);
+			const double rioSendRingCrossThreadRatePercent =
+				currentStats.rioSendRingTouchCount == 0
+				? 0.0
+				: (static_cast<double>(currentStats.rioSendRingCrossThreadTouchCount) * 100.0) /
+					static_cast<double>(currentStats.rioSendRingTouchCount);
+			const double rioDirectLockWaitAvgNs =
+				currentStats.rioDirectSendRingLockCount == 0
+				? 0.0
+				: static_cast<double>(currentStats.rioDirectSendRingLockWaitTotalNs) /
+					static_cast<double>(currentStats.rioDirectSendRingLockCount);
+			const double rioDirectLockHoldAvgNs =
+				currentStats.rioDirectSendRingLockCount == 0
+				? 0.0
+				: static_cast<double>(currentStats.rioDirectSendRingLockHoldTotalNs) /
+					static_cast<double>(currentStats.rioDirectSendRingLockCount);
 			const double cpuUsagePercent = CalculateCpuUsagePercent(previousProcessMetrics, currentProcessMetrics);
 			const double workingSetMb = currentProcessMetrics.valid ? BytesToMegabytes(currentProcessMetrics.workingSetBytes) : 0.0;
 			const double peakWorkingSetMb = currentProcessMetrics.valid ? BytesToMegabytes(currentProcessMetrics.peakWorkingSetBytes) : 0.0;
@@ -957,6 +977,17 @@ int main(int argc, char* argv[])
 				<< " totalSendRingInFlightBytes=" << currentStats.totalSendRingInFlightBytes
 				<< " maxSessionSendRingUsedBytes=" << currentStats.maxCurrentSendRingUsedBytes
 				<< " maxObservedSessionSendRingUsedBytes=" << currentStats.maxObservedSendRingUsedBytes
+				<< " rioSendPrepareCount=" << currentStats.rioSendPrepareCount
+				<< " rioSendPrepareAvgNs=" << std::fixed << std::setprecision(2) << rioPrepareAvgNs
+				<< " rioSendPrepareMaxNs=" << currentStats.rioSendPrepareMaxNs
+				<< " rioSendRingTouchCount=" << currentStats.rioSendRingTouchCount
+				<< " rioSendRingCrossThreadTouchCount=" << currentStats.rioSendRingCrossThreadTouchCount
+				<< " rioSendRingCrossThreadRatePercent=" << std::fixed << std::setprecision(2) << rioSendRingCrossThreadRatePercent
+				<< " rioDirectSendRingLockCount=" << currentStats.rioDirectSendRingLockCount
+				<< " rioDirectSendRingLockWaitAvgNs=" << std::fixed << std::setprecision(2) << rioDirectLockWaitAvgNs
+				<< " rioDirectSendRingLockWaitMaxNs=" << currentStats.rioDirectSendRingLockWaitMaxNs
+				<< " rioDirectSendRingLockHoldAvgNs=" << std::fixed << std::setprecision(2) << rioDirectLockHoldAvgNs
+				<< " rioDirectSendRingLockHoldMaxNs=" << currentStats.rioDirectSendRingLockHoldMaxNs
 				<< " sessionPool=" << currentStats.sessionPoolUsage << "/" << currentStats.sessionPoolCapacity
 				<< " sendBufferPool=" << currentStats.sendBufferPoolUsage << "/" << currentStats.sendBufferPoolCapacity
 				<< " packetBufferPool=" << currentStats.packetBufferPoolUsage << "/" << currentStats.packetBufferPoolCapacity

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Diagnostics/FServerMonitoringRuntime.h"
+
 namespace NetworkLib
 {
 	class IApplicationHandler;
@@ -109,12 +111,7 @@ namespace NetworkLib::Core
 		std::unique_ptr<std::atomic<NetworkLib::Session::FRioSession*>[]> m_sessionSlots;
 		std::unique_ptr<std::atomic<std::uint32_t>[]> m_generations;
 		std::atomic<std::uint32_t> m_packetRandomKeySeed = 1;
-		std::atomic<std::uint32_t> m_activeSessionCount = 0;
-		std::atomic<std::uint64_t> m_acceptedSessionCount = 0;
-		std::atomic<std::uint64_t> m_receivedPacketCount = 0;
-		std::atomic<std::uint64_t> m_sentPacketCount = 0;
-		std::atomic<std::uint64_t> m_receivedByteCount = 0;
-		std::atomic<std::uint64_t> m_sentByteCount = 0;
+		NetworkLib::Diagnostics::FServerMonitoringRuntime m_monitoring{};
 		std::atomic<bool> m_isRunning = false;
 		std::atomic<bool> m_winsockInitialized = false;
 	};

@@ -6,15 +6,24 @@
 
 namespace
 {
-	struct STlsRttState
+	struct STlsRttState final : Foundation::Diagnostics::FTlsCollectorRuntime::FRegisteredTlsShard
 	{
+		explicit STlsRttState(Foundation::Diagnostics::FRttMetricsRuntime& runtime)
+			: FRegisteredTlsShard(runtime)
+			, rttMetricsRuntime(&runtime)
+		{
+		}
+
 		Foundation::Diagnostics::FRttMetricsRuntime* rttMetricsRuntime = nullptr;
+		std::uint32_t collectorRefCount = 0;
 		std::int64_t activeBucketStartEpochSeconds = 0;
 		bool hasActiveBucket = false;
 		std::vector<Foundation::Diagnostics::SRttStageAggregate> stageAggregates;
 	};
 
-	thread_local STlsRttState g_tlsRttState{};
+	thread_local std::unordered_map<
+		Foundation::Diagnostics::FRttMetricsRuntime*,
+		std::unique_ptr<STlsRttState>> g_tlsRttStates{};
 
 	std::int64_t ToEpochMilliseconds(const std::chrono::system_clock::time_point timePoint)
 	{
@@ -60,44 +69,79 @@ namespace
 		}
 	}
 
-	void FlushTlsSnapshot()
+	STlsRttState* FindTlsState(Foundation::Diagnostics::FRttMetricsRuntime* const runtime) noexcept
 	{
-		if (g_tlsRttState.rttMetricsRuntime == nullptr || !g_tlsRttState.hasActiveBucket)
+		if (runtime == nullptr)
+		{
+			return nullptr;
+		}
+
+		const auto stateIt = g_tlsRttStates.find(runtime);
+		if (stateIt == g_tlsRttStates.end() ||
+			stateIt->second == nullptr ||
+			stateIt->second->GetOwnerRuntime() != runtime)
+		{
+			return nullptr;
+		}
+
+		return stateIt->second.get();
+	}
+
+	STlsRttState& GetOrCreateTlsState(Foundation::Diagnostics::FRttMetricsRuntime& runtime)
+	{
+		if (STlsRttState* const existingState = FindTlsState(&runtime); existingState != nullptr)
+		{
+			return *existingState;
+		}
+
+		g_tlsRttStates.erase(&runtime);
+
+		auto tlsState = std::make_unique<STlsRttState>(runtime);
+		tlsState->stageAggregates.assign(runtime.GetStageCount(), Foundation::Diagnostics::SRttStageAggregate{});
+
+		STlsRttState& stateReference = *tlsState;
+		g_tlsRttStates.emplace(&runtime, std::move(tlsState));
+		return stateReference;
+	}
+
+	void FlushTlsSnapshot(STlsRttState& tlsState)
+	{
+		if (tlsState.rttMetricsRuntime == nullptr || !tlsState.hasActiveBucket)
 		{
 			return;
 		}
 
 		auto snapshot = std::make_unique<Foundation::Diagnostics::SRttSnapshot>();
-		snapshot->bucketStartEpochSeconds = g_tlsRttState.activeBucketStartEpochSeconds;
-		snapshot->stageAggregates = g_tlsRttState.stageAggregates;
-		g_tlsRttState.rttMetricsRuntime->EnqueueSnapshot(std::move(snapshot));
+		snapshot->bucketStartEpochSeconds = tlsState.activeBucketStartEpochSeconds;
+		snapshot->stageAggregates = tlsState.stageAggregates;
+		tlsState.rttMetricsRuntime->EnqueueSnapshot(std::move(snapshot));
 
-		ResetStageAggregates(g_tlsRttState.stageAggregates);
-		g_tlsRttState.activeBucketStartEpochSeconds = 0;
-		g_tlsRttState.hasActiveBucket = false;
+		ResetStageAggregates(tlsState.stageAggregates);
+		tlsState.activeBucketStartEpochSeconds = 0;
+		tlsState.hasActiveBucket = false;
 	}
 
-	void EnsureTlsBucket(const std::chrono::system_clock::time_point nowSystem)
+	void EnsureTlsBucket(STlsRttState& tlsState, const std::chrono::system_clock::time_point nowSystem)
 	{
-		if (g_tlsRttState.rttMetricsRuntime == nullptr)
+		if (tlsState.rttMetricsRuntime == nullptr)
 		{
 			return;
 		}
 
 		const std::int64_t bucketStartEpochSeconds =
-			ToBucketStartEpochSeconds(nowSystem, g_tlsRttState.rttMetricsRuntime->GetFlushIntervalSeconds());
-		if (!g_tlsRttState.hasActiveBucket)
+			ToBucketStartEpochSeconds(nowSystem, tlsState.rttMetricsRuntime->GetFlushIntervalSeconds());
+		if (!tlsState.hasActiveBucket)
 		{
-			g_tlsRttState.hasActiveBucket = true;
-			g_tlsRttState.activeBucketStartEpochSeconds = bucketStartEpochSeconds;
+			tlsState.hasActiveBucket = true;
+			tlsState.activeBucketStartEpochSeconds = bucketStartEpochSeconds;
 			return;
 		}
 
-		if (g_tlsRttState.activeBucketStartEpochSeconds != bucketStartEpochSeconds)
+		if (tlsState.activeBucketStartEpochSeconds != bucketStartEpochSeconds)
 		{
-			FlushTlsSnapshot();
-			g_tlsRttState.hasActiveBucket = true;
-			g_tlsRttState.activeBucketStartEpochSeconds = bucketStartEpochSeconds;
+			FlushTlsSnapshot(tlsState);
+			tlsState.hasActiveBucket = true;
+			tlsState.activeBucketStartEpochSeconds = bucketStartEpochSeconds;
 		}
 	}
 }
@@ -112,21 +156,33 @@ namespace Foundation::Diagnostics
 			return;
 		}
 
-		g_tlsRttState.rttMetricsRuntime = m_rttMetricsRuntime;
-		g_tlsRttState.activeBucketStartEpochSeconds = 0;
-		g_tlsRttState.hasActiveBucket = false;
-		g_tlsRttState.stageAggregates.assign(m_rttMetricsRuntime->GetStageCount(), SRttStageAggregate{});
+		STlsRttState& tlsState = GetOrCreateTlsState(*m_rttMetricsRuntime);
+		if (tlsState.collectorRefCount == 0)
+		{
+			tlsState.activeBucketStartEpochSeconds = 0;
+			tlsState.hasActiveBucket = false;
+			tlsState.stageAggregates.assign(m_rttMetricsRuntime->GetStageCount(), SRttStageAggregate{});
+		}
+
+		++tlsState.collectorRefCount;
 	}
 
 	FRttThreadLocalCollector::~FRttThreadLocalCollector()
 	{
-		if (g_tlsRttState.rttMetricsRuntime != m_rttMetricsRuntime)
+		STlsRttState* const tlsState = FindTlsState(m_rttMetricsRuntime);
+		if (tlsState == nullptr || tlsState->collectorRefCount == 0)
 		{
 			return;
 		}
 
-		FlushTlsSnapshot();
-		g_tlsRttState = STlsRttState{};
+		--tlsState->collectorRefCount;
+		if (tlsState->collectorRefCount != 0)
+		{
+			return;
+		}
+
+		FlushTlsSnapshot(*tlsState);
+		g_tlsRttStates.erase(m_rttMetricsRuntime);
 	}
 
 	SRttPendingRequest FRttThreadLocalCollector::BeginRequest(const FRttStageIndex stageIndex, const int sessionIndex) const
@@ -143,15 +199,16 @@ namespace Foundation::Diagnostics
 		const SRttPendingRequest& pendingRequest,
 		const std::chrono::system_clock::time_point receivedSystem) const
 	{
+		STlsRttState* const tlsState = FindTlsState(m_rttMetricsRuntime);
 		if (m_rttMetricsRuntime == nullptr ||
-			g_tlsRttState.rttMetricsRuntime != m_rttMetricsRuntime ||
+			tlsState == nullptr ||
 			!m_rttMetricsRuntime->IsStageIndexValid(pendingRequest.stageIndex))
 		{
 			return;
 		}
 
-		EnsureTlsBucket(receivedSystem);
-		if (!g_tlsRttState.hasActiveBucket)
+		EnsureTlsBucket(*tlsState, receivedSystem);
+		if (!tlsState->hasActiveBucket)
 		{
 			return;
 		}
@@ -163,7 +220,7 @@ namespace Foundation::Diagnostics
 			1000.0;
 
 		SRttStageAggregate& stageAggregate =
-			g_tlsRttState.stageAggregates[static_cast<std::size_t>(pendingRequest.stageIndex)];
+			tlsState->stageAggregates[static_cast<std::size_t>(pendingRequest.stageIndex)];
 		++stageAggregate.sampleCount;
 		stageAggregate.totalRttMs += rttMs;
 
@@ -179,20 +236,21 @@ namespace Foundation::Diagnostics
 		const FRttStageIndex stageIndex,
 		const std::chrono::system_clock::time_point timeoutSystem) const
 	{
+		STlsRttState* const tlsState = FindTlsState(m_rttMetricsRuntime);
 		if (m_rttMetricsRuntime == nullptr ||
-			g_tlsRttState.rttMetricsRuntime != m_rttMetricsRuntime ||
+			tlsState == nullptr ||
 			!m_rttMetricsRuntime->IsStageIndexValid(stageIndex))
 		{
 			return;
 		}
 
-		EnsureTlsBucket(timeoutSystem);
-		if (!g_tlsRttState.hasActiveBucket)
+		EnsureTlsBucket(*tlsState, timeoutSystem);
+		if (!tlsState->hasActiveBucket)
 		{
 			return;
 		}
 
-		SRttStageAggregate& stageAggregate = g_tlsRttState.stageAggregates[static_cast<std::size_t>(stageIndex)];
+		SRttStageAggregate& stageAggregate = tlsState->stageAggregates[static_cast<std::size_t>(stageIndex)];
 		++stageAggregate.timeoutCount;
 	}
 }

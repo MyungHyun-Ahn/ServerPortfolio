@@ -42,7 +42,7 @@ namespace NetworkLib::Session
 		};
 
 	public:
-		inline static constexpr std::size_t kSendRingSizeBytes = 64u * 1024u;
+		inline static constexpr std::size_t kDefaultSendRingSizeBytes = 64u * 1024u;
 		inline static constexpr std::size_t kMaxSendPacketSizeBytes = 8u * 1024u;
 
 		FRioSession() = default;
@@ -55,7 +55,8 @@ namespace NetworkLib::Session
 			std::uint32_t generation,
 			std::uint32_t ownerWorkerIndex,
 			std::size_t recvBufferCapacity,
-			std::size_t recvStagingCapacity) noexcept;
+			std::size_t recvStagingCapacity,
+			std::size_t sendRingCapacityBytes) noexcept;
 		void Reset() noexcept;
 
 		SOCKET GetSocket() const noexcept;
@@ -91,6 +92,7 @@ namespace NetworkLib::Session
 		void ClearOwnerSendDrainScheduled() noexcept;
 		std::mutex& GetSendRingMutex() noexcept;
 		const std::mutex& GetSendRingMutex() const noexcept;
+		bool ObserveSendRingTouch(std::uint32_t threadId) noexcept;
 		bool EnsureSendRingRegistered(const RIO_EXTENSION_FUNCTION_TABLE& rioFunctionTable) noexcept;
 		void ReleaseSendRingRegistration(const RIO_EXTENSION_FUNCTION_TABLE& rioFunctionTable) noexcept;
 		static void ReleaseAllSendRingRegistrations(const RIO_EXTENSION_FUNCTION_TABLE& rioFunctionTable) noexcept;
@@ -117,6 +119,7 @@ namespace NetworkLib::Session
 		std::uint32_t GetSendRingUsedBytes() const noexcept;
 		std::uint32_t GetSendRingInFlightBytes() const noexcept;
 		std::uint32_t GetSendRingFreeBytes() const noexcept;
+		std::uint32_t GetSendRingCapacityBytes() const noexcept;
 		std::uint32_t GetMaxObservedSendRingUsedBytes() const noexcept;
 
 		void ReleaseRioResources(const RIO_EXTENSION_FUNCTION_TABLE& rioFunctionTable) noexcept;
@@ -139,9 +142,11 @@ namespace NetworkLib::Session
 		std::atomic<std::uint32_t> m_observedSendRingUsedBytes = 0;
 		std::atomic<std::uint32_t> m_observedSendRingInFlightBytes = 0;
 		std::atomic<std::uint32_t> m_maxObservedSendRingUsedBytes = 0;
+		std::atomic<std::uint32_t> m_lastObservedSendRingTouchThreadId = 0;
 		NetworkLib::Packet::Buffer::FRecvBuffer m_recvBuffer;
 		std::vector<char> m_recvStagingBuffer;
 		std::vector<char> m_sendRingBuffer;
+		std::size_t m_sendRingCapacityBytes = kDefaultSendRingSizeBytes;
 		std::size_t m_sendRingReadOffset = 0;
 		std::size_t m_sendRingWriteOffset = 0;
 		std::size_t m_sendRingUsedBytes = 0;

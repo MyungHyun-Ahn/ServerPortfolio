@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RttTypes.h"
+#include "Foundation/Diagnostics/Tls/FTlsCollectorRuntime.h"
 
 #include <deque>
 #include <memory>
@@ -9,7 +10,7 @@
 
 namespace Foundation::Diagnostics
 {
-	class FRttMetricsRuntime
+	class FRttMetricsRuntime : public FTlsCollectorRuntime
 	{
 	public:
 		explicit FRttMetricsRuntime(const SRttMetricsConfig& config);
