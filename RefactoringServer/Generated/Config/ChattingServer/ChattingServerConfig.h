@@ -101,7 +101,7 @@ namespace Generated::Config::ChattingServer
 
 	struct SChattingServerLoginAuthConfig
 	{
-		ELoginAuthMode Mode = ELoginAuthMode::Disabled;
+		ELoginAuthMode Mode = ELoginAuthMode::Redis;
 		std::string RedisHost = "127.0.0.1";
 		std::uint16_t RedisPort = static_cast<std::uint16_t>(6379);
 		std::string RedisPassword = "";

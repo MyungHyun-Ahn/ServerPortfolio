@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import { verifyMySqlConnection } from "../db/mysql";
 import { verifyRedisConnection } from "../db/redis";
 import type { ErrorResponse, LoginRequest, RegisterRequest } from "../models/auth-types";
-import { AccountService, getErrorStatusCode } from "../services/account-service";
+import { AccountService, getErrorCode, getErrorStatusCode } from "../services/account-service";
 import { ChatTicketService } from "../services/chat-ticket-service";
 
 export class AuthController {
@@ -67,6 +67,7 @@ export class AuthController {
     const statusCode = getErrorStatusCode(error) ?? 500;
     const body: ErrorResponse = {
       success: false,
+      code: getErrorCode(error) ?? "INTERNAL_SERVER_ERROR",
       message: getErrorMessage(error),
     };
 

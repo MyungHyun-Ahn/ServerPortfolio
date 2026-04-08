@@ -30,8 +30,8 @@ Scope: ChattingServer, ClientNetworkLib, ChattingDummy current state
 
 ## 5. 현재 미포함 범위
 - `Node.js LoginServer` 1차 스캐폴드와 `MySQL`, `Redis`, `Argon2id`, Swagger는 구현되었다.
-- `C# WinForms ChattingClient`는 1차 프로토타입을 추가했다.
-- 현재 `WinForms` 로그인/회원가입은 아직 mock 성공 기준이며, 실제 LoginServer 연동은 다음 작업이다.
+- `C# WinForms ChattingClient`는 `LoginServer HTTP 로그인/회원가입 -> LoginAuthRq` 흐름까지 연동되었다.
+- 로그인/회원가입 실패 시 `없는 아이디`, `중복 아이디`, `비밀번호 불일치` 같은 LoginServer 오류 코드를 팝업으로 매핑한다.
 - 현재 benchmark와 성능 비교 중심 축은 여전히 `ChattingDummyClient`다.
 
 ## 6. 관련 핵심 문서

@@ -9,6 +9,8 @@ internal static class ChattingPacketCodec
 {
     public const ushort LoginRqOpcode = 2000;
     public const ushort LoginRpOpcode = 2001;
+    public const ushort LoginAuthRqOpcode = 2002;
+    public const ushort LoginAuthRpOpcode = 2003;
     public const ushort RoomListRqOpcode = 3100;
     public const ushort RoomListRpOpcode = 3101;
     public const ushort RoomChangeRqOpcode = 3102;
@@ -23,6 +25,11 @@ internal static class ChattingPacketCodec
     public static byte[] CreateLoginRequestPacket(uint userId, byte packetKey)
     {
         return BuildPacket(LoginRqOpcode, writer => writer.WriteUInt32(userId), packetKey);
+    }
+
+    public static byte[] CreateLoginAuthRequestPacket(string ticket, byte packetKey)
+    {
+        return BuildPacket(LoginAuthRqOpcode, writer => writer.WriteString(ticket), packetKey);
     }
 
     public static byte[] CreateRoomListRequestPacket(byte packetKey)
@@ -99,7 +106,7 @@ internal static class ChattingPacketCodec
     public static bool TryReadLoginResult(DecodedPacket packet, out LoginResult result)
     {
         result = new LoginResult(0, false);
-        if (packet.Opcode != LoginRpOpcode)
+        if (packet.Opcode != LoginRpOpcode && packet.Opcode != LoginAuthRpOpcode)
         {
             return false;
         }

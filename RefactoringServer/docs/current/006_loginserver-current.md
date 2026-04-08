@@ -24,6 +24,7 @@ Scope: Node.js LoginServer current state
 - `GET /openapi.yaml`
 - `GET /openapi.json`
 - `GET /docs`
+- 실패 응답은 `success=false`, `code`, `message`를 함께 반환한다.
 
 ## 4. Swagger / OpenAPI 기준
 - Swagger UI 경로는 `http://127.0.0.1:18080/docs`다.
@@ -45,6 +46,6 @@ Scope: Node.js LoginServer current state
 - Redis ticket payload 확장
 
 ## 7. 다음 작업
-- `C# WinForms ChattingClient`를 `HTTP 로그인 -> LoginAuthRq` 흐름으로 전환한다.
-- UI에서 로그인/회원가입 오류 메시지와 로딩 상태를 정리한다.
+- `WinForms + ChattingServer` end-to-end 회귀를 실제 실행 기준으로 더 검증한다.
 - 필요 시 Swagger 예제와 오류 응답 schema를 더 세분화한다.
+- 운영 전환 전 HTTPS와 rate limit 정책을 붙인다.

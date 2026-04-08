@@ -6,7 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
-$refactoringServerRoot = Split-Path -Parent $scriptDirectory
+$scriptsRoot = Split-Path -Parent $scriptDirectory
+$refactoringServerRoot = Split-Path -Parent $scriptsRoot
 $projectPath = Join-Path $refactoringServerRoot "Tools\\ConfigGenerator\\ConfigGenerator.csproj"
 
 if (-not (Test-Path $projectPath))

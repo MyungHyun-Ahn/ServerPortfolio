@@ -3,6 +3,8 @@
 #include "Connector/Config/RedisChatTicketStoreTypes.h"
 #include "Connector/Interfaces/IChatTicketStore.h"
 
+#include <mutex>
+
 namespace cpp_redis
 {
 	class client;
@@ -26,6 +28,7 @@ namespace Connector
 		std::string BuildTicketKey(std::string_view ticket) const;
 
 	private:
+		mutable std::mutex m_mutex;
 		SRedisChatTicketStoreConfig m_config;
 		std::unique_ptr<cpp_redis::client> m_client;
 		bool m_authenticated = false;

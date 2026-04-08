@@ -30,6 +30,7 @@ export interface LoginResponse {
 
 export interface ErrorResponse {
   success: false;
+  code: string;
   message: string;
 }
 

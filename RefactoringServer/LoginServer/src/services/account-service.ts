@@ -10,16 +10,32 @@ import type {
   RegisterRequest,
 } from "../models/auth-types";
 
-class ValidationError extends Error {
-  public readonly statusCode = 400;
+class AuthServiceError extends Error {
+  public constructor(
+    public readonly statusCode: number,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
-class ConflictError extends Error {
-  public readonly statusCode = 409;
+class ValidationError extends AuthServiceError {
+  public constructor(code: string, message: string) {
+    super(400, code, message);
+  }
 }
 
-class AuthenticationError extends Error {
-  public readonly statusCode = 401;
+class ConflictError extends AuthServiceError {
+  public constructor(code: string, message: string) {
+    super(409, code, message);
+  }
+}
+
+class AuthenticationError extends AuthServiceError {
+  public constructor(code: string, message: string) {
+    super(401, code, message);
+  }
 }
 
 interface AccountRow extends RowDataPacket {
@@ -32,19 +48,32 @@ interface AccountRow extends RowDataPacket {
 
 function normalizeRequiredString(value: unknown, fieldName: string, maxLength: number): string {
   if (typeof value !== "string") {
-    throw new ValidationError(`${fieldName} must be a string.`);
+    throw new ValidationError(`${getFieldErrorCodePrefix(fieldName)}_REQUIRED`, `${fieldName} must be a string.`);
   }
 
   const normalized = value.trim();
   if (normalized.length === 0) {
-    throw new ValidationError(`${fieldName} is required.`);
+    throw new ValidationError(`${getFieldErrorCodePrefix(fieldName)}_REQUIRED`, `${fieldName} is required.`);
   }
 
   if (normalized.length > maxLength) {
-    throw new ValidationError(`${fieldName} is too long.`);
+    throw new ValidationError(`${getFieldErrorCodePrefix(fieldName)}_TOO_LONG`, `${fieldName} is too long.`);
   }
 
   return normalized;
+}
+
+function getFieldErrorCodePrefix(fieldName: string): string {
+  switch (fieldName) {
+  case "loginId":
+    return "LOGIN_ID";
+  case "password":
+    return "PASSWORD";
+  case "nickname":
+    return "NICKNAME";
+  default:
+    return "FIELD";
+  }
 }
 
 function createPasswordHash(password: string): Promise<string> {
@@ -93,7 +122,7 @@ export class AccountService {
       };
     } catch (error) {
       if (isDuplicateLoginIdError(error)) {
-        throw new ConflictError("loginId already exists.");
+        throw new ConflictError("LOGIN_ID_ALREADY_EXISTS", "loginId already exists.");
       }
 
       throw error;
@@ -113,17 +142,17 @@ export class AccountService {
     );
 
     if (rows.length === 0) {
-      throw new AuthenticationError("loginId or password is invalid.");
+      throw new AuthenticationError("LOGIN_ID_NOT_FOUND", "loginId does not exist.");
     }
 
     const account = mapAccountRow(rows[0]);
     if (account.status !== 1) {
-      throw new AuthenticationError("account is not active.");
+      throw new AuthenticationError("ACCOUNT_NOT_ACTIVE", "account is not active.");
     }
 
     const isVerified = await argon2.verify(account.passwordHash, password);
     if (!isVerified) {
-      throw new AuthenticationError("loginId or password is invalid.");
+      throw new AuthenticationError("PASSWORD_MISMATCH", "password is invalid.");
     }
 
     return {
@@ -150,4 +179,13 @@ export function getErrorStatusCode(error: unknown): number | null {
 
   const maybeStatusCode = error as { statusCode?: number };
   return typeof maybeStatusCode.statusCode === "number" ? maybeStatusCode.statusCode : null;
+}
+
+export function getErrorCode(error: unknown): string | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+
+  const maybeCode = error as { code?: string };
+  return typeof maybeCode.code === "string" && maybeCode.code.length > 0 ? maybeCode.code : null;
 }

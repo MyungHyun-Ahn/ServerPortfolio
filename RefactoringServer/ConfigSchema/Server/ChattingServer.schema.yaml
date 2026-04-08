@@ -57,7 +57,7 @@ Debug:
 LoginAuth:
   Mode:
     type: enum
-    default: Disabled
+    default: Redis
     values: [Disabled, Redis]
   RedisHost: { type: string, default: 127.0.0.1 }
   RedisPort: { type: uint16, default: 6379 }

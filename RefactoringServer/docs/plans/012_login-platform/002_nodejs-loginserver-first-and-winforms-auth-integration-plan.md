@@ -4,7 +4,7 @@
 정본: 예  
 최종 갱신: 2026-04-09  
 범위: `Node.js LoginServer` 1차 구현과 `C# WinForms` 외부 인증 전환  
-현황: `RefactoringServer/LoginServer` 1차 스캐폴드, `register/login/healthz`, `Argon2id + MySQL + Redis`, `Swagger/OpenAPI`, `Infra Docker compose` 연동 구현 완료
+현황: `RefactoringServer/LoginServer` 1차 스캐폴드, `register/login/healthz`, `Argon2id + MySQL + Redis`, `Swagger/OpenAPI`, `Infra Docker compose`, `WinForms HTTP 로그인/회원가입 -> LoginAuthRq` 연동 구현 완료
 
 ## 1. 목표
 - 다음 작업의 시작점을 `Node.js LoginServer`로 고정한다.
@@ -15,11 +15,11 @@
 - `ChattingServer`는 기존 `LoginRq/Rp` 경로와 새 `LoginAuthRq/Rp` 경로를 함께 가진다.
 - `Libraries/Connector`에는 `Redis ticket consume`용 `IChatTicketStore`, `FDisabledChatTicketStore`, `FRedisChatTicketStore`가 있다.
 - `Infra/docker-compose.login-platform.yaml`로 `MySQL + Redis`를 로컬에서 바로 올릴 수 있다.
-- `ChattingClientWinForms`는 아직 `LoginRq(userId)` 기반 mock 로그인만 사용한다.
+- `ChattingClientWinForms`는 `LoginServer HTTP 로그인/회원가입`과 `ChattingServer LoginAuthRq`를 사용한다.
 
-즉 서버 쪽 `ticket consume` 준비는 됐고, 이제 필요한 것은:
-1. `Node.js LoginServer`에서 계정 처리와 ticket 발급
-2. `WinForms`가 그 ticket으로 `LoginAuthRq`를 보내는 전환
+즉 서버 쪽 `ticket consume`과 `WinForms` 외부 인증 연동은 붙었고, 이제 필요한 것은:
+1. 실제 end-to-end 회귀 검증
+2. 에러 UX와 운영 설정 다듬기
 
 ## 3. 왜 LoginServer부터 시작하나
 - `WinForms` 전환은 결국 호출할 HTTP API 계약이 먼저 있어야 안정적으로 붙일 수 있다.

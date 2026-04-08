@@ -22,13 +22,13 @@
 | `009` | ChattingServer | 진행 중 | `ChattingServer` packet/flow 계약, `ClientNetworkLib`, `ChattingDummyClient` 1차 구현 완료. 다음은 `011_benchmark_runner` 연결 |
 | `010` | WorldServer | 후속 필요 | cell 기반 월드와 task graph는 별도 미래 우선순위 과제로 분리 |
 | `011` | BenchmarkRunner | 후속 필요 | `PowerShell + YAML manifest` 기반 범용 실행기 추가 예정. 1차는 `ChattingScenario`부터 시작 |
-| `012` | Login Platform / WinForms Prototype | 진행 중 | `ChattingClientWinForms` 1차 프로토타입, `LoginAuthRq/Rp`, `LoginServer` 1차 스캐폴드와 `register/login/healthz` 구현 완료. 다음은 WinForms HTTP 로그인과 `LoginAuthRq` 실제 연동 |
+| `012` | Login Platform / WinForms Prototype | 진행 중 | `ChattingClientWinForms`가 `LoginServer HTTP 로그인/회원가입 -> LoginAuthRq` 흐름과 오류 팝업까지 연동 완료. 다음은 end-to-end 회귀 검증과 UX 다듬기 |
 | `013` | Connector Library | 진행 중 | `Libraries/Connector`, `Redis ticket store`, `ChattingServer LoginAuth` 연동 완료. 다음은 `MySQL` 쪽 후속 정리와 운영 설정 보강 |
 
 ## 3. 현재 우선순위
 1. `012_login-platform`
-   - `C# WinForms`를 `HTTP 로그인 -> LoginAuthRq` 경로로 전환
-   - `LoginServer` API 응답/오류 처리와 인증 UX 정리
+   - `WinForms + LoginServer + ChattingServer` end-to-end 회귀 검증
+   - 로그인/회원가입 UX와 에러 문구 세부 조정
 2. `013_connector_library`
    - `Redis ticket consume` 경로 운영 검증
    - `MySQL` 후속 범위와 경계 정리
@@ -59,6 +59,6 @@
 ## 6. Chatting / Login 메모
 - `ChattingServer`는 패킷, room fan-out, end-to-end workload 비교용 샘플 서버다.
 - `ChattingDummyClient`는 `Login -> RoomList -> RoomChange -> Chatting -> Broadcast` 상태 머신으로 동작한다.
-- 사용자용 `C# WinForms ChattingClient` 1차 프로토타입이 추가돼 있다.
-- 외부 인증은 이후 `Node.js LoginServer + Redis chat ticket + MySQL AccountDB` 구조로 분리한다.
+- 사용자용 `C# WinForms ChattingClient`는 `LoginServer HTTP 로그인/회원가입 -> LoginAuthRq` 흐름까지 붙어 있다.
+- 외부 인증은 현재 `Node.js LoginServer + Redis chat ticket + MySQL AccountDB` 구조로 분리돼 있다.
 - `Connector`는 이 외부 인증 연동을 위해 `NetworkLib`, `ContentsRuntime` 밖에 두는 별도 인프라 계층이다.

@@ -6,10 +6,12 @@ namespace ChattingClientWinForms;
 internal sealed class MainForm : Form
 {
     private readonly ChattingTcpClient m_client = new();
+    private readonly AuthApiClient m_authApiClient = new();
 
     private readonly TextBox m_hostTextBox = new() { Dock = DockStyle.Fill, Text = "127.0.0.1" };
     private readonly NumericUpDown m_portNumericUpDown = new() { Dock = DockStyle.Fill, Minimum = 1, Maximum = 65535, Value = 19100 };
     private readonly NumericUpDown m_packetKeyNumericUpDown = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 255, Value = 55 };
+    private readonly TextBox m_loginServerBaseUrlTextBox = new() { Dock = DockStyle.Fill, Text = "http://127.0.0.1:18080" };
     private readonly Label m_connectionStatusValueLabel = new() { Dock = DockStyle.Fill, Text = "Disconnected", AutoSize = true };
     private readonly Label m_currentUserValueLabel = new() { Dock = DockStyle.Fill, Text = "-", AutoSize = true };
     private readonly Label m_currentRoomValueLabel = new() { Dock = DockStyle.Fill, Text = "-", AutoSize = true };
@@ -18,14 +20,14 @@ internal sealed class MainForm : Form
 
     private readonly TextBox m_loginIdTextBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox m_loginPasswordTextBox = new() { Dock = DockStyle.Fill, UseSystemPasswordChar = true };
-    private readonly Button m_loginButton = new() { Dock = DockStyle.Fill, Text = "Login (Prototype)" };
+    private readonly Button m_loginButton = new() { Dock = DockStyle.Fill, Text = "Login" };
 
     private readonly TextBox m_registerIdTextBox = new() { Dock = DockStyle.Fill };
     private readonly TextBox m_registerPasswordTextBox = new() { Dock = DockStyle.Fill, UseSystemPasswordChar = true };
     private readonly TextBox m_registerDisplayNameTextBox = new() { Dock = DockStyle.Fill };
-    private readonly Button m_registerButton = new() { Dock = DockStyle.Fill, Text = "Register (Mock)" };
+    private readonly Button m_registerButton = new() { Dock = DockStyle.Fill, Text = "Register" };
 
-    private readonly Button m_refreshRoomsButton = new() { Dock = DockStyle.Fill, Text = "Refresh Rooms" };
+    private readonly Button m_refreshRoomsButton = new() { Dock = DockStyle.Fill, Text = "Refresh RoomList" };
     private readonly Button m_enterRoomButton = new() { Dock = DockStyle.Fill, Text = "Enter / Change Room" };
     private readonly ListView m_roomListView = new()
     {
@@ -131,12 +133,12 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 8,
+            RowCount = 9,
             Padding = new Padding(8)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int row = 0; row < 6; ++row)
+        for (int row = 0; row < 7; ++row)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         }
@@ -150,12 +152,14 @@ internal sealed class MainForm : Form
         layout.Controls.Add(m_portNumericUpDown, 1, 1);
         layout.Controls.Add(CreateFieldLabel("Packet Key"), 0, 2);
         layout.Controls.Add(m_packetKeyNumericUpDown, 1, 2);
-        layout.Controls.Add(CreateFieldLabel("Status"), 0, 3);
-        layout.Controls.Add(m_connectionStatusValueLabel, 1, 3);
-        layout.Controls.Add(CreateFieldLabel("UserId"), 0, 4);
-        layout.Controls.Add(m_currentUserValueLabel, 1, 4);
-        layout.Controls.Add(CreateFieldLabel("Current Room"), 0, 5);
-        layout.Controls.Add(m_currentRoomValueLabel, 1, 5);
+        layout.Controls.Add(CreateFieldLabel("Login API"), 0, 3);
+        layout.Controls.Add(m_loginServerBaseUrlTextBox, 1, 3);
+        layout.Controls.Add(CreateFieldLabel("Status"), 0, 4);
+        layout.Controls.Add(m_connectionStatusValueLabel, 1, 4);
+        layout.Controls.Add(CreateFieldLabel("UserId"), 0, 5);
+        layout.Controls.Add(m_currentUserValueLabel, 1, 5);
+        layout.Controls.Add(CreateFieldLabel("Current Room"), 0, 6);
+        layout.Controls.Add(m_currentRoomValueLabel, 1, 6);
 
         FlowLayoutPanel buttonPanel = new()
         {
@@ -165,16 +169,16 @@ internal sealed class MainForm : Form
         buttonPanel.Controls.Add(m_connectButton);
         buttonPanel.Controls.Add(m_disconnectButton);
         layout.SetColumnSpan(buttonPanel, 2);
-        layout.Controls.Add(buttonPanel, 0, 6);
+        layout.Controls.Add(buttonPanel, 0, 7);
 
         Label noteLabel = new()
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            Text = "기본값은 현재 ChattingServer 설정과 맞춰져 있습니다.\r\n로그인은 어떤 입력이든 통과하며 임시 userId를 생성합니다."
+            Text = "로그인/회원가입은 LoginServer HTTP API를 사용합니다.\r\n로그인 성공 후 ChattingServer로 LoginAuthRq를 전송합니다."
         };
         layout.SetColumnSpan(noteLabel, 2);
-        layout.Controls.Add(noteLabel, 0, 7);
+        layout.Controls.Add(noteLabel, 0, 8);
 
         groupBox.Controls.Add(layout);
         return groupBox;
@@ -226,7 +230,7 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            Text = "현재는 입력값 검증 없이 mock 로그인합니다.\r\n서버에는 생성된 temporary userId만 전송됩니다."
+            Text = "LoginServer에 HTTP 로그인 후 chat ticket을 받아\r\nChattingServer에 LoginAuthRq로 인증합니다."
         };
         layout.SetColumnSpan(infoLabel, 2);
         layout.Controls.Add(infoLabel, 0, 3);
@@ -266,7 +270,7 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            Text = "회원가입은 현재 mock success 입니다.\r\n성공하면 로그인 탭 입력란을 자동으로 채워줍니다."
+            Text = "회원가입은 LoginServer에 실제 계정을 저장합니다.\r\n성공하면 로그인 탭 입력란을 자동으로 채워줍니다."
         };
         layout.SetColumnSpan(infoLabel, 2);
         layout.Controls.Add(infoLabel, 0, 4);
@@ -287,21 +291,35 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 3,
             Padding = new Padding(8)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        FlowLayoutPanel buttonPanel = new()
+        Label roomListLabel = new()
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight
+            Text = "RoomList",
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoSize = true
         };
+
+        TableLayoutPanel buttonPanel = new()
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1
+        };
+        buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         buttonPanel.Controls.Add(m_refreshRoomsButton);
-        buttonPanel.Controls.Add(m_enterRoomButton);
-        layout.Controls.Add(buttonPanel, 0, 0);
-        layout.Controls.Add(m_roomListView, 0, 1);
+        buttonPanel.Controls.Add(m_enterRoomButton, 1, 0);
+
+        layout.Controls.Add(roomListLabel, 0, 0);
+        layout.Controls.Add(buttonPanel, 0, 1);
+        layout.Controls.Add(m_roomListView, 0, 2);
 
         groupBox.Controls.Add(layout);
         return groupBox;
@@ -348,7 +366,7 @@ internal sealed class MainForm : Form
         m_connectButton.Click += async (_, _) => await ConnectOnlyAsync();
         m_disconnectButton.Click += async (_, _) => await DisconnectAsync();
         m_loginButton.Click += async (_, _) => await LoginAsync();
-        m_registerButton.Click += (_, _) => HandleRegisterMock();
+        m_registerButton.Click += async (_, _) => await RegisterAsync();
         m_refreshRoomsButton.Click += async (_, _) => await RefreshRoomsAsync();
         m_enterRoomButton.Click += async (_, _) => await EnterSelectedRoomAsync();
         m_sendChatButton.Click += async (_, _) => await SendChatAsync();
@@ -406,26 +424,43 @@ internal sealed class MainForm : Form
         {
             SetBusy(true);
 
-            if (m_loginAccepted)
+            LoginAccountRequest loginRequest = new(
+                m_loginIdTextBox.Text.Trim(),
+                m_loginPasswordTextBox.Text);
+            LoginAccountResponse loginResponse = await m_authApiClient
+                .LoginAsync(BuildAuthServerSettings(), loginRequest)
+                .ConfigureAwait(true);
+
+            if (m_client.IsConnected || m_loginAccepted)
             {
-                await m_client.DisconnectAsync("Reconnecting for a new login.").ConfigureAwait(true);
+                await m_client.DisconnectAsync("Reconnecting for external auth login.").ConfigureAwait(true);
                 ResetSessionState(clearChatLog: false);
             }
 
-            if (!m_client.IsConnected)
-            {
-                await m_client.ConnectAsync(BuildConnectionSettings()).ConfigureAwait(true);
-            }
-
-            m_currentUserId = TemporaryUserIdFactory.Create(m_loginIdTextBox.Text, m_loginPasswordTextBox.Text);
+            m_hostTextBox.Text = loginResponse.ChatServer.Ip;
+            m_portNumericUpDown.Value = Math.Clamp(
+                loginResponse.ChatServer.Port,
+                Decimal.ToInt32(m_portNumericUpDown.Minimum),
+                Decimal.ToInt32(m_portNumericUpDown.Maximum));
             UpdateStatusLabels();
 
-            AppendSystemMessage($"Prototype login request sent. temporaryUserId={m_currentUserId}");
-            await m_client.SendLoginAsync(m_currentUserId).ConfigureAwait(true);
+            AppendSystemMessage(
+                $"LoginServer login succeeded. userId={loginResponse.UserId}, nickname={loginResponse.Nickname}, ticketExpiresIn={loginResponse.TicketExpiresInSeconds}s");
+
+            await m_client.ConnectAsync(BuildConnectionSettings(loginResponse.ChatServer.Ip, loginResponse.ChatServer.Port))
+                .ConfigureAwait(true);
+            await m_client.SendLoginAuthAsync(loginResponse.Ticket).ConfigureAwait(true);
+            AppendSystemMessage("LoginAuth request sent to ChattingServer.");
+        }
+        catch (AuthApiException exception)
+        {
+            AppendSystemMessage($"Login failed. code={exception.ErrorCode ?? "-"}, message={exception.Message}");
+            ShowErrorPopup("로그인 실패", BuildAuthErrorMessage(exception));
         }
         catch (Exception exception)
         {
             AppendSystemMessage($"Login request failed: {exception.Message}");
+            ShowErrorPopup("로그인 실패", $"로그인 처리 중 오류가 발생했습니다.\r\n{exception.Message}");
         }
         finally
         {
@@ -433,25 +468,45 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void HandleRegisterMock()
+    private async Task RegisterAsync()
     {
-        string registerId = string.IsNullOrWhiteSpace(m_registerIdTextBox.Text)
-            ? $"user{Random.Shared.Next(1000, 9999)}"
-            : m_registerIdTextBox.Text.Trim();
-        string password = string.IsNullOrWhiteSpace(m_registerPasswordTextBox.Text)
-            ? "prototype"
-            : m_registerPasswordTextBox.Text;
-        string displayName = string.IsNullOrWhiteSpace(m_registerDisplayNameTextBox.Text)
-            ? registerId
-            : m_registerDisplayNameTextBox.Text.Trim();
+        try
+        {
+            SetBusy(true);
 
-        m_registerIdTextBox.Text = registerId;
-        m_registerPasswordTextBox.Text = password;
-        m_registerDisplayNameTextBox.Text = displayName;
+            RegisterAccountRequest registerRequest = new(
+                m_registerIdTextBox.Text.Trim(),
+                m_registerPasswordTextBox.Text,
+                m_registerDisplayNameTextBox.Text.Trim());
+            RegisterAccountResponse registerResponse = await m_authApiClient
+                .RegisterAsync(BuildAuthServerSettings(), registerRequest)
+                .ConfigureAwait(true);
 
-        m_loginIdTextBox.Text = registerId;
-        m_loginPasswordTextBox.Text = password;
-        AppendSystemMessage($"Mock register success. loginId={registerId}, nickname={displayName}");
+            m_loginIdTextBox.Text = registerRequest.LoginId;
+            m_loginPasswordTextBox.Text = registerRequest.Password;
+            AppendSystemMessage(
+                $"Register succeeded. userId={registerResponse.UserId}, loginId={registerRequest.LoginId}, nickname={registerResponse.Nickname}");
+            MessageBox.Show(
+                this,
+                $"회원가입이 완료되었습니다.\r\n아이디: {registerRequest.LoginId}\r\n닉네임: {registerResponse.Nickname}",
+                "회원가입 성공",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (AuthApiException exception)
+        {
+            AppendSystemMessage($"Register failed. code={exception.ErrorCode ?? "-"}, message={exception.Message}");
+            ShowErrorPopup("회원가입 실패", BuildAuthErrorMessage(exception));
+        }
+        catch (Exception exception)
+        {
+            AppendSystemMessage($"Register request failed: {exception.Message}");
+            ShowErrorPopup("회원가입 실패", $"회원가입 처리 중 오류가 발생했습니다.\r\n{exception.Message}");
+        }
+        finally
+        {
+            SetBusy(false);
+        }
     }
 
     private async Task RefreshRoomsAsync()
@@ -568,6 +623,7 @@ internal sealed class MainForm : Form
         {
             m_currentRoomId = 0;
             AppendSystemMessage($"Login rejected. userId={result.UserId}");
+            ShowErrorPopup("채팅 서버 인증 실패", "채팅 서버에서 로그인 인증을 거부했습니다.\r\n티켓이 만료되었거나 이미 사용되었을 수 있습니다.");
         }
         else
         {
@@ -651,12 +707,17 @@ internal sealed class MainForm : Form
         AppendChatMessage($"{message.SenderUserId}", message.PayloadText);
     }
 
-    private ClientConnectionSettings BuildConnectionSettings()
+    private ClientConnectionSettings BuildConnectionSettings(string? hostOverride = null, int? portOverride = null)
     {
         return new ClientConnectionSettings(
-            m_hostTextBox.Text.Trim(),
-            Decimal.ToInt32(m_portNumericUpDown.Value),
+            hostOverride ?? m_hostTextBox.Text.Trim(),
+            portOverride ?? Decimal.ToInt32(m_portNumericUpDown.Value),
             (byte)m_packetKeyNumericUpDown.Value);
+    }
+
+    private AuthServerSettings BuildAuthServerSettings()
+    {
+        return new AuthServerSettings(m_loginServerBaseUrlTextBox.Text.Trim());
     }
 
     private void ResetSessionState(bool clearChatLog)
@@ -732,6 +793,31 @@ internal sealed class MainForm : Form
     {
         m_isBusy = isBusy;
         UpdateUiState();
+    }
+
+    private void ShowErrorPopup(string title, string message)
+    {
+        MessageBox.Show(this, message, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+
+    private static string BuildAuthErrorMessage(AuthApiException exception)
+    {
+        return exception.ErrorCode switch
+        {
+            "LOGIN_ID_REQUIRED" => "아이디를 입력해 주세요.",
+            "LOGIN_ID_TOO_LONG" => "아이디 길이가 너무 깁니다.",
+            "PASSWORD_REQUIRED" => "비밀번호를 입력해 주세요.",
+            "PASSWORD_TOO_LONG" => "비밀번호 길이가 너무 깁니다.",
+            "NICKNAME_REQUIRED" => "닉네임을 입력해 주세요.",
+            "NICKNAME_TOO_LONG" => "닉네임 길이가 너무 깁니다.",
+            "LOGIN_ID_ALREADY_EXISTS" => "이미 사용 중인 아이디입니다. 다른 아이디를 입력해 주세요.",
+            "LOGIN_ID_NOT_FOUND" => "존재하지 않는 아이디입니다.",
+            "PASSWORD_MISMATCH" => "비밀번호가 올바르지 않습니다.",
+            "ACCOUNT_NOT_ACTIVE" => "비활성화된 계정입니다.",
+            _ => string.IsNullOrWhiteSpace(exception.Message)
+                ? "LoginServer 요청이 실패했습니다."
+                : exception.Message
+        };
     }
 
     private void RunOnUiThread(Action action)

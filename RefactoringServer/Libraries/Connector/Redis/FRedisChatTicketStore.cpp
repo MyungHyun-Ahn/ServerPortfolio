@@ -25,12 +25,12 @@ namespace Connector
 
 	FRedisChatTicketStore::FRedisChatTicketStore(SRedisChatTicketStoreConfig config)
 		: m_config(std::move(config))
-		, m_client(std::make_unique<cpp_redis::client>())
 	{
 	}
 
 	FRedisChatTicketStore::~FRedisChatTicketStore()
 	{
+		std::scoped_lock lock(m_mutex);
 		if (m_client != nullptr && m_client->is_connected())
 		{
 			m_client->disconnect(true);
@@ -42,6 +42,7 @@ namespace Connector
 		SConsumedChatTicket& outTicket,
 		std::string& outError)
 	{
+		std::scoped_lock lock(m_mutex);
 		outTicket = {};
 		outError.clear();
 
@@ -103,8 +104,7 @@ namespace Connector
 		{
 			if (m_client == nullptr)
 			{
-				outError = "redis client is not initialized.";
-				return false;
+				m_client = std::make_unique<cpp_redis::client>();
 			}
 
 			if (!m_client->is_connected())

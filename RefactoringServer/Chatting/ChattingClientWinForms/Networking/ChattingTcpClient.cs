@@ -87,6 +87,11 @@ internal sealed class ChattingTcpClient : IAsyncDisposable
         return SendPacketAsync(ChattingPacketCodec.CreateLoginRequestPacket(userId, m_packetKey), cancellationToken);
     }
 
+    public Task SendLoginAuthAsync(string ticket, CancellationToken cancellationToken = default)
+    {
+        return SendPacketAsync(ChattingPacketCodec.CreateLoginAuthRequestPacket(ticket, m_packetKey), cancellationToken);
+    }
+
     public Task SendRoomListAsync(CancellationToken cancellationToken = default)
     {
         return SendPacketAsync(ChattingPacketCodec.CreateRoomListRequestPacket(m_packetKey), cancellationToken);
@@ -220,6 +225,7 @@ internal sealed class ChattingTcpClient : IAsyncDisposable
         switch (decodedPacket.Opcode)
         {
         case ChattingPacketCodec.LoginRpOpcode:
+        case ChattingPacketCodec.LoginAuthRpOpcode:
             if (ChattingPacketCodec.TryReadLoginResult(decodedPacket, out LoginResult loginResult))
             {
                 LoginResultReceived?.Invoke(loginResult);

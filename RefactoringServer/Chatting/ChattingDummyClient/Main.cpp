@@ -392,6 +392,7 @@ namespace
 		void HandleRoomChangeResponse(SSessionSlot& slot, const FClientEvent& event, FRttThreadLocalCollector& rttCollector);
 		void HandleChattingResponse(SSessionSlot& slot, const FClientEvent& event, FRttThreadLocalCollector& rttCollector);
 		void HandleBroadcast(SSessionSlot& slot, const FClientEvent& event);
+		bool IsManagedDummyUserId(std::uint32_t userId) const noexcept;
 		std::optional<std::uint32_t> SelectTargetRoom(SSessionSlot& slot);
 		void RecordPendingSample(SSessionSlot& slot, FRttThreadLocalCollector& rttCollector);
 		std::uint8_t MakeRandomKey(const SSessionSlot& slot, std::uint8_t salt) const noexcept;
@@ -1002,7 +1003,8 @@ namespace
 			return;
 		}
 
-		if (broadcastPacket.payload != m_payloadPattern)
+		if (IsManagedDummyUserId(broadcastPacket.senderUserId) &&
+			broadcastPacket.payload != m_payloadPattern)
 		{
 			++m_stats.payloadValidationFailureCount;
 			MarkPermanentFailure(slot, "broadcast payload validation failed");
@@ -1010,6 +1012,14 @@ namespace
 		}
 
 		++m_stats.broadcastReceiveCount;
+	}
+
+	bool FChattingDummyRuntime::IsManagedDummyUserId(const std::uint32_t userId) const noexcept
+	{
+		const std::uint64_t begin = static_cast<std::uint64_t>(m_options.loginUserIdBase);
+		const std::uint64_t end = begin + static_cast<std::uint64_t>(std::max(1, m_options.sessionCount));
+		const std::uint64_t value = static_cast<std::uint64_t>(userId);
+		return value >= begin && value < end;
 	}
 
 	std::optional<std::uint32_t> FChattingDummyRuntime::SelectTargetRoom(SSessionSlot& slot)
