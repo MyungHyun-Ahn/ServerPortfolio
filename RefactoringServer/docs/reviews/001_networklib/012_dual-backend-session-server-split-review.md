@@ -1,90 +1,89 @@
-# Dual Backend Session/Server Split Review
+﻿# Dual Backend Session/Server Split Review
 
-## 1. 목적
-- `NetworkLib`가 `IOCP`와 `RIO`를 모두 backend로 지원할 수 있도록 내부 구조를 분리한 작업을 정리한다.
-- 이번 단계의 목표는 `RIO 완성`이 아니라, `IOCP 동작 유지 + RIO 진입점 확보`다.
+## 1. 紐⑹쟻
+- `NetworkLib`媛 `IOCP`? `RIO`瑜?紐⑤몢 backend濡?吏?먰븷 ???덈룄濡??대? 援ъ“瑜?遺꾨━???묒뾽???뺣━?쒕떎.
+- ?대쾲 ?④퀎??紐⑺몴??`RIO ?꾩꽦`???꾨땲?? `IOCP ?숈옉 ?좎? + RIO 吏꾩엯???뺣낫`??
 
-## 2. 핵심 변경
-### 2.1 Session 분리
-- 기존 단일 구현:
+## 2. ?듭떖 蹂寃?### 2.1 Session 遺꾨━
+- 湲곗〈 ?⑥씪 援ы쁽:
   - `FSession`
-- 현재 구조:
-  - [ISession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\ISession.h)
-  - [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
-  - [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
+- ?꾩옱 援ъ“:
+  - [ISession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\ISession.h)
+  - [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.h)
+  - [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
 
-`ISession`은 최소 공통 수명주기와 통계만 가진다.
+`ISession`? 理쒖냼 怨듯넻 ?섎챸二쇨린? ?듦퀎留?媛吏꾨떎.
 - `sessionId`
 - `slotIndex`
 - `generation`
 - closing / refcount
 - queued send count
 
-IOCP 전용 상태는 `FIocpSession`으로 내렸다.
+IOCP ?꾩슜 ?곹깭??`FIocpSession`?쇰줈 ?대졇??
 - `OVERLAPPED`
 - `WSABUF`
 - recv buffer
 - send queue
 - `TryBeginSend / EndSend`
 
-RIO 전용 상태는 `FRioSession`으로 둘 자리를 먼저 만들었다.
-- 현재는 skeleton만 있고 실제 `RQ/CQ` 상태는 후속 구현 범위다.
+RIO ?꾩슜 ?곹깭??`FRioSession`?쇰줈 ???먮━瑜?癒쇱? 留뚮뱾?덈떎.
+- ?꾩옱??skeleton留??덇퀬 ?ㅼ젣 `RQ/CQ` ?곹깭???꾩냽 援ы쁽 踰붿쐞??
 
-### 2.2 Server 분리
-- 기존:
-  - [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
-- 추가:
-  - [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
+### 2.2 Server 遺꾨━
+- 湲곗〈:
+  - [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.h)
+- 異붽?:
+  - [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)
 
-현재 의미:
-- `FIocpServer`는 실제 동작 backend
-- `FRioServer`는 backend entry stub
+?꾩옱 ?섎?:
+- `FIocpServer`???ㅼ젣 ?숈옉 backend
+- `FRioServer`??backend entry stub
 
-### 2.3 Factory 연결
-- [FServerFactory.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.cpp)
+### 2.3 Factory ?곌껐
+- [FServerFactory.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FServerFactory.cpp)
 - `Backend: Iocp` -> `FIocpServer`
 - `Backend: Rio` -> `FRioServer`
 
-## 3. IOCP 회귀 여부
-이번 분리 작업에서 가장 중요한 조건은 `IOCP 동작 보존`이었다.
+## 3. IOCP ?뚭? ?щ?
+?대쾲 遺꾨━ ?묒뾽?먯꽌 媛??以묒슂??議곌굔? `IOCP ?숈옉 蹂댁〈`?댁뿀??
 
-확인한 내용:
-- 솔루션 `Debug x64` 빌드 성공
-- `EchoServer + EchoClient` 기본 스모크 성공
-- `IOCP 100세션 / 3분` 회귀 성공
+?뺤씤???댁슜:
+- ?붾（??`Debug x64` 鍮뚮뱶 ?깃났
+- `EchoServer + EchoClient` 湲곕낯 ?ㅻえ???깃났
+- `IOCP 100?몄뀡 / 3遺? ?뚭? ?깃났
 
-검증 로그:
+寃利?濡쒓렇:
 - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\iocp_regression_100x3m\client.log)
 
-결과:
+寃곌낵:
 - `echo validation succeeded. sessions=100 responses=17912 ... holdSeconds=180`
-- 클라이언트 에러 로그 비어 있음
-- 서버 에러 로그 비어 있음
+- ?대씪?댁뼵???먮윭 濡쒓렇 鍮꾩뼱 ?덉쓬
+- ?쒕쾭 ?먮윭 濡쒓렇 鍮꾩뼱 ?덉쓬
 
-## 4. RIO 현재 상태
-현재 `RIO`는 “선택 가능하지만 미구현” 상태다.
+## 4. RIO ?꾩옱 ?곹깭
+?꾩옱 `RIO`???쒖꽑??媛?ν븯吏留?誘멸뎄?꾟??곹깭??
 
-확인한 내용:
-- `Backend: Rio`로 서버를 기동하면 [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)가 선택된다.
-- 현재는 명시적으로 `RIO backend is not implemented yet.`를 출력하고 실패 종료한다.
+?뺤씤???댁슜:
+- `Backend: Rio`濡??쒕쾭瑜?湲곕룞?섎㈃ [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)媛 ?좏깮?쒕떎.
+- ?꾩옱??紐낆떆?곸쑝濡?`RIO backend is not implemented yet.`瑜?異쒕젰?섍퀬 ?ㅽ뙣 醫낅즺?쒕떎.
 
-검증 로그:
+寃利?濡쒓렇:
 - [rio_server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_refactor_smoke\rio_server.log)
 
-이 상태의 장점:
-- factory, config, public API 경로가 이미 `RIO`를 인식한다.
-- 다음 작업은 내부 구현만 채우면 된다.
+???곹깭???μ젏:
+- factory, config, public API 寃쎈줈媛 ?대? `RIO`瑜??몄떇?쒕떎.
+- ?ㅼ쓬 ?묒뾽? ?대? 援ы쁽留?梨꾩슦硫??쒕떎.
 
-## 5. 이번 단계에서 하지 않은 것
-- `FRioServer` 실제 send/recv 구현
-- `FRioSession`의 RQ/CQ 상태 구현
-- owner-worker 정책
-- session 수 기반 least-loaded 배정
-- CQ ownership 정책
+## 5. ?대쾲 ?④퀎?먯꽌 ?섏? ?딆? 寃?- `FRioServer` ?ㅼ젣 send/recv 援ы쁽
+- `FRioSession`??RQ/CQ ?곹깭 援ы쁽
+- owner-worker ?뺤콉
+- session ??湲곕컲 least-loaded 諛곗젙
+- CQ ownership ?뺤콉
 
-이 항목들은 `RIO` 실제 구현 단계에서 다시 다룬다.
+????ぉ?ㅼ? `RIO` ?ㅼ젣 援ы쁽 ?④퀎?먯꽌 ?ㅼ떆 ?ㅻ，??
 
-## 6. 결론
-- 이번 작업으로 `NetworkLib`는 `single IOCP implementation`에서 `dual-backend로 확장 가능한 구조`로 넘어갔다.
-- `IOCP` 기준선은 유지됐다.
-- 이제 `RIO`는 설계 문서만 있는 상태가 아니라, 실제 코드 경계와 backend 선택 경로를 가진 상태다.
+## 6. 寃곕줎
+- ?대쾲 ?묒뾽?쇰줈 `NetworkLib`??`single IOCP implementation`?먯꽌 `dual-backend濡??뺤옣 媛?ν븳 援ъ“`濡??섏뼱媛붾떎.
+- `IOCP` 湲곗??좎? ?좎??먮떎.
+- ?댁젣 `RIO`???ㅺ퀎 臾몄꽌留??덈뒗 ?곹깭媛 ?꾨땲?? ?ㅼ젣 肄붾뱶 寃쎄퀎? backend ?좏깮 寃쎈줈瑜?媛吏??곹깭??
+

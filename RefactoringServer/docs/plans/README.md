@@ -49,18 +49,18 @@
 ## 6. Codegen 규칙
 ### PacketGenerator
 - 실행 진입점:
-  - [Generate-Packets.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Packets.ps1)
-  - [Generate-Packets.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Packets.cmd)
+  - [Generate-Packets.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Packets.ps1)
+  - [Generate-Packets.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Packets.cmd)
 
 ### ConfigGenerator
 - 실행 진입점:
-  - [Generate-Configs.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Configs.ps1)
-  - [Generate-Configs.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Configs.cmd)
+  - [Generate-Configs.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Configs.ps1)
+  - [Generate-Configs.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Configs.cmd)
 
 ### 통합 실행
 - packet/config 스키마를 한 번에 갱신할 때 사용:
-  - [Generate-Codegen.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Codegen.ps1)
-  - [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Codegen.cmd)
+  - [Generate-Codegen.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Codegen.ps1)
+  - [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Codegen.cmd)
 
 ## 7. Packet Schema Tooling 문서
 - [003_packet-generator-broadcast-contract.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\006_packet-schema-tooling\003_packet-generator-broadcast-contract.md)

@@ -1,64 +1,62 @@
-# RIO EchoServer Flow Review
+﻿# RIO EchoServer Flow Review
 
-## 1. 목적
-- 현재 기준 `Backend: Rio`에서 `EchoClient -> EchoServer -> ContentsRuntime -> EchoServer -> EchoClient` 흐름이 실제로 어떻게 이어지는지 코드 호출 스택 기준으로 정리한다.
-- 특히 다음 질문에 바로 답할 수 있게 하는 것이 목적이다.
-  - `EchoClient`가 `Rq`를 만들고 보내는 경로는 어디인가
-  - `EchoServer`의 `AcceptEx` 기반 accept 흐름은 어떻게 이어지는가
-  - `RIO` recv completion이 어떻게 `ContentsRuntime`까지 올라가는가
-  - `EchoRp`가 어떤 경로로 `RIOSend()`까지 내려가는가
+## 1. 紐⑹쟻
+- ?꾩옱 湲곗? `Backend: Rio`?먯꽌 `EchoClient -> EchoServer -> ContentsRuntime -> EchoServer -> EchoClient` ?먮쫫???ㅼ젣濡??대뼸寃??댁뼱吏?붿? 肄붾뱶 ?몄텧 ?ㅽ깮 湲곗??쇰줈 ?뺣━?쒕떎.
+- ?뱁엳 ?ㅼ쓬 吏덈Ц??諛붾줈 ?듯븷 ???덇쾶 ?섎뒗 寃껋씠 紐⑹쟻?대떎.
+  - `EchoClient`媛 `Rq`瑜?留뚮뱾怨?蹂대궡??寃쎈줈???대뵒?멸?
+  - `EchoServer`??`AcceptEx` 湲곕컲 accept ?먮쫫? ?대뼸寃??댁뼱吏?붽?
+  - `RIO` recv completion???대뼸寃?`ContentsRuntime`源뚯? ?щ씪媛?붽?
+  - `EchoRp`媛 ?대뼡 寃쎈줈濡?`RIOSend()`源뚯? ?대젮媛?붽?
 
-## 2. 대상 파일
-- 서버 시작 / application 경계
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 2. ????뚯씪
+- ?쒕쾭 ?쒖옉 / application 寃쎄퀎
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
 - RIO backend
-  - [FRioServer.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
+  - [FRioServer.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp)
 - RIO session
-  - [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
-  - [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.cpp)
-- 콘텐츠 런타임
-  - [FContentRuntime.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.h)
-  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
-  - [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Bridge\IContentBridge.h)
-- 패킷 직렬화 / send packet 경계
-  - [FPacketSerialization.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Serialization\FPacketSerialization.h)
-  - [FPacketWriter.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Serialization\FPacketWriter.h)
+  - [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
+  - [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.cpp)
+- 肄섑뀗痢??고???  - [FContentRuntime.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.h)
+  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp)
+  - [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Bridge\IContentBridge.h)
+- ?⑦궥 吏곷젹??/ send packet 寃쎄퀎
+  - [FPacketSerialization.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Serialization\FPacketSerialization.h)
+  - [FPacketWriter.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Serialization\FPacketWriter.h)
 - Echo content
-  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.cpp)
-- 클라이언트
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
+  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.cpp)
+- ?대씪?댁뼵??  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\Main.cpp)
 
-## 3. 현재 구조 요약
-- `EchoClient`는 여전히 raw Winsock으로 동작하지만, 패킷 직렬화/프레이밍은 `NetworkLib`를 사용한다.
-- `EchoServer`는 `IApplicationHandler` 구현체인 `FEchoApplication`을 통해 transport와 `ContentsRuntime`를 연결한다.
-- `RIO` backend는 `AcceptEx + WSA_FLAG_REGISTERED_IO + RIO_EVENT_COMPLETION` 조합으로 동작한다.
-- 현재 send 경계는 예전 `SendRaw(opcode, buffer, length)`가 아니라 `SendPacket(sessionId, FOutgoingContentPacket&&)` 기준이다.
-- 이 변경으로 애플리케이션 계층은 `NetworkLib` transport header를 직접 다루지 않는다.
+## 3. ?꾩옱 援ъ“ ?붿빟
+- `EchoClient`???ъ쟾??raw Winsock?쇰줈 ?숈옉?섏?留? ?⑦궥 吏곷젹???꾨젅?대컢? `NetworkLib`瑜??ъ슜?쒕떎.
+- `EchoServer`??`IApplicationHandler` 援ы쁽泥댁씤 `FEchoApplication`???듯빐 transport? `ContentsRuntime`瑜??곌껐?쒕떎.
+- `RIO` backend??`AcceptEx + WSA_FLAG_REGISTERED_IO + RIO_EVENT_COMPLETION` 議고빀?쇰줈 ?숈옉?쒕떎.
+- ?꾩옱 send 寃쎄퀎???덉쟾 `SendRaw(opcode, buffer, length)`媛 ?꾨땲??`SendPacket(sessionId, FOutgoingContentPacket&&)` 湲곗??대떎.
+- ??蹂寃쎌쑝濡??좏뵆由ъ??댁뀡 怨꾩링? `NetworkLib` transport header瑜?吏곸젒 ?ㅻ（吏 ?딅뒗??
 
-## 4. EchoClient에서 Rq를 보내는 흐름
-### 4-1. 세션 루프 진입
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
+## 4. EchoClient?먯꽌 Rq瑜?蹂대궡???먮쫫
+### 4-1. ?몄뀡 猷⑦봽 吏꾩엯
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\Main.cpp)
   - `main()`
   - `RunSingleSession(sessionIndex, options, rttMetricsRuntime)`
 
-### 4-2. 연결
+### 4-2. ?곌껐
 - `RunSingleSession(...)`
   - `TryConnectSocket(options, clientSocket, errorMessage)`
 - `TryConnectSocket(...)`
   - `socket()`
   - `connect()`
-  - 필요 시 `SO_RCVTIMEO` 설정
+  - ?꾩슂 ??`SO_RCVTIMEO` ?ㅼ젙
 
-### 4-3. 로그인 / 룸 진입 bootstrap
-- 같은 `RunSingleSession(...)` 안에서 순서대로 진행된다.
-  - `FLoginRq` 전송
-  - `FRoomListRq` 수신
-  - `FRoomEnterRq` 전송
-  - `FRoomEnterRp` 수신
-- 정상 bootstrap 후에만 `EchoRq` 루프로 들어간다.
+### 4-3. 濡쒓렇??/ 猷?吏꾩엯 bootstrap
+- 媛숈? `RunSingleSession(...)` ?덉뿉???쒖꽌?濡?吏꾪뻾?쒕떎.
+  - `FLoginRq` ?꾩넚
+  - `FRoomListRq` ?섏떊
+  - `FRoomEnterRq` ?꾩넚
+  - `FRoomEnterRp` ?섏떊
+- ?뺤긽 bootstrap ?꾩뿉留?`EchoRq` 猷⑦봽濡??ㅼ뼱媛꾨떎.
 
-### 4-4. EchoRq 직렬화와 전송
+### 4-4. EchoRq 吏곷젹?붿? ?꾩넚
 - `RunSingleSession(...)`
   - `Generated::Echo::FEchoRq requestPacket`
   - `NetworkLib::Packet::Serialization::SerializeContentPacket(requestPacket)`
@@ -66,36 +64,34 @@
   - `packetFramer.BuildPacket(...)`
   - `SendPacketWithOptionalChunking(...)`
 
-현재 `SerializeContentPacket(...)` 내부는:
-- [FPacketSerialization.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Serialization\FPacketSerialization.h)
+?꾩옱 `SerializeContentPacket(...)` ?대???
+- [FPacketSerialization.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Serialization\FPacketSerialization.h)
   - `BuildOutgoingContentPacket(packet).MoveBuffer()`
 
-즉 클라이언트도 현재는:
-- writer가 앞쪽에 `SContentHeader` 공간을 잡고
-- body를 뒤에 serialize한 뒤
-- `NetworkLib` 쪽 helper가 content header를 채워서 완성된 content payload를 만든다.
+利??대씪?댁뼵?몃룄 ?꾩옱??
+- writer媛 ?욎そ??`SContentHeader` 怨듦컙???↔퀬
+- body瑜??ㅼ뿉 serialize????- `NetworkLib` 履?helper媛 content header瑜?梨꾩썙???꾩꽦??content payload瑜?留뚮뱺??
 
-## 5. EchoServer 시작 흐름
-### 5-1. config와 backend 선택
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 5. EchoServer ?쒖옉 ?먮쫫
+### 5-1. config? backend ?좏깮
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
   - `FEchoServerConfigLoader::LoadFromFile(...)`
   - `ApplyEchoServerConfigDocument(...)`
   - `FServerFactory::Create(serverConfig.backendKind)`
 
-`Backend: Rio`이면:
-- [FServerFactory.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.cpp)
-  - `FRioServer` 생성
+`Backend: Rio`?대㈃:
+- [FServerFactory.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FServerFactory.cpp)
+  - `FRioServer` ?앹꽦
 
-### 5-2. Start 호출
+### 5-2. Start ?몄텧
 - `server->Start(serverConfig, echoApplication)`
-- `echoApplication`은 `IApplicationHandler` 구현체다.
+- `echoApplication`? `IApplicationHandler` 援ы쁽泥대떎.
 
-## 6. RIO accept 호출 스택
-### 6-1. Start 내부 초기화
-- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
+## 6. RIO accept ?몄텧 ?ㅽ깮
+### 6-1. Start ?대? 珥덇린??- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp)
   - `FRioServer::Start(...)`
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `InitializeWinsock()`
 2. `LoadRioFunctionTable()`
 3. `OpenListenSocket()`
@@ -104,174 +100,172 @@
 6. `m_acceptThread = std::thread(&FRioServer::AcceptLoop, this)`
 7. `m_applicationHandler->OnServerStarted(*this)`
 
-### 6-2. AcceptEx 루프
+### 6-2. AcceptEx 猷⑦봽
 - `FRioServer::AcceptLoop()`
 
-실제 흐름:
-1. `WSASocketW(..., WSA_FLAG_REGISTERED_IO)`로 accepted socket 후보 생성
-2. `AcceptEx(...)` 호출
+?ㅼ젣 ?먮쫫:
+1. `WSASocketW(..., WSA_FLAG_REGISTERED_IO)`濡?accepted socket ?꾨낫 ?앹꽦
+2. `AcceptEx(...)` ?몄텧
 3. event wait
-4. 완료 후 `SO_UPDATE_ACCEPT_CONTEXT`
+4. ?꾨즺 ??`SO_UPDATE_ACCEPT_CONTEXT`
 5. `AttachAcceptedSocket(clientSocket)`
 
-즉 RIO 경로의 accept는:
-- `accept()`가 아니라 `AcceptEx`
-- accepted socket도 미리 `WSA_FLAG_REGISTERED_IO`로 만든다.
+利?RIO 寃쎈줈??accept??
+- `accept()`媛 ?꾨땲??`AcceptEx`
+- accepted socket??誘몃━ `WSA_FLAG_REGISTERED_IO`濡?留뚮뱺??
 
-### 6-3. AttachAcceptedSocket 호출 스택
+### 6-3. AttachAcceptedSocket ?몄텧 ?ㅽ깮
 - `FRioServer::AttachAcceptedSocket(clientSocket)`
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `ChooseLeastLoadedWorkerIndex()`
-2. 빈 session slot 탐색
+2. 鍮?session slot ?먯깋
 3. `FRioSession::Create()`
 4. `FRioSession::Initialize(...)`
-5. recv staging buffer용 `RIORegisterBuffer(...)`
+5. recv staging buffer??`RIORegisterBuffer(...)`
 6. `RIOCreateRequestQueue(...)`
 7. slot attach
 8. `m_applicationHandler->OnClientConnected(sessionId)`
 9. `PostRecv(*newSessionContext)`
 
-현재 owner worker 정책은:
-- `activeSessionCount` 기반 least-loaded
-- accept 시 owner를 정하고 세션은 그 worker에 고정된다.
+?꾩옱 owner worker ?뺤콉?:
+- `activeSessionCount` 湲곕컲 least-loaded
+- accept ??owner瑜??뺥븯怨??몄뀡? 洹?worker??怨좎젙?쒕떎.
 
-## 7. RIO recv -> EchoServer application -> ContentsRuntime 흐름
-### 7-1. 첫 recv post
+## 7. RIO recv -> EchoServer application -> ContentsRuntime ?먮쫫
+### 7-1. 泥?recv post
 - `FRioServer::PostRecv(FRioSession&)`
-  - recv pending 상태 체크
-  - staging buffer를 `RIO_BUF`로 설정
+  - recv pending ?곹깭 泥댄겕
+  - staging buffer瑜?`RIO_BUF`濡??ㅼ젙
   - `RIOReceive(...)`
 
-### 7-2. CQ 소비
+### 7-2. CQ ?뚮퉬
 - `FRioServer::WorkerLoop(workerIndex)`
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `DrainSendCommands(workerIndex)`
 2. `RIONotify(worker.completionQueue)`
 3. `WaitForSingleObject(worker.completionEvent, ...)`
 4. `RIODequeueCompletion(...)`
-5. 각 completion마다 `HandleRioCompletion(...)`
+5. 媛?completion留덈떎 `HandleRioCompletion(...)`
 
-### 7-3. recv completion 처리
+### 7-3. recv completion 泥섎━
 - `FRioServer::HandleRioCompletion(...)`
-  - `requestKind == Recv`면 `HandleRecvCompletion(...)`
+  - `requestKind == Recv`硫?`HandleRecvCompletion(...)`
 
 - `FRioServer::HandleRecvCompletion(...)`
-  - staging buffer -> session recv ring buffer 복사
+  - staging buffer -> session recv ring buffer 蹂듭궗
   - `m_packetFramer->TryExtractPacketView(...)`
-  - checksum 검증
-  - 필요 시 `packetCipher->Decode(...)`
+  - checksum 寃利?  - ?꾩슂 ??`packetCipher->Decode(...)`
   - `TryParseContentPacketView(...)`
   - `m_applicationHandler->OnPacketReceived(*this, sessionId, contentPacketView)`
 
-여기까지가 transport 계층 책임이다.
+?ш린源뚯?媛 transport 怨꾩링 梨낆엫?대떎.
 
-## 8. EchoServer application dispatch 흐름
-### 8-1. 연결 직후
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 8. EchoServer application dispatch ?먮쫫
+### 8-1. ?곌껐 吏곹썑
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
   - `FEchoApplication::OnClientConnected(sessionId)`
   - `m_contentRuntime.EnterSession(sessionId, kAuthContentId)`
 
-즉 새 세션은 먼저 `Auth` content로 들어간다.
+利????몄뀡? 癒쇱? `Auth` content濡??ㅼ뼱媛꾨떎.
 
-### 8-2. packet 수신 후
-- `FEchoApplication::OnPacketReceived(server, sessionId, packetView)`
-  - 필요 시 trace/log
+### 8-2. packet ?섏떊 ??- `FEchoApplication::OnPacketReceived(server, sessionId, packetView)`
+  - ?꾩슂 ??trace/log
   - `m_contentRuntime.EnqueuePacket(sessionId, packetView.opcode, packetView.payload, packetView.payloadLength)`
 
-즉 `FRioServer`는 contents thread를 직접 호출하지 않고:
+利?`FRioServer`??contents thread瑜?吏곸젒 ?몄텧?섏? ?딄퀬:
 - `IApplicationHandler`
 - `ContentsRuntime`
-순서로 넘긴다.
+?쒖꽌濡??섍릿??
 
-## 9. ContentsRuntime -> Echo content 흐름
-- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
+## 9. ContentsRuntime -> Echo content ?먮쫫
+- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp)
   - `FContentRuntime::EnqueuePacket(...)`
   - route lookup
-  - target `FContentThread`에 envelope enqueue
+  - target `FContentThread`??envelope enqueue
 
-- [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.cpp)
+- [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.cpp)
   - `FEchoContent::OnPacket(...)`
   - opcode switch
   - `HandleEchoRq(...)`
   - `HandleRoomListRq(...)`
   - `HandleRoomChangeRq(...)`
 
-즉 `EchoRq`는 최종적으로:
+利?`EchoRq`??理쒖쥌?곸쑝濡?
 1. `FRioServer`
 2. `FEchoApplication`
 3. `FContentRuntime`
 4. `FContentThread`
 5. `FEchoContent::HandleEchoRq`
-순서로 들어간다.
+?쒖꽌濡??ㅼ뼱媛꾨떎.
 
-## 10. EchoRp send 호출 스택
-### 10-1. content 계층
+## 10. EchoRp send ?몄텧 ?ㅽ깮
+### 10-1. content 怨꾩링
 - `FEchoContent::HandleEchoRq(...)`
   - `Generated::Echo::FEchoRp responsePacket`
   - `ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, responsePacket)`
 
-### 10-2. bridge / runtime 계층
-- [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Bridge\IContentBridge.h)
+### 10-2. bridge / runtime 怨꾩링
+- [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Bridge\IContentBridge.h)
   - `SendContentPacket(...)`
   - `NetworkLib::Packet::Serialization::BuildOutgoingContentPacket(packet)`
   - `bridge.SendPacket(sessionId, outgoingPacket)`
 
-- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
+- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp)
   - `FContentRuntime::SendPacket(...)`
   - `server->SendPacket(sessionId, std::move(packet))`
 
-### 10-3. RIO send 계층
-- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
+### 10-3. RIO send 怨꾩링
+- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp)
   - `FRioServer::SendPacket(...)`
 
-현재 기준 주요 순서:
+?꾩옱 湲곗? 二쇱슂 ?쒖꽌:
 1. `AcquireSession(sessionId)`
 2. `packet.ReleaseBuffer()`
-3. framer가 있으면 `BuildPacket(...)`으로 transport packet 생성
-4. 현재 mode가 `Direct`면 `SubmitSendDirect(...)`
+3. framer媛 ?덉쑝硫?`BuildPacket(...)`?쇰줈 transport packet ?앹꽦
+4. ?꾩옱 mode媛 `Direct`硫?`SubmitSendDirect(...)`
 5. `SubmitSendDirect(...)`
    - `RIORegisterBuffer(...)`
    - `RIOSend(...)`
 
-즉 현재 기본 `Rio Direct` 흐름에서는:
-- contents thread가 만든 outgoing packet
+利??꾩옱 湲곕낯 `Rio Direct` ?먮쫫?먯꽌??
+- contents thread媛 留뚮뱺 outgoing packet
 - `FRioServer::SendPacket`
 - `SubmitSendDirect`
 - `RIOSend`
-순서로 간다.
+?쒖꽌濡?媛꾨떎.
 
-## 11. EchoClient에서 Rp를 받는 흐름
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
+## 11. EchoClient?먯꽌 Rp瑜?諛쏅뒗 ?먮쫫
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\Main.cpp)
   - `RunSingleSession(...)`
   - `tryReceiveNextContentPacket(...)`
 
-주요 순서:
-1. `recv()` 또는 timeout 기반 wait
+二쇱슂 ?쒖꽌:
+1. `recv()` ?먮뒗 timeout 湲곕컲 wait
 2. `packetFramer.TryExtractPacketView(...)`
-3. checksum 검증
-4. `packetCipher.Decode(...)`
+3. checksum 寃利?4. `packetCipher.Decode(...)`
 5. `TryParseContentPacketView(...)`
 6. `DeserializeContentPacket(contentPacketView, responsePacket)`
 
-즉 EchoClient 쪽 응답 수신은:
-- transport header 제거
-- content header 제거
+利?EchoClient 履??묐떟 ?섏떊?:
+- transport header ?쒓굅
+- content header ?쒓굅
 - generated packet deserialize
-순서다.
+?쒖꽌??
 
-## 12. 현재 기준에서 중요하게 바뀐 점
-1. 예전 `SendRaw(opcode, buffer, length)` 경로가 아니라 `SendPacket(FOutgoingContentPacket&&)` 경로다.
-2. `SContentHeader`는 앱 계층이 직접 쓰지 않는다.
-3. `BuildOutgoingContentPacket(...)`가 front headroom을 이용해 content payload를 완성한다.
-4. 이 변경으로 `SContentHeader + body` 재복사가 줄었다.
+## 12. ?꾩옱 湲곗??먯꽌 以묒슂?섍쾶 諛붾???1. ?덉쟾 `SendRaw(opcode, buffer, length)` 寃쎈줈媛 ?꾨땲??`SendPacket(FOutgoingContentPacket&&)` 寃쎈줈??
+2. `SContentHeader`????怨꾩링??吏곸젒 ?곗? ?딅뒗??
+3. `BuildOutgoingContentPacket(...)`媛 front headroom???댁슜??content payload瑜??꾩꽦?쒕떎.
+4. ??蹂寃쎌쑝濡?`SContentHeader + body` ?щ났?ш? 以꾩뿀??
 
-## 13. 현재 해석
-- `RIO` backend는 이제 stub이 아니라, `EchoServer`에서 accept/recv/send/contents dispatch 전체 흐름이 실제로 연결된 상태다.
-- `EchoClient`와의 end-to-end 흐름도 현재 `SendPacket` 경로 기준으로 정리 가능하다.
-- 이후 성능 최적화는 이 구조 위에서:
+## 13. ?꾩옱 ?댁꽍
+- `RIO` backend???댁젣 stub???꾨땲?? `EchoServer`?먯꽌 accept/recv/send/contents dispatch ?꾩껜 ?먮쫫???ㅼ젣濡??곌껐???곹깭??
+- `EchoClient`???end-to-end ?먮쫫???꾩옱 `SendPacket` 寃쎈줈 湲곗??쇰줈 ?뺣━ 媛?ν븯??
+- ?댄썑 ?깅뒫 理쒖쟻?붾뒗 ??援ъ“ ?꾩뿉??
   - broadcast fan-out
-  - registered buffer 비용 최적화
-  - owner-thread send 추가 실험
-순서로 보는 게 맞다.
+  - registered buffer 鍮꾩슜 理쒖쟻??  - owner-thread send 異붽? ?ㅽ뿕
+?쒖꽌濡?蹂대뒗 寃?留욌떎.
+
+
+

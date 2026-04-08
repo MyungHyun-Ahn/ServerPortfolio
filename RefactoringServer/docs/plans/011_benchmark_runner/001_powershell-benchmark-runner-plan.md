@@ -1,83 +1,78 @@
-# PowerShell BenchmarkRunner Plan
+﻿# PowerShell BenchmarkRunner Plan
 
-## 1. 목적
-- `RefactoringServer`의 벤치마크 실행을 수동 순서 실행에서 벗어나 `PowerShell` 스크립트 기반 자동 실행으로 정리한다.
-- 실행 대상은 1차로 `ChattingServer + ChattingDummyClient`이지만, 구조는 `Echo`, 향후 다른 더미 클라이언트, 다른 서버 샘플에도 재사용 가능한 범용 러너로 설계한다.
-- 실행할 실험 조합은 코드 수정이 아니라 `YAML manifest` 파일로 제어한다.
+## 1. 紐⑹쟻
+- `RefactoringServer`??踰ㅼ튂留덊겕 ?ㅽ뻾???섎룞 ?쒖꽌 ?ㅽ뻾?먯꽌 踰쀬뼱??`PowerShell` ?ㅽ겕由쏀듃 湲곕컲 ?먮룞 ?ㅽ뻾?쇰줈 ?뺣━?쒕떎.
+- ?ㅽ뻾 ??곸? 1李⑤줈 `ChattingServer + ChattingDummyClient`?댁?留? 援ъ“??`Echo`, ?ν썑 ?ㅻⅨ ?붾? ?대씪?댁뼵?? ?ㅻⅨ ?쒕쾭 ?섑뵆?먮룄 ?ъ궗??媛?ν븳 踰붿슜 ?щ꼫濡??ㅺ퀎?쒕떎.
+- ?ㅽ뻾???ㅽ뿕 議고빀? 肄붾뱶 ?섏젙???꾨땲??`YAML manifest` ?뚯씪濡??쒖뼱?쒕떎.
 
-## 2. 배경
-- 현재 레포에는 [Run-RioDispatchComparisonSequence.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-RioDispatchComparisonSequence.ps1), [Run-SndBufBackendComparisonSequence.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-SndBufBackendComparisonSequence.ps1)처럼 특정 실험을 위해 작성된 순차 실행 스크립트가 이미 존재한다.
-- 이 스크립트들은 `config template 복사`, `YAML scalar patch`, `프로세스 실행`, `로그 수집`, `결과 폴더 생성` 같은 핵심 패턴을 이미 갖고 있다.
-- 하지만 현재 구조는 실험 대상과 지표가 스크립트에 하드코딩되어 있어, `ChattingServer`처럼 새로운 시나리오를 추가할 때마다 별도 스크립트를 복제하는 방향으로 흐를 가능성이 높다.
-- `ChattingDummyClient`가 준비된 시점부터는 동일한 실험을 `RIO`, `IOCP`, 큰 payload, room selection mode 조합별로 반복 실행할 수 있는 상위 실행기가 필요하다.
+## 2. 諛곌꼍
+- ?꾩옱 ?덊룷?먮뒗 [Run-RioDispatchComparisonSequence.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-RioDispatchComparisonSequence.ps1), [Run-SndBufBackendComparisonSequence.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\Run-SndBufBackendComparisonSequence.ps1)泥섎읆 ?뱀젙 ?ㅽ뿕???꾪빐 ?묒꽦???쒖감 ?ㅽ뻾 ?ㅽ겕由쏀듃媛 ?대? 議댁옱?쒕떎.
+- ???ㅽ겕由쏀듃?ㅼ? `config template 蹂듭궗`, `YAML scalar patch`, `?꾨줈?몄뒪 ?ㅽ뻾`, `濡쒓렇 ?섏쭛`, `寃곌낵 ?대뜑 ?앹꽦` 媛숈? ?듭떖 ?⑦꽩???대? 媛뽮퀬 ?덈떎.
+- ?섏?留??꾩옱 援ъ“???ㅽ뿕 ??곴낵 吏?쒓? ?ㅽ겕由쏀듃???섎뱶肄붾뵫?섏뼱 ?덉뼱, `ChattingServer`泥섎읆 ?덈줈???쒕굹由ъ삤瑜?異붽????뚮쭏??蹂꾨룄 ?ㅽ겕由쏀듃瑜?蹂듭젣?섎뒗 諛⑺뼢?쇰줈 ?먮? 媛?μ꽦???믩떎.
+- `ChattingDummyClient`媛 以鍮꾨맂 ?쒖젏遺?곕뒗 ?숈씪???ㅽ뿕??`RIO`, `IOCP`, ??payload, room selection mode 議고빀蹂꾨줈 諛섎났 ?ㅽ뻾?????덈뒗 ?곸쐞 ?ㅽ뻾湲곌? ?꾩슂?섎떎.
 
-## 3. 목표
-- `PowerShell` 기반 `BenchmarkRunner`를 추가한다.
-- `YAML manifest` 1개로 서로 다른 `N개 run case`를 순차 실행할 수 있어야 한다.
-- 공통 실행기와 시나리오별 어댑터를 분리한다.
-- 1차 어댑터는 `ChattingScenario`로 구현한다.
-- 결과는 `run directory` 단위로 아카이브되고, 최종 집계는 `csv/json`으로 남긴다.
+## 3. 紐⑺몴
+- `PowerShell` 湲곕컲 `BenchmarkRunner`瑜?異붽??쒕떎.
+- `YAML manifest` 1媛쒕줈 ?쒕줈 ?ㅻⅨ `N媛?run case`瑜??쒖감 ?ㅽ뻾?????덉뼱???쒕떎.
+- 怨듯넻 ?ㅽ뻾湲곗? ?쒕굹由ъ삤蹂??대뙌?곕? 遺꾨━?쒕떎.
+- 1李??대뙌?곕뒗 `ChattingScenario`濡?援ы쁽?쒕떎.
+- 寃곌낵??`run directory` ?⑥쐞濡??꾩뭅?대툕?섍퀬, 理쒖쥌 吏묎퀎??`csv/json`?쇰줈 ?④릿??
 
-## 4. 비목표
-- 1차에 실시간 웹 대시보드까지 만들지 않는다.
-- 1차에 다중 머신 분산 벤치마크를 지원하지 않는다.
-- 1차에 모든 YAML 기능(anchor, merge key, multiline block scalar)을 지원하지 않는다.
-- 1차에 벤치마크 러너 자체를 별도 C++ 바이너리로 만들지 않는다.
+## 4. 鍮꾨ぉ??- 1李⑥뿉 ?ㅼ떆媛?????쒕낫?쒓퉴吏 留뚮뱾吏 ?딅뒗??
+- 1李⑥뿉 ?ㅼ쨷 癒몄떊 遺꾩궛 踰ㅼ튂留덊겕瑜?吏?먰븯吏 ?딅뒗??
+- 1李⑥뿉 紐⑤뱺 YAML 湲곕뒫(anchor, merge key, multiline block scalar)??吏?먰븯吏 ?딅뒗??
+- 1李⑥뿉 踰ㅼ튂留덊겕 ?щ꼫 ?먯껜瑜?蹂꾨룄 C++ 諛붿씠?덈━濡?留뚮뱾吏 ?딅뒗??
 
-## 5. 핵심 결정
-- 실행기는 `PowerShell`로 만든다.
-- 실험 정의는 `YAML manifest`로 둔다.
-- `BenchmarkRunner Core`는 실행 순서와 공통 수집만 담당한다.
-- 서버/클라이언트별 config patch, readiness 판단, 결과 요약 파싱은 `Scenario Adapter`가 담당한다.
-- 1차는 `Runs: []` 배열을 명시적으로 순차 실행한다.
-- 조합 자동 생성용 `Matrix`는 후속 단계로 둔다.
+## 5. ?듭떖 寃곗젙
+- ?ㅽ뻾湲곕뒗 `PowerShell`濡?留뚮뱺??
+- ?ㅽ뿕 ?뺤쓽??`YAML manifest`濡??붾떎.
+- `BenchmarkRunner Core`???ㅽ뻾 ?쒖꽌? 怨듯넻 ?섏쭛留??대떦?쒕떎.
+- ?쒕쾭/?대씪?댁뼵?몃퀎 config patch, readiness ?먮떒, 寃곌낵 ?붿빟 ?뚯떛? `Scenario Adapter`媛 ?대떦?쒕떎.
+- 1李⑤뒗 `Runs: []` 諛곗뿴??紐낆떆?곸쑝濡??쒖감 ?ㅽ뻾?쒕떎.
+- 議고빀 ?먮룞 ?앹꽦??`Matrix`???꾩냽 ?④퀎濡??붾떎.
 
-## 6. 전체 구조
-### 6.1 디렉터리
+## 6. ?꾩껜 援ъ“
+### 6.1 ?붾젆?곕━
 - `scripts/bench/Run-Benchmark.ps1`
 - `scripts/bench/Benchmark.Common.ps1`
 - `scripts/bench/scenarios/Invoke-ChattingScenario.ps1`
 - `scripts/bench/manifests/*.yaml`
 - `Out/bench/<timestamp>/<run-name>/...`
 
-### 6.2 역할 분리
+### 6.2 ??븷 遺꾨━
 - `Run-Benchmark.ps1`
-  - manifest 로드
-  - 공통 defaults 병합
-  - `Runs` 배열 순차 실행
-  - 실패 정책 처리
-  - 전체 집계 파일 기록
+  - manifest 濡쒕뱶
+  - 怨듯넻 defaults 蹂묓빀
+  - `Runs` 諛곗뿴 ?쒖감 ?ㅽ뻾
+  - ?ㅽ뙣 ?뺤콉 泥섎━
+  - ?꾩껜 吏묎퀎 ?뚯씪 湲곕줉
 - `Benchmark.Common.ps1`
   - YAML patch helper
-  - 임시 config 생성
-  - 프로세스 시작/종료
+  - ?꾩떆 config ?앹꽦
+  - ?꾨줈?몄뒪 ?쒖옉/醫낅즺
   - timeout / orphan cleanup
   - stdout/stderr redirect
-  - 결과 디렉터리 구성
+  - 寃곌낵 ?붾젆?곕━ 援ъ꽦
 - `Invoke-ChattingScenario.ps1`
-  - `ChattingServer.yaml`, `ChattingDummy.yaml` template 기반 effective config 생성
-  - 서버 readiness 대기
-  - 더미 실행
-  - `summary`, `RTT CSV`, `server log` 파싱
+  - `ChattingServer.yaml`, `ChattingDummy.yaml` template 湲곕컲 effective config ?앹꽦
+  - ?쒕쾭 readiness ?湲?  - ?붾? ?ㅽ뻾
+  - `summary`, `RTT CSV`, `server log` ?뚯떛
 
-## 7. Manifest 모델
-### 7.1 1차 구조
+## 7. Manifest 紐⑤뜽
+### 7.1 1李?援ъ“
 - `Scenario`
 - `OutputRoot`
 - `ContinueOnError`
 - `Defaults`
-  - 서버 공통 기본값
-  - 클라이언트 공통 기본값
-  - 타이밍 공통 기본값
-- `Runs`
-  - 이름
-  - 태그
-  - enabled 여부
-  - 서버 override
-  - 클라이언트 override
-  - 반복 횟수
+  - ?쒕쾭 怨듯넻 湲곕낯媛?  - ?대씪?댁뼵??怨듯넻 湲곕낯媛?  - ??대컢 怨듯넻 湲곕낯媛?- `Runs`
+  - ?대쫫
+  - ?쒓렇
+  - enabled ?щ?
+  - ?쒕쾭 override
+  - ?대씪?댁뼵??override
+  - 諛섎났 ?잛닔
 
-### 7.2 예시
+### 7.2 ?덉떆
 ```yaml
 Scenario: Chatting
 OutputRoot: Out/bench
@@ -91,13 +86,13 @@ Defaults:
     StartupTimeoutSeconds: 10
     ShutdownTimeoutSeconds: 10
   Server:
-    Executable: Out/ChattingServer.exe
+    Executable: Out/ChattingServer/ChattingServer.exe
     ConfigTemplate: Config/Server/ChattingServer.yaml
     Overrides:
       ChattingServer.Port: 19100
       Debug.Headless: true
   Client:
-    Executable: Out/ChattingDummyClient.exe
+    Executable: Out/ChattingDummyClient/ChattingDummyClient.exe
     ConfigTemplate: Config/Client/ChattingDummy.yaml
     Overrides:
       ChattingDummy.ServerIp: 127.0.0.1
@@ -140,35 +135,33 @@ Runs:
         ChattingDummy.HotspotBiasPercent: 80
 ```
 
-## 8. 실행 수명주기
-1. manifest를 읽고 `Defaults + Run Override`를 병합한다.
-2. 전체 실행 루트 디렉터리를 생성한다.
-3. 각 run마다 고유 결과 디렉터리를 만든다.
-4. server/client effective config 파일을 결과 디렉터리에 생성한다.
-5. 서버를 headless 모드로 실행한다.
-6. readiness timeout 동안 서버가 정상 기동했는지 확인한다.
-7. 더미 클라이언트를 실행한다.
-8. run 종료 또는 timeout까지 대기한다.
-9. stdout/stderr, effective config, RTT CSV, log file, summary file을 결과 디렉터리에 보관한다.
-10. 서버와 클라이언트 프로세스를 정리한다.
-11. 다음 run으로 이동한다.
+## 8. ?ㅽ뻾 ?섎챸二쇨린
+1. manifest瑜??쎄퀬 `Defaults + Run Override`瑜?蹂묓빀?쒕떎.
+2. ?꾩껜 ?ㅽ뻾 猷⑦듃 ?붾젆?곕━瑜??앹꽦?쒕떎.
+3. 媛?run留덈떎 怨좎쑀 寃곌낵 ?붾젆?곕━瑜?留뚮뱺??
+4. server/client effective config ?뚯씪??寃곌낵 ?붾젆?곕━???앹꽦?쒕떎.
+5. ?쒕쾭瑜?headless 紐⑤뱶濡??ㅽ뻾?쒕떎.
+6. readiness timeout ?숈븞 ?쒕쾭媛 ?뺤긽 湲곕룞?덈뒗吏 ?뺤씤?쒕떎.
+7. ?붾? ?대씪?댁뼵?몃? ?ㅽ뻾?쒕떎.
+8. run 醫낅즺 ?먮뒗 timeout源뚯? ?湲고븳??
+9. stdout/stderr, effective config, RTT CSV, log file, summary file??寃곌낵 ?붾젆?곕━??蹂닿??쒕떎.
+10. ?쒕쾭? ?대씪?댁뼵???꾨줈?몄뒪瑜??뺣━?쒕떎.
+11. ?ㅼ쓬 run?쇰줈 ?대룞?쒕떎.
 
-## 9. 범용성 설계 원칙
-### 9.1 Runner Core는 채팅을 모른다
-- core는 `ChattingServer`, `EchoServer`, `WorldServer` 같은 이름을 하드코딩하지 않는다.
-- core는 `ProcessSpec`, `ConfigTemplate`, `Overrides`, `Timing`, `ArtifactPolicy` 같은 공통 개념만 안다.
+## 9. 踰붿슜???ㅺ퀎 ?먯튃
+### 9.1 Runner Core??梨꾪똿??紐⑤Ⅸ??- core??`ChattingServer`, `EchoServer`, `WorldServer` 媛숈? ?대쫫???섎뱶肄붾뵫?섏? ?딅뒗??
+- core??`ProcessSpec`, `ConfigTemplate`, `Overrides`, `Timing`, `ArtifactPolicy` 媛숈? 怨듯넻 媛쒕뀗留??덈떎.
 
-### 9.2 Scenario Adapter가 도메인을 안다
-- `ChattingScenario`는 `ChattingServer` config key 이름을 안다.
-- `EchoScenario`는 `EchoServer` config key 이름을 안다.
-- 결과 파싱도 scenario별로 분리한다.
+### 9.2 Scenario Adapter媛 ?꾨찓?몄쓣 ?덈떎
+- `ChattingScenario`??`ChattingServer` config key ?대쫫???덈떎.
+- `EchoScenario`??`EchoServer` config key ?대쫫???덈떎.
+- 寃곌낵 ?뚯떛??scenario蹂꾨줈 遺꾨━?쒕떎.
 
-### 9.3 기존 스크립트 재사용
-- 기존 `Run-RioDispatchComparisonSequence.ps1`, `Run-SndBufBackendComparisonSequence.ps1`의 `Set-YamlScalarValue`와 process orchestration 패턴을 공통 helper로 끌어올린다.
-- 새 러너가 안정화되면 기존 단발성 비교 스크립트를 점진적으로 manifest 기반 호출로 이관한다.
+### 9.3 湲곗〈 ?ㅽ겕由쏀듃 ?ъ궗??- 湲곗〈 `Run-RioDispatchComparisonSequence.ps1`, `Run-SndBufBackendComparisonSequence.ps1`??`Set-YamlScalarValue`? process orchestration ?⑦꽩??怨듯넻 helper濡??뚯뼱?щ┛??
+- ???щ꼫媛 ?덉젙?붾릺硫?湲곗〈 ?⑤컻??鍮꾧탳 ?ㅽ겕由쏀듃瑜??먯쭊?곸쑝濡?manifest 湲곕컲 ?몄텧濡??닿??쒕떎.
 
-## 10. Chatting 1차 적용 범위
-### 10.1 서버 측 제어 항목
+## 10. Chatting 1李??곸슜 踰붿쐞
+### 10.1 ?쒕쾭 痢??쒖뼱 ??ぉ
 - `ChattingServer.Backend`
 - `ChattingServer.RioSendDispatchMode`
 - `ChattingServer.WorkerThreadCount`
@@ -181,7 +174,7 @@ Runs:
 - `Debug.Headless`
 - `ChattingServer.LogOutputDirectory`
 
-### 10.2 더미 측 제어 항목
+### 10.2 ?붾? 痢??쒖뼱 ??ぉ
 - `ChattingDummy.SessionCount`
 - `ChattingDummy.ConnectsPerSecond`
 - `ChattingDummy.RunSeconds`
@@ -196,8 +189,7 @@ Runs:
 - `ChattingDummy.ResponseTimeoutMs`
 - `ChattingDummy.RttCsvPath`
 
-### 10.3 1차 수집 지표
-- `connectSuccess`
+### 10.3 1李??섏쭛 吏??- `connectSuccess`
 - `loginSuccess`
 - `roomListResponses`
 - `roomChangeSuccess`
@@ -214,10 +206,10 @@ Runs:
 - `payloadValidationFailure`
 - `permanentFailure`
 - `RTT p50/p95/p99`
-- server log 기반 `sendTPS`, `recvTPS`, `cpuPercent`, `workingSetMB`
+- server log 湲곕컲 `sendTPS`, `recvTPS`, `cpuPercent`, `workingSetMB`
 
-## 11. 결과물 구조
-### 11.1 run 디렉터리
+## 11. 寃곌낵臾?援ъ“
+### 11.1 run ?붾젆?곕━
 - `manifest.snapshot.yaml`
 - `effective.server.yaml`
 - `effective.client.yaml`
@@ -228,42 +220,43 @@ Runs:
 - `rtt.csv`
 - `run-summary.json`
 
-### 11.2 sequence 루트
+### 11.2 sequence 猷⑦듃
 - `sequence-summary.csv`
 - `sequence-summary.json`
 - `failed-runs.txt`
 
-## 12. 실패 정책
+## 12. ?ㅽ뙣 ?뺤콉
 - `ContinueOnError`
-  - true면 한 run 실패 후 다음 run 계속 진행
-  - false면 즉시 중단
+  - true硫???run ?ㅽ뙣 ???ㅼ쓬 run 怨꾩냽 吏꾪뻾
+  - false硫?利됱떆 以묐떒
 - `StartupTimeoutSeconds`
-  - 서버 기동 실패 판단 시간
+  - ?쒕쾭 湲곕룞 ?ㅽ뙣 ?먮떒 ?쒓컙
 - `ShutdownTimeoutSeconds`
-  - graceful 종료 대기 시간
+  - graceful 醫낅즺 ?湲??쒓컙
 - `RunTimeoutSeconds`
-  - client hang 또는 server stall 대비 hard timeout
-- orphan process가 남으면 강제 종료 후 실패 기록
+  - client hang ?먮뒗 server stall ?鍮?hard timeout
+- orphan process媛 ?⑥쑝硫?媛뺤젣 醫낅즺 ???ㅽ뙣 湲곕줉
 
-## 13. Manifest / YAML 전략
-- 1차 manifest는 사람이 직접 읽고 편집하기 쉬운 `YAML` 형식을 유지한다.
-- 1차 지원 범위는 scalar, flat list, 2단계 map 중심의 제한형 구조로 둔다.
-- 복잡한 YAML 기능은 지원 범위에서 제외한다.
-- 러너 본체는 `manifest object` 기반으로 동작하게 만들고, manifest loader 구현은 교체 가능하게 유지한다.
-- 즉 `YAML loader` 구현 방식이 바뀌더라도 `Run-Benchmark.ps1`의 실행 코어는 유지되도록 설계한다.
+## 13. Manifest / YAML ?꾨왂
+- 1李?manifest???щ엺??吏곸젒 ?쎄퀬 ?몄쭛?섍린 ?ъ슫 `YAML` ?뺤떇???좎??쒕떎.
+- 1李?吏??踰붿쐞??scalar, flat list, 2?④퀎 map 以묒떖???쒗븳??援ъ“濡??붾떎.
+- 蹂듭옟??YAML 湲곕뒫? 吏??踰붿쐞?먯꽌 ?쒖쇅?쒕떎.
+- ?щ꼫 蹂몄껜??`manifest object` 湲곕컲?쇰줈 ?숈옉?섍쾶 留뚮뱾怨? manifest loader 援ы쁽? 援먯껜 媛?ν븯寃??좎??쒕떎.
+- 利?`YAML loader` 援ы쁽 諛⑹떇??諛붾뚮뜑?쇰룄 `Run-Benchmark.ps1`???ㅽ뻾 肄붿뼱???좎??섎룄濡??ㅺ퀎?쒕떎.
 
-## 14. 구현 순서
-1. `scripts/bench` 디렉터리와 공통 helper 뼈대를 추가한다.
-2. 기존 비교 스크립트의 YAML patch / process control helper를 공통 모듈로 추출한다.
-3. manifest loader를 붙인다.
-4. `Runs[]` 순차 실행 루프를 구현한다.
-5. `ChattingScenario` adapter를 추가한다.
-6. `run-summary.json`, `sequence-summary.csv`를 기록한다.
-7. `ChattingServer / ChattingDummyClient`용 대표 manifest를 추가한다.
-8. 기존 `Echo` 비교 스크립트를 새 runner 기반으로 점진 이관한다.
+## 14. 援ы쁽 ?쒖꽌
+1. `scripts/bench` ?붾젆?곕━? 怨듯넻 helper 堉덈?瑜?異붽??쒕떎.
+2. 湲곗〈 鍮꾧탳 ?ㅽ겕由쏀듃??YAML patch / process control helper瑜?怨듯넻 紐⑤뱢濡?異붿텧?쒕떎.
+3. manifest loader瑜?遺숈씤??
+4. `Runs[]` ?쒖감 ?ㅽ뻾 猷⑦봽瑜?援ы쁽?쒕떎.
+5. `ChattingScenario` adapter瑜?異붽??쒕떎.
+6. `run-summary.json`, `sequence-summary.csv`瑜?湲곕줉?쒕떎.
+7. `ChattingServer / ChattingDummyClient`?????manifest瑜?異붽??쒕떎.
+8. 湲곗〈 `Echo` 鍮꾧탳 ?ㅽ겕由쏀듃瑜???runner 湲곕컲?쇰줈 ?먯쭊 ?닿??쒕떎.
 
-## 15. 기대 효과
-- `RIO / IOCP` 비교를 사람 손으로 반복 실행하지 않아도 된다.
-- 실험 케이스 추가가 스크립트 복제가 아니라 manifest 추가로 바뀐다.
-- `Chatting`뿐 아니라 다른 성능 실험에도 같은 실행기를 재사용할 수 있다.
-- 벤치마크 재현성과 실행 기록 보존 수준이 올라간다.
+## 15. 湲곕? ?④낵
+- `RIO / IOCP` 鍮꾧탳瑜??щ엺 ?먯쑝濡?諛섎났 ?ㅽ뻾?섏? ?딆븘???쒕떎.
+- ?ㅽ뿕 耳?댁뒪 異붽?媛 ?ㅽ겕由쏀듃 蹂듭젣媛 ?꾨땲??manifest 異붽?濡?諛붾먮떎.
+- `Chatting`肉??꾨땲???ㅻⅨ ?깅뒫 ?ㅽ뿕?먮룄 媛숈? ?ㅽ뻾湲곕? ?ъ궗?⑺븷 ???덈떎.
+- 踰ㅼ튂留덊겕 ?ы쁽?깃낵 ?ㅽ뻾 湲곕줉 蹂댁〈 ?섏????щ씪媛꾨떎.
+

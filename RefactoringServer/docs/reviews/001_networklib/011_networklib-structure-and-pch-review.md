@@ -1,36 +1,36 @@
-# NetworkLib Structure And PCH Review
+﻿# NetworkLib Structure And PCH Review
 
-## 1. 목적
-- `NetworkLib` 디렉터리를 책임 기준으로 더 읽기 쉬운 구조로 나눈다.
-- 헤더 의존성을 줄이고 공용 PCH 사용 규칙을 명확히 한다.
-- 최상위 `GameServer` 네임스페이스를 제거하고 디렉터리 기준 네임스페이스로 정리한다.
+## 1. 紐⑹쟻
+- `NetworkLib` ?붾젆?곕━瑜?梨낆엫 湲곗??쇰줈 ???쎄린 ?ъ슫 援ъ“濡??섎늿??
+- ?ㅻ뜑 ?섏〈?깆쓣 以꾩씠怨?怨듭슜 PCH ?ъ슜 洹쒖튃??紐낇솗???쒕떎.
+- 理쒖긽??`GameServer` ?ㅼ엫?ㅽ럹?댁뒪瑜??쒓굅?섍퀬 ?붾젆?곕━ 湲곗? ?ㅼ엫?ㅽ럹?댁뒪濡??뺣━?쒕떎.
 
-## 2. 적용 내용
+## 2. ?곸슜 ?댁슜
 - `Servers/Core`
-  - 서버 설정, 팩토리, IOCP 구현, placeholder 백엔드를 배치했다.
+  - ?쒕쾭 ?ㅼ젙, ?⑺넗由? IOCP 援ы쁽, placeholder 諛깆뿏?쒕? 諛곗튂?덈떎.
 - `Servers/Session`
-  - `FSession` 같은 세션 로컬 상태를 분리했다.
+  - `FSession` 媛숈? ?몄뀡 濡쒖뺄 ?곹깭瑜?遺꾨━?덈떎.
 - `Packet`
-  - 한 디렉터리에 몰아두지 않고 목적별로 다시 나눴다.
+  - ???붾젆?곕━??紐곗븘?먯? ?딄퀬 紐⑹쟻蹂꾨줈 ?ㅼ떆 ?섎댋??
   - `Packet/Buffer`
   - `Packet/Framing`
   - `Packet/Serialization`
   - `Packet/View`
 - `Servers`
-  - 외부 공개 인터페이스인 `IServer`, `IApplicationHandler`만 남겼다.
+  - ?몃? 怨듦컻 ?명꽣?섏씠?ㅼ씤 `IServer`, `IApplicationHandler`留??④꼈??
 
-## 3. Packet 구조 정리 판단
-- `FRecvBuffer`와 `FSendBuffer`는 둘 다 송수신 패킷 버퍼 계층에 속하므로 `Packet/Buffer`가 가장 자연스럽다.
-- `FPacketReader`, `FPacketWriter`, `FPacketSerialization`은 generated packet과 직접 맞물리므로 `Packet/Serialization`으로 분리하는 편이 읽기 쉽다.
-- `FPacketView`, `FBorrowedViewGuard`는 zero-copy borrowed view 수명 문제를 다루므로 `Packet/View`가 목적을 가장 잘 드러낸다.
-- `PacketTypes`, `ContentHeader`, `IPacketFramer`, `FDefaultPacketFramer`는 framing 책임이므로 `Packet/Framing`에 두는 편이 명확하다.
+## 3. Packet 援ъ“ ?뺣━ ?먮떒
+- `FRecvBuffer`? `FSendBuffer`???????≪닔???⑦궥 踰꾪띁 怨꾩링???랁븯誘濡?`Packet/Buffer`媛 媛???먯뿰?ㅻ읇??
+- `FPacketReader`, `FPacketWriter`, `FPacketSerialization`? generated packet怨?吏곸젒 留욌Ъ由щ?濡?`Packet/Serialization`?쇰줈 遺꾨━?섎뒗 ?몄씠 ?쎄린 ?쎈떎.
+- `FPacketView`, `FBorrowedViewGuard`??zero-copy borrowed view ?섎챸 臾몄젣瑜??ㅻ（誘濡?`Packet/View`媛 紐⑹쟻??媛?????쒕윭?몃떎.
+- `PacketTypes`, `ContentHeader`, `IPacketFramer`, `FDefaultPacketFramer`??framing 梨낆엫?대?濡?`Packet/Framing`???먮뒗 ?몄씠 紐낇솗?섎떎.
 
-## 4. 네임스페이스 정리
-- 기존 `GameServer::Foundation`, `GameServer::NetworkLib`, `GameServer::Generated`는 아래처럼 정리했다.
+## 4. ?ㅼ엫?ㅽ럹?댁뒪 ?뺣━
+- 湲곗〈 `GameServer::Foundation`, `GameServer::NetworkLib`, `GameServer::Generated`???꾨옒泥섎읆 ?뺣━?덈떎.
   - `Foundation`
   - `NetworkLib`
   - `Generated`
-- 내부 구현 네임스페이스도 디렉터리 기준으로 맞췄다.
+- ?대? 援ы쁽 ?ㅼ엫?ㅽ럹?댁뒪???붾젆?곕━ 湲곗??쇰줈 留욎톬??
   - `NetworkLib::Core`
   - `NetworkLib::Session`
   - `NetworkLib::Packet::Buffer`
@@ -38,13 +38,14 @@
   - `NetworkLib::Packet::Serialization`
   - `NetworkLib::Packet::View`
 
-## 5. 헤더 / PCH 정리
-- `IServer.h`, `IApplicationHandler.h`, `FServerFactory.h`는 forward declaration 중심으로 가볍게 유지한다.
-- `NetworkLib` 공용 PCH 묶음은 [`NetLibPch.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\NetLibPch.h)에서 관리한다.
-- 소비 프로젝트는 자기 `Pch.h`에서 `NetLibPch.h` 한 줄로 공용 의존성을 가져온다.
-- 헤더에서 include를 기본값으로 남발하지 않고, 필요한 경우만 예외적으로 남긴다.
+## 5. ?ㅻ뜑 / PCH ?뺣━
+- `IServer.h`, `IApplicationHandler.h`, `FServerFactory.h`??forward declaration 以묒떖?쇰줈 媛蹂띻쾶 ?좎??쒕떎.
+- `NetworkLib` 怨듭슜 PCH 臾띠쓬? [`NetLibPch.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\NetLibPch.h)?먯꽌 愿由ы븳??
+- ?뚮퉬 ?꾨줈?앺듃???먭린 `Pch.h`?먯꽌 `NetLibPch.h` ??以꾨줈 怨듭슜 ?섏〈?깆쓣 媛?몄삩??
+- ?ㅻ뜑?먯꽌 include瑜?湲곕낯媛믪쑝濡??⑤컻?섏? ?딄퀬, ?꾩슂??寃쎌슦留??덉쇅?곸쑝濡??④릿??
 
-## 6. 현재 판단
-- `Servers`와 `Packet`을 목적별로 나눈 뒤 구조 가독성이 확실히 좋아졌다.
-- generated packet/handler/router까지 새 네임스페이스 구조에 맞춰 재생성 가능한 상태를 확인했다.
-- `EchoServer`, `EchoClient`, `LockFreeTests` 빌드와 스모크 검증까지 통과했으므로 현재 구조는 실사용 가능한 단계다.
+## 6. ?꾩옱 ?먮떒
+- `Servers`? `Packet`??紐⑹쟻蹂꾨줈 ?섎늿 ??援ъ“ 媛?낆꽦???뺤떎??醫뗭븘議뚮떎.
+- generated packet/handler/router源뚯? ???ㅼ엫?ㅽ럹?댁뒪 援ъ“??留욎떠 ?ъ깮??媛?ν븳 ?곹깭瑜??뺤씤?덈떎.
+- `EchoServer`, `EchoClient`, `LockFreeTests` 鍮뚮뱶? ?ㅻえ??寃利앷퉴吏 ?듦낵?덉쑝誘濡??꾩옱 援ъ“???ㅼ궗??媛?ν븳 ?④퀎??
+

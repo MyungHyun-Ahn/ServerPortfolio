@@ -1,64 +1,63 @@
-# Send Post Lost-Wakeup 리뷰
+﻿# Send Post Lost-Wakeup 由щ럭
 
-## 1. 범위
-- 이 문서는 `Lobby -> Room -> RoomChange -> Echo` 검증 중 발견한 `send queue가 1개 남은 채 더 이상 진행되지 않는 hang`만 따로 정리한다.
-- 콘텐츠 전이 규칙이나 `echo-response timeout` 전체 이슈와 분리해서, `NetworkLib` send 경로 자체의 문제만 본다.
+## 1. 踰붿쐞
+- ??臾몄꽌??`Lobby -> Room -> RoomChange -> Echo` 寃利?以?諛쒓껄??`send queue媛 1媛??⑥? 梨????댁긽 吏꾪뻾?섏? ?딅뒗 hang`留??곕줈 ?뺣━?쒕떎.
+- 肄섑뀗痢??꾩씠 洹쒖튃?대굹 `echo-response timeout` ?꾩껜 ?댁뒋? 遺꾨━?댁꽌, `NetworkLib` send 寃쎈줈 ?먯껜??臾몄젣留?蹂몃떎.
 
-## 2. 증상
-- `recv timeout`을 모두 끄고 1분 런을 돌렸는데도 클라이언트가 끝나지 않고 멈췄다.
-- 외부 watchdog이 90초 뒤 강제 종료했다.
-- 서버 상태는 다음과 같았다.
+## 2. 利앹긽
+- `recv timeout`??紐⑤몢 ?꾧퀬 1遺??곗쓣 ?뚮졇?붾뜲???대씪?댁뼵?멸? ?앸굹吏 ?딄퀬 硫덉톬??
+- ?몃? watchdog??90珥???媛뺤젣 醫낅즺?덈떎.
+- ?쒕쾭 ?곹깭???ㅼ쓬怨?媛숈븯??
   - `sessions=1`
   - `recvTPS=0`
   - `sendTPS=0`
   - `queuedSendBuffers=1`
-  - `totalWSASendCalls` 증가 없음
-- 즉 마지막 세션 하나가 살아 있고, send queue에는 버퍼가 남아 있는데 `WSASend`가 다시 걸리지 않는 상태였다.
+  - `totalWSASendCalls` 利앷? ?놁쓬
+- 利?留덉?留??몄뀡 ?섎굹媛 ?댁븘 ?덇퀬, send queue?먮뒗 踰꾪띁媛 ?⑥븘 ?덈뒗??`WSASend`媛 ?ㅼ떆 嫄몃━吏 ?딅뒗 ?곹깭???
 
-## 3. 원인
-### 3.1 레거시와 달랐던 점
-- 레거시 프로젝트는 `SendPacket()`과 `EnqueuePacket()`을 분리하고 있었다.
-- 더 중요한 점은 `m_iSendFlag + ENQUEUE_FLAG`로 `send 중 새 enqueue가 들어오면 다음 PostSend를 놓치지 않도록` 보장하고 있었다.
-- 현재 `RefactoringServer`는 이 부분이 `std::atomic<bool> m_sendInFlight`로 단순화되어 있었다.
+## 3. ?먯씤
+### 3.1 ?덇굅?쒖? ?щ옄????- ?덇굅???꾨줈?앺듃??`SendPacket()`怨?`EnqueuePacket()`??遺꾨━?섍퀬 ?덉뿀??
+- ??以묒슂???먯? `m_iSendFlag + ENQUEUE_FLAG`濡?`send 以???enqueue媛 ?ㅼ뼱?ㅻ㈃ ?ㅼ쓬 PostSend瑜??볦튂吏 ?딅룄濡? 蹂댁옣?섍퀬 ?덉뿀??
+- ?꾩옱 `RefactoringServer`????遺遺꾩씠 `std::atomic<bool> m_sendInFlight`濡??⑥닚?붾릺???덉뿀??
 
-### 3.2 현재 코드에서 가능했던 race
-1. send completion 쪽이 `PostSend()`에 들어가 `m_sendInFlight=true`를 잡는다.
-2. queue를 확인했더니 비어 있어서 종료하려고 한다.
-3. 그 사이 다른 스레드가 새 send buffer를 enqueue하고 `PostSend()`를 호출한다.
-4. 하지만 `m_sendInFlight=true`라서 두 번째 `PostSend()`는 그냥 빠진다.
-5. 첫 번째 `PostSend()`는 `m_sendInFlight=false`로 내리고 끝난다.
-6. 결과적으로 queue에는 버퍼가 남았는데 send가 다시 시작되지 않는다.
+### 3.2 ?꾩옱 肄붾뱶?먯꽌 媛?ν뻽??race
+1. send completion 履쎌씠 `PostSend()`???ㅼ뼱媛 `m_sendInFlight=true`瑜??〓뒗??
+2. queue瑜??뺤씤?덈뜑??鍮꾩뼱 ?덉뼱??醫낅즺?섎젮怨??쒕떎.
+3. 洹??ъ씠 ?ㅻⅨ ?ㅻ젅?쒓? ??send buffer瑜?enqueue?섍퀬 `PostSend()`瑜??몄텧?쒕떎.
+4. ?섏?留?`m_sendInFlight=true`?쇱꽌 ??踰덉㎏ `PostSend()`??洹몃깷 鍮좎쭊??
+5. 泥?踰덉㎏ `PostSend()`??`m_sendInFlight=false`濡??대━怨??앸궃??
+6. 寃곌낵?곸쑝濡?queue?먮뒗 踰꾪띁媛 ?⑥븯?붾뜲 send媛 ?ㅼ떆 ?쒖옉?섏? ?딅뒗??
 
-## 4. 조사 결과
-- 현재 `RefactoringServer`에는 레거시의 `EnqueuePacket()` 같은 `enqueue-only network send` API는 없었다.
-- 즉 이번 문제는 `특수 API를 잘못 사용해서 PostSend를 안 불렀다`가 아니라, `send 재기동 보장 자체가 빠져 있었다`가 맞다.
-- 이 패턴은 실제 로그와도 잘 맞았다.
+## 4. 議곗궗 寃곌낵
+- ?꾩옱 `RefactoringServer`?먮뒗 ?덇굅?쒖쓽 `EnqueuePacket()` 媛숈? `enqueue-only network send` API???놁뿀??
+- 利??대쾲 臾몄젣??`?뱀닔 API瑜??섎せ ?ъ슜?댁꽌 PostSend瑜???遺덈???媛 ?꾨땲?? `send ?ш린??蹂댁옣 ?먯껜媛 鍮좎졇 ?덉뿀??媛 留욌떎.
+- ???⑦꽩? ?ㅼ젣 濡쒓렇?????留욎븯??
   - `queuedSendBuffers=1`
   - `sendTPS=0`
-  - `totalWSASendCalls` 정지
-  - 클라이언트는 응답 없이 무한 대기
-
-## 5. 적용한 수정
-- 당시 수정은 `FSession`에 단순 bool 대신 send 상태 비트를 두는 것이었고, 현재 구조 분리 후에는 같은 구현이 [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)로 이동했다.
+  - `totalWSASendCalls` ?뺤?
+  - ?대씪?댁뼵?몃뒗 ?묐떟 ?놁씠 臾댄븳 ?湲?
+## 5. ?곸슜???섏젙
+- ?뱀떆 ?섏젙? `FSession`???⑥닚 bool ???send ?곹깭 鍮꾪듃瑜??먮뒗 寃껋씠?덇퀬, ?꾩옱 援ъ“ 遺꾨━ ?꾩뿉??媛숈? 援ы쁽??[FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.h)濡??대룞?덈떎.
   - `kSendInFlightFlag`
   - `kSendPendingFlag`
-- enqueue 시 `kSendPendingFlag`를 세운다.
-- `PostSend()`가 빈 queue로 끝나려 할 때 pending 비트를 확인하고 바로 다시 시도한다.
-- send completion 이후에도 pending 비트 또는 잔여 queue가 있으면 다시 `PostSend()`를 건다.
+- enqueue ??`kSendPendingFlag`瑜??몄슫??
+- `PostSend()`媛 鍮?queue濡??앸굹??????pending 鍮꾪듃瑜??뺤씤?섍퀬 諛붾줈 ?ㅼ떆 ?쒕룄?쒕떎.
+- send completion ?댄썑?먮룄 pending 鍮꾪듃 ?먮뒗 ?붿뿬 queue媛 ?덉쑝硫??ㅼ떆 `PostSend()`瑜?嫄대떎.
 
-대상 파일:
-- [FIocpSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
-- [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
-- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
+????뚯씪:
+- [FIocpSession.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.h)
+- [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.cpp)
+- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.cpp)
 
-## 6. 결과
-- 같은 무timeout 1분 런을 다시 돌렸을 때 클라이언트가 정상 종료했다.
-- 서버도 마지막에
+## 6. 寃곌낵
+- 媛숈? 臾큧imeout 1遺??곗쓣 ?ㅼ떆 ?뚮졇?????대씪?댁뼵?멸? ?뺤긽 醫낅즺?덈떎.
+- ?쒕쾭??留덉?留됱뿉
   - `sessions=0`
   - `queuedSendBuffers=0`
-  상태로 정리됐다.
-- 이전에 보였던 `sessions=1`, `queuedSendBuffers=1` hang은 이 수정 후 짧은 재현에서 다시 나오지 않았다.
+  ?곹깭濡??뺣━?먮떎.
+- ?댁쟾??蹂댁???`sessions=1`, `queuedSendBuffers=1` hang? ???섏젙 ??吏㏃? ?ы쁽?먯꽌 ?ㅼ떆 ?섏삤吏 ?딆븯??
 
-## 7. 결론
-- 이번 건은 `응답이 느려서 timeout` 난 문제가 아니라, 레거시에서 중요하게 유지하던 send 재기동 보장이 빠진 채 옮겨오면서 생긴 lost-wakeup 계열 버그였다.
-- 따라서 이후 `room-flow timeout`을 다시 볼 때는, 이 send fix 적용 이후에도 남는 실패만 별도로 평가해야 한다.
+## 7. 寃곕줎
+- ?대쾲 嫄댁? `?묐떟???먮젮??timeout` ??臾몄젣媛 ?꾨땲?? ?덇굅?쒖뿉??以묒슂?섍쾶 ?좎??섎뜕 send ?ш린??蹂댁옣??鍮좎쭊 梨???꺼?ㅻ㈃???앷릿 lost-wakeup 怨꾩뿴 踰꾧렇???
+- ?곕씪???댄썑 `room-flow timeout`???ㅼ떆 蹂??뚮뒗, ??send fix ?곸슜 ?댄썑?먮룄 ?⑤뒗 ?ㅽ뙣留?蹂꾨룄濡??됯??댁빞 ?쒕떎.
+

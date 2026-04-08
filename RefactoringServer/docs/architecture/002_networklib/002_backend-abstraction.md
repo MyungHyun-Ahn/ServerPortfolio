@@ -1,12 +1,11 @@
-# Backend Abstraction
+﻿# Backend Abstraction
 
-## 1. 목적
-- `IOCP`, `RIO`, `boost.asio`를 같은 상위 서버 코드에서 비교할 수 있게 한다.
-- 상위 애플리케이션은 backend 구현체를 직접 모르고 `IServer`만 사용한다.
+## 1. 紐⑹쟻
+- `IOCP`, `RIO`, `boost.asio`瑜?媛숈? ?곸쐞 ?쒕쾭 肄붾뱶?먯꽌 鍮꾧탳?????덇쾶 ?쒕떎.
+- ?곸쐞 ?좏뵆由ъ??댁뀡? backend 援ы쁽泥대? 吏곸젒 紐⑤Ⅴ怨?`IServer`留??ъ슜?쒕떎.
 
-## 2. 현재 구조
-### 2-1. 서버 인터페이스
-- `IServer`
+## 2. ?꾩옱 援ъ“
+### 2-1. ?쒕쾭 ?명꽣?섏씠??- `IServer`
   - `Start(const SServerConfig&, IApplicationHandler&)`
   - `Stop()`
   - `Send(uint64_t sessionId, uint16_t opcode, const char* buffer, int32_t length)`
@@ -14,59 +13,56 @@
   - `GetBackendKind()`
   - `GetStatsSnapshot()`
 
-### 2-2. 애플리케이션 인터페이스
-- `IApplicationHandler`
+### 2-2. ?좏뵆由ъ??댁뀡 ?명꽣?섏씠??- `IApplicationHandler`
   - `OnServerStarted`
   - `OnClientConnected`
   - `OnPacketReceived`
   - `OnClientDisconnected`
   - `OnServerStopped`
 
-### 2-3. 세션 인터페이스
-- `ISession`
+### 2-3. ?몄뀡 ?명꽣?섏씠??- `ISession`
   - `sessionId`
   - `slotIndex`
   - `generation`
   - closing / refcount
-  - queued send 통계
+  - queued send ?듦퀎
 
-## 3. backend 구현 상태
+## 3. backend 援ы쁽 ?곹깭
 - `Iocp`
-  - [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
-  - [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
-  - 현재 기준선 backend
+  - [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.h)
+  - [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.h)
+  - ?꾩옱 湲곗???backend
 - `Rio`
-  - [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
-  - [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
-  - `RIO_EVENT_COMPLETION` 기반 순수 RIO backend baseline
+  - [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)
+  - [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
+  - `RIO_EVENT_COMPLETION` 湲곕컲 ?쒖닔 RIO backend baseline
 - `BoostAsio`
-  - 아직 stub
+  - ?꾩쭅 stub
 
-backend 선택은 [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.h)가 담당한다.
+backend ?좏깮? [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FServerFactory.h)媛 ?대떦?쒕떎.
 
-## 4. RIO 현재 정책
-- `IOCP + RIO` 하이브리드는 이번 클래스에 섞지 않는다.
-- 순수 `RIO`는 `FRioServer`가 맡는다.
-- 하이브리드가 필요하면 나중에 `FRioIocpServer` 같은 별도 backend로 분리한다.
+## 4. RIO ?꾩옱 ?뺤콉
+- `IOCP + RIO` ?섏씠釉뚮━?쒕뒗 ?대쾲 ?대옒?ㅼ뿉 ?욎? ?딅뒗??
+- ?쒖닔 `RIO`??`FRioServer`媛 留〓뒗??
+- ?섏씠釉뚮━?쒓? ?꾩슂?섎㈃ ?섏쨷??`FRioIocpServer` 媛숈? 蹂꾨룄 backend濡?遺꾨━?쒕떎.
 
-## 5. ownership 정책
-- worker마다 `RIO_CQ`와 owner thread를 하나 둔다.
-- 세션은 accept 시 worker 하나에 배정된다.
-- 배정 기준은 `activeSessionCount` 기반 least-loaded다.
-- 세션은 disconnect 전까지 owner worker를 바꾸지 않는다.
+## 5. ownership ?뺤콉
+- worker留덈떎 `RIO_CQ`? owner thread瑜??섎굹 ?붾떎.
+- ?몄뀡? accept ??worker ?섎굹??諛곗젙?쒕떎.
+- 諛곗젙 湲곗?? `activeSessionCount` 湲곕컲 least-loaded??
+- ?몄뀡? disconnect ?꾧퉴吏 owner worker瑜?諛붽씀吏 ?딅뒗??
 
-## 6. 현재 장점
-- `EchoServer`는 backend 타입을 직접 모르고 시작할 수 있다.
-- `IOCP`와 `RIO`를 같은 config 모델에서 선택할 수 있다.
-- 상위 계층을 흔들지 않고 transport backend를 확장할 수 있다.
+## 6. ?꾩옱 ?μ젏
+- `EchoServer`??backend ??낆쓣 吏곸젒 紐⑤Ⅴ怨??쒖옉?????덈떎.
+- `IOCP`? `RIO`瑜?媛숈? config 紐⑤뜽?먯꽌 ?좏깮?????덈떎.
+- ?곸쐞 怨꾩링???붾뱾吏 ?딄퀬 transport backend瑜??뺤옣?????덈떎.
 
-## 7. 현재 한계
-- `RIO`는 baseline 구현 단계라 buffer 등록 비용 최적화가 아직 없다.
-- `RIO_IOCP_COMPLETION` 기반 하이브리드는 아직 없다.
-- backend별 성능 비교는 더 많은 soak / benchmark가 필요하다.
+## 7. ?꾩옱 ?쒓퀎
+- `RIO`??baseline 援ы쁽 ?④퀎??buffer ?깅줉 鍮꾩슜 理쒖쟻?붽? ?꾩쭅 ?녿떎.
+- `RIO_IOCP_COMPLETION` 湲곕컲 ?섏씠釉뚮━?쒕뒗 ?꾩쭅 ?녿떎.
+- backend蹂??깅뒫 鍮꾧탳????留롮? soak / benchmark媛 ?꾩슂?섎떎.
 
-## 8. 다음 작업
-- `RIO` 장시간 검증
-- `IOCP` / `RIO` 비교 벤치마크
-- send/recv hot path 최적화
-- 필요 시 `FRioIocpServer` 설계
+## 8. ?ㅼ쓬 ?묒뾽
+- `RIO` ?μ떆媛?寃利?- `IOCP` / `RIO` 鍮꾧탳 踰ㅼ튂留덊겕
+- send/recv hot path 理쒖쟻??- ?꾩슂 ??`FRioIocpServer` ?ㅺ퀎
+

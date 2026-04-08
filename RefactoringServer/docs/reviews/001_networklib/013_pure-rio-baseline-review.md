@@ -1,126 +1,126 @@
-# Pure RIO Baseline Review
+﻿# Pure RIO Baseline Review
 
-## 1. 목적
-- `NetworkLib`에 순수 `RIO` backend를 실제로 동작하는 baseline으로 추가한 결과를 정리한다.
-- 이번 단계는 `IOCP + RIO` 하이브리드가 아니라 `RIO_EVENT_COMPLETION` 기반 순수 `RIO` 구현이다.
+## 1. 紐⑹쟻
+- `NetworkLib`???쒖닔 `RIO` backend瑜??ㅼ젣濡??숈옉?섎뒗 baseline?쇰줈 異붽???寃곌낵瑜??뺣━?쒕떎.
+- ?대쾲 ?④퀎??`IOCP + RIO` ?섏씠釉뚮━?쒓? ?꾨땲??`RIO_EVENT_COMPLETION` 湲곕컲 ?쒖닔 `RIO` 援ы쁽?대떎.
 
-## 2. 이번 범위
-- [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
-- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
-- [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
-- [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.cpp)
+## 2. ?대쾲 踰붿쐞
+- [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)
+- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp)
+- [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
+- [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.cpp)
 
-핵심 구현:
-- worker별 `RIO_CQ + event + owner thread`
-- `AcceptEx + WSA_FLAG_REGISTERED_IO` 기반 accept
-- 세션별 `RIO_RQ` 생성
-- recv staging buffer 등록 후 `RIOReceive`
-- send 시 packet buffer 등록 후 `RIOSend`
-- `activeSessionCount` 기반 least-loaded worker 배정
+?듭떖 援ы쁽:
+- worker蹂?`RIO_CQ + event + owner thread`
+- `AcceptEx + WSA_FLAG_REGISTERED_IO` 湲곕컲 accept
+- ?몄뀡蹂?`RIO_RQ` ?앹꽦
+- recv staging buffer ?깅줉 ??`RIOReceive`
+- send ??packet buffer ?깅줉 ??`RIOSend`
+- `activeSessionCount` 湲곕컲 least-loaded worker 諛곗젙
 
-## 3. 코드 구조
+## 3. 肄붾뱶 援ъ“
 ### 3-1. server
-- [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
+- [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)
   - backend lifecycle
-  - worker/CQ 관리
-  - accept loop
+  - worker/CQ 愿由?  - accept loop
   - send / disconnect / stats
 
 ### 3-2. session
-- [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
+- [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
   - `sessionId`, `slotIndex`, `generation`
   - owner worker index
   - `RIO_RQ`
   - recv staging buffer / recv ring buffer
   - recv pending state
-  - send queue 통계
+  - send queue ?듦퀎
 
 ### 3-3. factory / public layer
-- [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.cpp)
-  - `Backend: Rio`면 `FRioServer` 선택
-- [IServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h)
-  - 상위 레이어는 backend 종류를 직접 모른다.
+- [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FServerFactory.cpp)
+  - `Backend: Rio`硫?`FRioServer` ?좏깮
+- [IServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\IServer.h)
+  - ?곸쐞 ?덉씠?대뒗 backend 醫낅쪟瑜?吏곸젒 紐⑤Ⅸ??
 
-## 4. 동작 흐름
-1. `FRioServer::Start()`가 Winsock, RIO function table, listen socket, AcceptEx, worker CQ를 초기화한다.
-2. accept thread가 `AcceptEx`로 `WSA_FLAG_REGISTERED_IO` client socket을 받는다.
-3. `AttachAcceptedSocket()`이 빈 slot을 먼저 찾고, 그 slot 기준으로 `FRioSession`, recv registered buffer, `RIO_RQ`를 생성한다.
-4. owner worker는 `RIO_EVENT_COMPLETION`으로 깨워지고, `RIODequeueCompletion()`으로 completions를 소비한다.
-5. recv completion은 framer / cipher / app handler 경로로 올라간다.
-6. send는 packet을 framing한 뒤 temporary registered buffer로 `RIOSend()`를 건다.
+## 4. ?숈옉 ?먮쫫
+1. `FRioServer::Start()`媛 Winsock, RIO function table, listen socket, AcceptEx, worker CQ瑜?珥덇린?뷀븳??
+2. accept thread媛 `AcceptEx`濡?`WSA_FLAG_REGISTERED_IO` client socket??諛쏅뒗??
+3. `AttachAcceptedSocket()`??鍮?slot??癒쇱? 李얘퀬, 洹?slot 湲곗??쇰줈 `FRioSession`, recv registered buffer, `RIO_RQ`瑜??앹꽦?쒕떎.
+4. owner worker??`RIO_EVENT_COMPLETION`?쇰줈 源⑥썙吏怨? `RIODequeueCompletion()`?쇰줈 completions瑜??뚮퉬?쒕떎.
+5. recv completion? framer / cipher / app handler 寃쎈줈濡??щ씪媛꾨떎.
+6. send??packet??framing????temporary registered buffer濡?`RIOSend()`瑜?嫄대떎.
 
-## 5. 중요 설계 판단
-### 5-1. CQ 단일 owner
-- CQ를 여러 스레드가 공유 dequeue하지 않는다.
-- worker마다 CQ를 하나 두고, 해당 worker만 소비한다.
-- 1차 구현에서 동기화 복잡도를 낮추는 데 유리하다.
+## 5. 以묒슂 ?ㅺ퀎 ?먮떒
+### 5-1. CQ ?⑥씪 owner
+- CQ瑜??щ윭 ?ㅻ젅?쒓? 怨듭쑀 dequeue?섏? ?딅뒗??
+- worker留덈떎 CQ瑜??섎굹 ?먭퀬, ?대떦 worker留??뚮퉬?쒕떎.
+- 1李?援ы쁽?먯꽌 ?숆린??蹂듭옟?꾨? ??텛?????좊━?섎떎.
 
-### 5-2. 세션 owner 정책
-- 세션은 accept 시 worker 하나에 배정된다.
-- 배정 기준은 `activeSessionCount` 기반 least-loaded다.
-- 세션 migration은 이번 범위에서 하지 않는다.
+### 5-2. ?몄뀡 owner ?뺤콉
+- ?몄뀡? accept ??worker ?섎굹??諛곗젙?쒕떎.
+- 諛곗젙 湲곗?? `activeSessionCount` 湲곕컲 least-loaded??
+- ?몄뀡 migration? ?대쾲 踰붿쐞?먯꽌 ?섏? ?딅뒗??
 
-### 5-3. lock-free 범위
-- 이번 baseline은 “정확성 우선”이다.
-- session request queue 접근 등 필요한 곳에는 lock을 둔다.
-- 이후 hot path 계측 후 lock-free 후보만 분리한다.
+### 5-3. lock-free 踰붿쐞
+- ?대쾲 baseline? ?쒖젙?뺤꽦 ?곗꽑?앹씠??
+- session request queue ?묎렐 ???꾩슂??怨녹뿉??lock???붾떎.
+- ?댄썑 hot path 怨꾩륫 ??lock-free ?꾨낫留?遺꾨━?쒕떎.
 
-## 6. 잡힌 버그
-### 6-1. 증상
-- 다중 세션에서 `RIOCreateRequestQueue failed. error=10014`가 반복됐다.
+## 6. ?≫엺 踰꾧렇
+### 6-1. 利앹긽
+- ?ㅼ쨷 ?몄뀡?먯꽌 `RIOCreateRequestQueue failed. error=10014`媛 諛섎났?먮떎.
 
-### 6-2. 원인
-- 초기 구현은 빈 slot을 확정하기 전에 slot 탐색 루프 안에서 `RIOCreateRequestQueue()`를 호출했다.
-- slot 0이 이미 사용 중인 경우, 같은 accepted socket으로 `RIO_RQ` 생성을 여러 번 시도할 수 있었다.
+### 6-2. ?먯씤
+- 珥덇린 援ы쁽? 鍮?slot???뺤젙?섍린 ?꾩뿉 slot ?먯깋 猷⑦봽 ?덉뿉??`RIOCreateRequestQueue()`瑜??몄텧?덈떎.
+- slot 0???대? ?ъ슜 以묒씤 寃쎌슦, 媛숈? accepted socket?쇰줈 `RIO_RQ` ?앹꽦???щ윭 踰??쒕룄?????덉뿀??
 
-### 6-3. 수정
-- 먼저 빈 slot을 찾는다.
-- 그 slot 기준으로 session / registered buffer / `RIO_RQ`를 한 번만 생성한다.
-- 마지막에 slot attach를 수행한다.
+### 6-3. ?섏젙
+- 癒쇱? 鍮?slot??李얜뒗??
+- 洹?slot 湲곗??쇰줈 session / registered buffer / `RIO_RQ`瑜???踰덈쭔 ?앹꽦?쒕떎.
+- 留덉?留됱뿉 slot attach瑜??섑뻾?쒕떎.
 
-### 6-4. 수정 파일
-- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
+### 6-4. ?섏젙 ?뚯씪
+- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp)
 
-### 6-5. 추가로 잡힌 자원 부족 문제
-#### 증상
-- `250세션 / 10분` 비교 런에서 일부 세션이 `login-response` 전에 끊겼다.
-- 서버 로그에는 `RIOCreateRequestQueue failed. error=10055`가 반복됐다.
+### 6-5. 異붽?濡??≫엺 ?먯썝 遺議?臾몄젣
+#### 利앹긽
+- `250?몄뀡 / 10遺? 鍮꾧탳 ?곗뿉???쇰? ?몄뀡??`login-response` ?꾩뿉 ?딄꼈??
+- ?쒕쾭 濡쒓렇?먮뒗 `RIOCreateRequestQueue failed. error=10055`媛 諛섎났?먮떎.
 
-#### 원인
-- baseline 구현은 세션당 `RIOCreateRequestQueue()` 예약값이 상대적으로 컸다.
-  - 특히 send reservation이 과하게 잡혀 있었다.
-- 세션 풀도 `MaxSessionCount` 기준으로 미리 warm-up되지 않아, 시작 구간 admission 비용이 더 컸다.
+#### ?먯씤
+- baseline 援ы쁽? ?몄뀡??`RIOCreateRequestQueue()` ?덉빟媛믪씠 ?곷??곸쑝濡?而몃떎.
+  - ?뱁엳 send reservation??怨쇳븯寃??≫? ?덉뿀??
+- ?몄뀡 ???`MaxSessionCount` 湲곗??쇰줈 誘몃━ warm-up?섏? ?딆븘, ?쒖옉 援ш컙 admission 鍮꾩슜????而몃떎.
 
-#### 수정
-- `FRioSession::EnsurePoolCapacity(maxSessionCount)`를 추가해 세션 풀을 미리 확보했다.
-- `FRioServer`의 `kMaxOutstandingSend`를 `64 -> 8`로 낮췄다.
+#### ?섏젙
+- `FRioSession::EnsurePoolCapacity(maxSessionCount)`瑜?異붽????몄뀡 ???誘몃━ ?뺣낫?덈떎.
+- `FRioServer`??`kMaxOutstandingSend`瑜?`64 -> 8`濡???톬??
 
-#### 수정 파일
-- [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
-- [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.cpp)
-- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp)
+#### ?섏젙 ?뚯씪
+- [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
+- [FRioSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.cpp)
+- [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp)
 
-## 7. 검증 결과
-- `Debug x64` 솔루션 빌드 성공
-- `RIO 1세션` 스모크 성공
-- `RIO 20세션 / 15초` 스모크 성공
-- `RIO 100세션 / 3분` 회귀 성공
-- 기존 `IOCP 100세션 / 3분` 회귀도 유지
-- 수정 후 `RIO Direct 250세션 / 10분` 성공
+## 7. 寃利?寃곌낵
+- `Debug x64` ?붾（??鍮뚮뱶 ?깃났
+- `RIO 1?몄뀡` ?ㅻえ???깃났
+- `RIO 20?몄뀡 / 15珥? ?ㅻえ???깃났
+- `RIO 100?몄뀡 / 3遺? ?뚭? ?깃났
+- 湲곗〈 `IOCP 100?몄뀡 / 3遺? ?뚭????좎?
+- ?섏젙 ??`RIO Direct 250?몄뀡 / 10遺? ?깃났
   - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\client.log)
   - [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\server.log)
   - [rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_direct_fix_250x10m_t15_r80\rtt.csv)
   - `echo validation succeeded. sessions=250 responses=619436 ... holdSeconds=600`
-  - `RIOCreateRequestQueue failed` 발생 `0회`
+  - `RIOCreateRequestQueue failed` 諛쒖깮 `0??
 
-로그:
+濡쒓렇:
 - [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_smoke_20x15s_acceptfix2\server.log)
 - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_smoke_20x15s_acceptfix2\client.log)
 - [server.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_regression_100x3m\server.log)
 - [client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\rio_regression_100x3m\client.log)
 
-## 8. 현재 결론
-- `RIO`는 이제 stub이 아니라 실제 baseline backend다.
-- 아직 성능 최적화 단계는 아니지만, 상위 `EchoServer` / `ContentsRuntime` 경로를 태우는 데는 충분한 상태다.
-- `250세션` 비교 런에서 보였던 `RIOCreateRequestQueue error=10055` admission 문제도 수정 후 재현되지 않았다.
-- 다음 작업은 `Direct / OwnerThread / IOCP` 비교와, 필요 시 buffer 등록 비용 최적화다.
+## 8. ?꾩옱 寃곕줎
+- `RIO`???댁젣 stub???꾨땲???ㅼ젣 baseline backend??
+- ?꾩쭅 ?깅뒫 理쒖쟻???④퀎???꾨땲吏留? ?곸쐞 `EchoServer` / `ContentsRuntime` 寃쎈줈瑜??쒖슦???곕뒗 異⑸텇???곹깭??
+- `250?몄뀡` 鍮꾧탳 ?곗뿉??蹂댁???`RIOCreateRequestQueue error=10055` admission 臾몄젣???섏젙 ???ы쁽?섏? ?딆븯??
+- ?ㅼ쓬 ?묒뾽? `Direct / OwnerThread / IOCP` 鍮꾧탳?, ?꾩슂 ??buffer ?깅줉 鍮꾩슜 理쒖쟻?붾떎.
+

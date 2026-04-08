@@ -1,4 +1,4 @@
-Scenario: Chatting
+﻿Scenario: Chatting
 OutputRoot: Out/bench
 ContinueOnError: true
 
@@ -10,7 +10,7 @@ Defaults:
     StartupTimeoutSeconds: 15
     RunTimeoutSeconds: 3660
   Server:
-    Executable: Out/ChattingServer.exe
+    Executable: Out/ChattingServer/ChattingServer.exe
     ConfigTemplate: Config/Server/ChattingServer.yaml
     Overrides:
       ChattingServer.Port: 19100
@@ -23,7 +23,7 @@ Defaults:
       ChattingServer.RioSendRingSizeBytes: 65536
       Debug.Headless: true
   Client:
-    Executable: Out/ChattingDummyClient.exe
+    Executable: Out/ChattingDummyClient/ChattingDummyClient.exe
     ConfigTemplate: Config/Client/ChattingDummy.yaml
     Overrides:
       ChattingDummy.ServerIp: 127.0.0.1
@@ -76,3 +76,4 @@ Runs:
         ChattingServer.Backend: Rio
         ChattingServer.RioSendDispatchMode: OwnerThread
         ChattingServer.SocketSendBufferBytes: -1
+

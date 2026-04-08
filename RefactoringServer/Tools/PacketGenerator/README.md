@@ -12,7 +12,7 @@
 프로젝트 루트에서:
 
 ```powershell
-RefactoringServer\scripts\Generate-Packets.cmd
+RefactoringServer\scripts\generate\Generate-Packets.cmd
 ```
 
 직접 실행할 때:

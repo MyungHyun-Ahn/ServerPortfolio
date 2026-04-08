@@ -1,79 +1,76 @@
-# NetworkLib Packet Framing And Cipher Plan
+﻿# NetworkLib Packet Framing And Cipher Plan
 
-## 1. 목적
-- 현재 `EchoServer`/`EchoClient`에서 응용 계층 수준으로만 검증한 패킷 암호화를 `NetworkLib` 코어로 옮기기 위한 선행 설계를 정리한다.
-- 목표는 `recv/send` 함수에 바로 암복호화를 섞는 것이 아니라, `패킷 프레이밍 -> 암복호화 -> application dispatch` 경계를 먼저 고정하는 것이다.
+## 1. 紐⑹쟻
+- ?꾩옱 `EchoServer`/`EchoClient`?먯꽌 ?묒슜 怨꾩링 ?섏??쇰줈留?寃利앺븳 ?⑦궥 ?뷀샇?붾? `NetworkLib` 肄붿뼱濡???린湲??꾪븳 ?좏뻾 ?ㅺ퀎瑜??뺣━?쒕떎.
+- 紐⑺몴??`recv/send` ?⑥닔??諛붾줈 ?붾났?명솕瑜??욌뒗 寃껋씠 ?꾨땲?? `?⑦궥 ?꾨젅?대컢 -> ?붾났?명솕 -> application dispatch` 寃쎄퀎瑜?癒쇱? 怨좎젙?섎뒗 寃껋씠??
 
-## 2. 현재 확인된 사실
-- 현재 `EchoServer`와 `EchoClient`는 payload 앞 1바이트를 `randomKey`로 사용하고, 나머지 payload를 `FDefaultPacketCipher`로 처리한다.
-- 이 방식으로 실제 왕복 검증은 성공했다.
-- 반면 `NetworkLib` 내부의 [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)는 여전히 “수신된 바이트 덩어리 전체를 그대로 application에 넘기는 구조”다.
-- 즉 지금 상태에서 암복호화를 코어에 바로 넣으면 다음 문제를 피하기 어렵다.
-  - 패킷 분할 수신
-  - 여러 패킷의 연속 수신
-  - 프레임 경계 없는 바이트 스트림 처리
+## 2. ?꾩옱 ?뺤씤???ъ떎
+- ?꾩옱 `EchoServer`? `EchoClient`??payload ??1諛붿씠?몃? `randomKey`濡??ъ슜?섍퀬, ?섎㉧吏 payload瑜?`FDefaultPacketCipher`濡?泥섎━?쒕떎.
+- ??諛⑹떇?쇰줈 ?ㅼ젣 ?뺣났 寃利앹? ?깃났?덈떎.
+- 諛섎㈃ `NetworkLib` ?대???[FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\FIocpServer.cpp)???ъ쟾???쒖닔?좊맂 諛붿씠???⑹뼱由??꾩껜瑜?洹몃?濡?application???섍린??援ъ“?앸떎.
+- 利?吏湲??곹깭?먯꽌 ?붾났?명솕瑜?肄붿뼱??諛붾줈 ?ｌ쑝硫??ㅼ쓬 臾몄젣瑜??쇳븯湲??대졄??
+  - ?⑦궥 遺꾪븷 ?섏떊
+  - ?щ윭 ?⑦궥???곗냽 ?섏떊
+  - ?꾨젅??寃쎄퀎 ?녿뒗 諛붿씠???ㅽ듃由?泥섎━
 
-## 3. 왜 프레이밍이 먼저 필요한가
-- TCP는 메시지 경계를 보장하지 않는다.
-- 따라서 `recv()` 한 번이 “패킷 1개”를 의미하지 않는다.
-- 코어에 cipher를 올리려면 최소한 아래 순서가 성립해야 한다.
-  1. 수신 버퍼 누적
-  2. 프레임 헤더 해석
-  3. 패킷 단위 추출
-  4. payload 복호화
-  5. application dispatch
+## 3. ???꾨젅?대컢??癒쇱? ?꾩슂?쒓?
+- TCP??硫붿떆吏 寃쎄퀎瑜?蹂댁옣?섏? ?딅뒗??
+- ?곕씪??`recv()` ??踰덉씠 ?쒗뙣??1媛쒋앸? ?섎??섏? ?딅뒗??
+- 肄붿뼱??cipher瑜??щ━?ㅻ㈃ 理쒖냼???꾨옒 ?쒖꽌媛 ?깅┰?댁빞 ?쒕떎.
+  1. ?섏떊 踰꾪띁 ?꾩쟻
+  2. ?꾨젅???ㅻ뜑 ?댁꽍
+  3. ?⑦궥 ?⑥쐞 異붿텧
+  4. payload 蹂듯샇??  5. application dispatch
 
-## 4. 1차 프레이밍 기준 제안
+## 4. 1李??꾨젅?대컢 湲곗? ?쒖븞
 
-### 4-1. 고정 헤더
-- 최소 헤더는 아래 2개를 포함한다.
+### 4-1. 怨좎젙 ?ㅻ뜑
+- 理쒖냼 ?ㅻ뜑???꾨옒 2媛쒕? ?ы븿?쒕떎.
   - `payloadLength`
   - `randomKey`
 
-### 4-2. 권장 헤더 초안
+### 4-2. 沅뚯옣 ?ㅻ뜑 珥덉븞
 - `std::uint16_t payloadLength`
 - `std::uint8_t randomKey`
 
-### 4-3. 해석 순서
-- 헤더 크기만큼 수신되었는지 확인
-- `payloadLength` 기준으로 본문 길이 확인
-- 패킷 전체가 도착했을 때만 payload를 꺼내서 cipher 적용
+### 4-3. ?댁꽍 ?쒖꽌
+- ?ㅻ뜑 ?ш린留뚰겮 ?섏떊?섏뿀?붿? ?뺤씤
+- `payloadLength` 湲곗??쇰줈 蹂몃Ц 湲몄씠 ?뺤씤
+- ?⑦궥 ?꾩껜媛 ?꾩갑?덉쓣 ?뚮쭔 payload瑜?爰쇰궡??cipher ?곸슜
 
-## 5. 적용 계층
+## 5. ?곸슜 怨꾩링
 
-### 5-1. `NetworkLib` 내부에 추가할 것
-- `Packet` 또는 `Framing` 디렉터리
-- 예시 후보:
+### 5-1. `NetworkLib` ?대???異붽???寃?- `Packet` ?먮뒗 `Framing` ?붾젆?곕━
+- ?덉떆 ?꾨낫:
   - `SPacketHeader`
   - `IPacketFramer`
   - `FDefaultPacketFramer`
 
-### 5-2. `SServerConfig`에 추가할 후보
+### 5-2. `SServerConfig`??異붽????꾨낫
 - `std::shared_ptr<Crypto::IPacketCipher> packetCipher`
 - `bool usePacketFraming`
-- 이후 필요하면 `std::shared_ptr<Packet::IPacketFramer> packetFramer`
+- ?댄썑 ?꾩슂?섎㈃ `std::shared_ptr<Packet::IPacketFramer> packetFramer`
 
-## 6. 1차 구현 범위
-- `recvBuffer`를 바로 application에 넘기지 않고 세션별 누적 버퍼를 둔다.
-- `payloadLength + randomKey` 기반 기본 프레이머를 추가한다.
-- 프레이밍 완료 후 payload만 `IPacketCipher`에 넘긴다.
-- `Send()`도 동일 헤더를 붙인 뒤 payload를 암호화해 송신한다.
+## 6. 1李?援ы쁽 踰붿쐞
+- `recvBuffer`瑜?諛붾줈 application???섍린吏 ?딄퀬 ?몄뀡蹂??꾩쟻 踰꾪띁瑜??붾떎.
+- `payloadLength + randomKey` 湲곕컲 湲곕낯 ?꾨젅?대㉧瑜?異붽??쒕떎.
+- ?꾨젅?대컢 ?꾨즺 ??payload留?`IPacketCipher`???섍릿??
+- `Send()`???숈씪 ?ㅻ뜑瑜?遺숈씤 ??payload瑜??뷀샇?뷀빐 ?≪떊?쒕떎.
 
-## 7. 구현 순서 제안
-1. `Packet` 프레이밍 기획 문서 상세화
-2. `SPacketHeader`와 기본 프레이머 추가
-3. `SServerConfig`에 `packetCipher` 연결
-4. `EchoServer`/`EchoClient`를 프레이머 기반으로 바꾸기
-5. `FIocpServer` recv/send 경계로 이동
+## 7. 援ы쁽 ?쒖꽌 ?쒖븞
+1. `Packet` ?꾨젅?대컢 湲고쉷 臾몄꽌 ?곸꽭??2. `SPacketHeader`? 湲곕낯 ?꾨젅?대㉧ 異붽?
+3. `SServerConfig`??`packetCipher` ?곌껐
+4. `EchoServer`/`EchoClient`瑜??꾨젅?대㉧ 湲곕컲?쇰줈 諛붽씀湲?5. `FIocpServer` recv/send 寃쎄퀎濡??대룞
 
-## 8. 검증 계획
-- 단일 클라이언트 에코 왕복
-- 여러 번 연속 송신
-- 긴 메시지 송신
-- 분할 수신을 유도하는 작은 recv buffer 환경
-- `FDefaultPacketCipher`와 `FNullPacketCipher` 모두 동일 프레이머에서 동작 확인
+## 8. 寃利?怨꾪쉷
+- ?⑥씪 ?대씪?댁뼵???먯퐫 ?뺣났
+- ?щ윭 踰??곗냽 ?≪떊
+- 湲?硫붿떆吏 ?≪떊
+- 遺꾪븷 ?섏떊???좊룄?섎뒗 ?묒? recv buffer ?섍꼍
+- `FDefaultPacketCipher`? `FNullPacketCipher` 紐⑤몢 ?숈씪 ?꾨젅?대㉧?먯꽌 ?숈옉 ?뺤씤
 
-## 9. 현재 결론
-- 다음 작업이 `NetworkLib` 암호화 적용인 것은 맞다.
-- 다만 바로 `FIocpServer::Send/Recv`에 cipher를 넣는 것보다, 프레이밍 계층을 먼저 고정하는 것이 안전하다.
-- 따라서 다음 실제 코드 작업은 `packet framing` 1차 구현이 가장 자연스럽다.
+## 9. ?꾩옱 寃곕줎
+- ?ㅼ쓬 ?묒뾽??`NetworkLib` ?뷀샇???곸슜??寃껋? 留욌떎.
+- ?ㅻ쭔 諛붾줈 `FIocpServer::Send/Recv`??cipher瑜??ｋ뒗 寃껊낫?? ?꾨젅?대컢 怨꾩링??癒쇱? 怨좎젙?섎뒗 寃껋씠 ?덉쟾?섎떎.
+- ?곕씪???ㅼ쓬 ?ㅼ젣 肄붾뱶 ?묒뾽? `packet framing` 1李?援ы쁽??媛???먯뿰?ㅻ읇??
+

@@ -1,54 +1,51 @@
-# bytes_view zero-copy 리뷰
+﻿# bytes_view zero-copy 由щ럭
 
-## 1. 목적
-- recv 역직렬화 경로에서 바이너리 payload를 복사 없이 읽을 수 있도록 `bytes_view` 지원을 추가한 이유와 현재 제약을 정리한다.
+## 1. 紐⑹쟻
+- recv ??쭅?ы솕 寃쎈줈?먯꽌 諛붿씠?덈━ payload瑜?蹂듭궗 ?놁씠 ?쎌쓣 ???덈룄濡?`bytes_view` 吏?먯쓣 異붽????댁쑀? ?꾩옱 ?쒖빟???뺣━?쒕떎.
 
-## 2. 이번 단계에서 적용한 내용
-### 2-1. 런타임 지원
-- [FPacketReader.h](D:/Project/ServerPortfolio/RefactoringServer/NetworkLib/Packet/FPacketReader.h)
-  - `std::span<const std::uint8_t>` 읽기 경로를 추가했다.
+## 2. ?대쾲 ?④퀎?먯꽌 ?곸슜???댁슜
+### 2-1. ?고???吏??- [FPacketReader.h](D:/Project/ServerPortfolio/RefactoringServer/NetworkLib/Packet/FPacketReader.h)
+  - `std::span<const std::uint8_t>` ?쎄린 寃쎈줈瑜?異붽??덈떎.
 - [FPacketWriter.h](D:/Project/ServerPortfolio/RefactoringServer/NetworkLib/Packet/FPacketWriter.h)
-  - `std::span<const std::uint8_t>` 쓰기 경로를 추가했다.
+  - `std::span<const std::uint8_t>` ?곌린 寃쎈줈瑜?異붽??덈떎.
 - [FPacketSerialization.h](D:/Project/ServerPortfolio/RefactoringServer/NetworkLib/Packet/FPacketSerialization.h)
-  - `bytes_view` 직렬화 크기 계산 경로를 추가했다.
+  - `bytes_view` 吏곷젹???ш린 怨꾩궛 寃쎈줈瑜?異붽??덈떎.
 
-### 2-2. 생성기 지원
-- [Program.cs](D:/Project/ServerPortfolio/RefactoringServer/Tools/PacketGenerator/Program.cs)
-  - 스키마 타입 `bytes_view`를 C++에서는 `std::span<const std::uint8_t>`로 생성하도록 추가했다.
-  - C# 출력 타입은 우선 `byte[]`로 매핑한다.
+### 2-2. ?앹꽦湲?吏??- [Program.cs](D:/Project/ServerPortfolio/RefactoringServer/Tools/PacketGenerator/Program.cs)
+  - ?ㅽ궎留????`bytes_view`瑜?C++?먯꽌??`std::span<const std::uint8_t>`濡??앹꽦?섎룄濡?異붽??덈떎.
+  - C# 異쒕젰 ??낆? ?곗꽑 `byte[]`濡?留ㅽ븨?쒕떎.
 
-### 2-3. 샘플 적용
+### 2-3. ?섑뵆 ?곸슜
 - [Chat.yaml](D:/Project/ServerPortfolio/RefactoringServer/Packet/Chat/Chat.yaml)
-  - `RoomBinarySnapshotNoti.payload`를 `bytes_view`로 정의했다.
+  - `RoomBinarySnapshotNoti.payload`瑜?`bytes_view`濡??뺤쓽?덈떎.
 - [ChatPackets.h](D:/Project/ServerPortfolio/RefactoringServer/Generated/Packets/Chat/ChatPackets.h)
-  - generated packet이 `std::span<const std::uint8_t>`를 사용하도록 생성됐다.
+  - generated packet??`std::span<const std::uint8_t>`瑜??ъ슜?섎룄濡??앹꽦?먮떎.
 
-## 3. 구조적 장점
-- 큰 바이너리 payload를 `std::vector<std::uint8_t>`로 한 번 더 복사하지 않고 recv 버퍼를 그대로 참조할 수 있다.
-- `string_view`와 같은 규칙으로 다뤄서 생성기와 런타임 설계가 일관된다.
-- 이후 압축 데이터, blob, 직렬화된 하위 구조 payload에 대해 zero-copy 선택지를 열어둘 수 있다.
+## 3. 援ъ“???μ젏
+- ??諛붿씠?덈━ payload瑜?`std::vector<std::uint8_t>`濡???踰???蹂듭궗?섏? ?딄퀬 recv 踰꾪띁瑜?洹몃?濡?李몄“?????덈떎.
+- `string_view`? 媛숈? 洹쒖튃?쇰줈 ?ㅻ쨪???앹꽦湲곗? ?고????ㅺ퀎媛 ?쇨??쒕떎.
+- ?댄썑 ?뺤텞 ?곗씠?? blob, 吏곷젹?붾맂 ?섏쐞 援ъ“ payload?????zero-copy ?좏깮吏瑜??댁뼱?????덈떎.
 
-## 4. 가장 중요한 수명 규칙
-- `bytes_view`는 recv payload 버퍼 수명에 의존한다.
-- handler callback 범위를 넘겨 오래 보관하면 안 된다.
-- 오래 들고 있어야 하면 호출 측에서 `std::vector<std::uint8_t>`나 자체 버퍼로 명시적으로 복사해야 한다.
+## 4. 媛??以묒슂???섎챸 洹쒖튃
+- `bytes_view`??recv payload 踰꾪띁 ?섎챸???섏〈?쒕떎.
+- handler callback 踰붿쐞瑜??섍꺼 ?ㅻ옒 蹂닿??섎㈃ ???쒕떎.
+- ?ㅻ옒 ?ㅺ퀬 ?덉뼱???섎㈃ ?몄텧 痢≪뿉??`std::vector<std::uint8_t>`???먯껜 踰꾪띁濡?紐낆떆?곸쑝濡?蹂듭궗?댁빞 ?쒕떎.
 
-## 5. 현재 제약
-- 현재 zero-copy 대상은 읽기 전용 바이너리 view다.
-- 수정 가능한 view는 아직 지원하지 않는다.
-- 컨테이너 중첩 정책과 마찬가지로, 복잡한 수명 관리가 필요한 경우는 기본 생성 경로보다 수동 구현이 더 안전하다.
+## 5. ?꾩옱 ?쒖빟
+- ?꾩옱 zero-copy ??곸? ?쎄린 ?꾩슜 諛붿씠?덈━ view??
+- ?섏젙 媛?ν븳 view???꾩쭅 吏?먰븯吏 ?딅뒗??
+- 而⑦뀒?대꼫 以묒꺽 ?뺤콉怨?留덉갔媛吏濡? 蹂듭옟???섎챸 愿由ш? ?꾩슂??寃쎌슦??湲곕낯 ?앹꽦 寃쎈줈蹂대떎 ?섎룞 援ы쁽?????덉쟾?섎떎.
 
-## 6. 검증 근거
-- 빌드
+## 6. 寃利?洹쇨굅
+- 鍮뚮뱶
   - `RefactoringServer.sln` x64 Debug
-- 테스트
-  - [LockFreeTests.exe](D:/Project/ServerPortfolio/RefactoringServer/Out/LockFreeTests.exe)
+- ?뚯뒪??  - [LockFreeTests.exe](D:/Project/ServerPortfolio/RefactoringServer/Out/LockFreeTests/LockFreeTests.exe)
   - `Packet bytes_view round trip`
   - `Generated chat bytes_view packet round trip`
-- 스모크
-  - [bytes_view_smoke_server.log](D:/Project/ServerPortfolio/RefactoringServer/Out/bytes_view_smoke_server.log)
+- ?ㅻえ??  - [bytes_view_smoke_server.log](D:/Project/ServerPortfolio/RefactoringServer/Out/bytes_view_smoke_server.log)
   - [bytes_view_smoke_client.log](D:/Project/ServerPortfolio/RefactoringServer/Out/bytes_view_smoke_client.log)
 
-## 7. 결론
-- `bytes_view`는 recv zero-copy 확장의 다음 단계로 구조적으로 타당하다.
-- 다만 성능 최적화용 선택지로 보고, 수명 규칙을 지킬 수 있는 패킷에만 선택적으로 적용하는 것이 맞다.
+## 7. 寃곕줎
+- `bytes_view`??recv zero-copy ?뺤옣???ㅼ쓬 ?④퀎濡?援ъ“?곸쑝濡???뱁븯??
+- ?ㅻ쭔 ?깅뒫 理쒖쟻?붿슜 ?좏깮吏濡?蹂닿퀬, ?섎챸 洹쒖튃??吏?????덈뒗 ?⑦궥?먮쭔 ?좏깮?곸쑝濡??곸슜?섎뒗 寃껋씠 留욌떎.
+

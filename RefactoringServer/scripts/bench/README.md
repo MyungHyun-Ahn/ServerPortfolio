@@ -1,26 +1,24 @@
-# Benchmark Scripts
+﻿# Benchmark Scripts
 
-## 1. 목적
-- `scripts/bench`는 `RefactoringServer`의 벤치마크를 `PowerShell`로 반복 실행하기 위한 스크립트 디렉터리다.
-- 현재 1차 지원 시나리오는 `ChattingServer + ChattingDummyClient`이다.
-- 실행 대상, 기본 설정, run case 조합은 `YAML manifest`로 제어한다.
+## 1. 紐⑹쟻
+- `scripts/bench`??`RefactoringServer`??踰ㅼ튂留덊겕瑜?`PowerShell`濡?諛섎났 ?ㅽ뻾?섍린 ?꾪븳 ?ㅽ겕由쏀듃 ?붾젆?곕━??
+- ?꾩옱 1李?吏???쒕굹由ъ삤??`ChattingServer + ChattingDummyClient`?대떎.
+- ?ㅽ뻾 ??? 湲곕낯 ?ㅼ젙, run case 議고빀? `YAML manifest`濡??쒖뼱?쒕떎.
 
-## 2. 현재 구성
+## 2. ?꾩옱 援ъ꽦
 - [Run-Benchmark.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\Run-Benchmark.ps1)
-  - 메인 실행기
-- [Run-Benchmark.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\Run-Benchmark.cmd)
-  - `PowerShell` 래퍼
+  - 硫붿씤 ?ㅽ뻾湲?- [Run-Benchmark.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\Run-Benchmark.cmd)
+  - `PowerShell` ?섑띁
 - [Benchmark.Common.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\Benchmark.Common.ps1)
-  - 공통 helper
-  - 제한형 YAML 파서
+  - 怨듯넻 helper
+  - ?쒗븳??YAML ?뚯꽌
   - config patch
-  - process 실행/정리
+  - process ?ㅽ뻾/?뺣━
 - [Invoke-ChattingScenario.ps1](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\scenarios\Invoke-ChattingScenario.ps1)
-  - `Chatting` 시나리오 어댑터
-- [chatting-smoke.yaml](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\manifests\chatting-smoke.yaml)
-  - 최소 smoke 예시 manifest
+  - `Chatting` ?쒕굹由ъ삤 ?대뙌??- [chatting-smoke.yaml](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\manifests\chatting-smoke.yaml)
+  - 理쒖냼 smoke ?덉떆 manifest
 
-## 3. 빠른 시작
+## 3. 鍮좊Ⅸ ?쒖옉
 ### PowerShell
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\bench\Run-Benchmark.ps1 `
@@ -33,26 +31,26 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bench\Run-Benchmark.ps1 `
 scripts\bench\Run-Benchmark.cmd -Manifest scripts\bench\manifests\chatting-smoke.yaml -OutputLabel smoke
 ```
 
-권장 실행 위치:
-- `RefactoringServer` 루트에서 실행
+沅뚯옣 ?ㅽ뻾 ?꾩튂:
+- `RefactoringServer` 猷⑦듃?먯꽌 ?ㅽ뻾
 
-필수 선행 조건:
-- [ChattingServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\ChattingServer.exe)가 빌드되어 있어야 한다.
-- [ChattingDummyClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\ChattingDummyClient.exe)가 빌드되어 있어야 한다.
-- 기본 template config가 존재해야 한다.
+?꾩닔 ?좏뻾 議곌굔:
+- [ChattingServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\ChattingServer.exe)媛 鍮뚮뱶?섏뼱 ?덉뼱???쒕떎.
+- [ChattingDummyClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\ChattingDummyClient.exe)媛 鍮뚮뱶?섏뼱 ?덉뼱???쒕떎.
+- 湲곕낯 template config媛 議댁옱?댁빞 ?쒕떎.
   - [ChattingServer.yaml](D:\Project\ServerPortfolio\RefactoringServer\Config\Server\ChattingServer.yaml)
   - [ChattingDummy.yaml](D:\Project\ServerPortfolio\RefactoringServer\Config\Client\ChattingDummy.yaml)
 
-## 4. 실행 방식
-1. manifest를 읽는다.
-2. `Defaults`와 각 `Runs[]` 항목을 병합한다.
-3. run마다 임시 `effective.server.yaml`, `effective.client.yaml`을 만든다.
-4. 서버를 headless 모드로 실행한다.
-5. 더미 클라이언트를 실행한다.
-6. 종료 후 stdout/stderr, 요약 JSON, sequence CSV를 저장한다.
+## 4. ?ㅽ뻾 諛⑹떇
+1. manifest瑜??쎈뒗??
+2. `Defaults`? 媛?`Runs[]` ??ぉ??蹂묓빀?쒕떎.
+3. run留덈떎 ?꾩떆 `effective.server.yaml`, `effective.client.yaml`??留뚮뱺??
+4. ?쒕쾭瑜?headless 紐⑤뱶濡??ㅽ뻾?쒕떎.
+5. ?붾? ?대씪?댁뼵?몃? ?ㅽ뻾?쒕떎.
+6. 醫낅즺 ??stdout/stderr, ?붿빟 JSON, sequence CSV瑜???ν븳??
 
-## 5. Manifest 구조
-### 기본 예시
+## 5. Manifest 援ъ“
+### 湲곕낯 ?덉떆
 ```yaml
 Scenario: Chatting
 OutputRoot: Out/bench
@@ -66,13 +64,13 @@ Defaults:
     StartupTimeoutSeconds: 10
     RunTimeoutSeconds: 20
   Server:
-    Executable: Out/ChattingServer.exe
+    Executable: Out/ChattingServer/ChattingServer.exe
     ConfigTemplate: Config/Server/ChattingServer.yaml
     Overrides:
       ChattingServer.Port: 19100
       Debug.Headless: true
   Client:
-    Executable: Out/ChattingDummyClient.exe
+    Executable: Out/ChattingDummyClient/ChattingDummyClient.exe
     ConfigTemplate: Config/Client/ChattingDummy.yaml
     Overrides:
       ChattingDummy.ServerIp: 127.0.0.1
@@ -89,44 +87,42 @@ Runs:
         ChattingDummy.PayloadSizeBytes: 256
 ```
 
-### 주요 필드
+### 二쇱슂 ?꾨뱶
 - `Scenario`
-  - 현재는 `Chatting`만 지원
-- `OutputRoot`
-  - 결과 디렉터리 루트
+  - ?꾩옱??`Chatting`留?吏??- `OutputRoot`
+  - 寃곌낵 ?붾젆?곕━ 猷⑦듃
 - `ContinueOnError`
-  - `true`면 한 run 실패 후 다음 run 계속 진행
+  - `true`硫???run ?ㅽ뙣 ???ㅼ쓬 run 怨꾩냽 吏꾪뻾
 - `Defaults`
-  - 모든 run에 공통 적용될 기본값
-- `Runs`
-  - 실제 순차 실행할 run 목록
+  - 紐⑤뱺 run??怨듯넻 ?곸슜??湲곕낯媛?- `Runs`
+  - ?ㅼ젣 ?쒖감 ?ㅽ뻾??run 紐⑸줉
 - `RepeatCount`
-  - 동일 run을 여러 번 반복하고 싶을 때 사용
+  - ?숈씪 run???щ윭 踰?諛섎났?섍퀬 ?띠쓣 ???ъ슜
 - `Enabled`
-  - 임시 비활성화할 run에 사용
+  - ?꾩떆 鍮꾪솢?깊솕??run???ъ슜
 
-## 6. Override 규칙
-- override key는 `<Section>.<Key>` 형식만 지원한다.
-- 예:
+## 6. Override 洹쒖튃
+- override key??`<Section>.<Key>` ?뺤떇留?吏?먰븳??
+- ??
   - `ChattingServer.Backend`
   - `ChattingServer.MaxChatPayloadBytes`
   - `ChattingDummy.SessionCount`
   - `ChattingDummy.RoomSelectionMode`
 
-현재는 template YAML 안에 이미 존재하는 key만 덮어쓸 수 있다.
-- 없는 section/key를 새로 추가하는 기능은 아직 없다.
+?꾩옱??template YAML ?덉뿉 ?대? 議댁옱?섎뒗 key留???뼱?????덈떎.
+- ?녿뒗 section/key瑜??덈줈 異붽??섎뒗 湲곕뒫? ?꾩쭅 ?녿떎.
 
-## 7. 결과물 위치
-예시:
+## 7. 寃곌낵臾??꾩튂
+?덉떆:
 - `Out/bench/20260407_164920_smoke_test3/`
 
-sequence 루트에는 아래 파일이 생긴다.
+sequence 猷⑦듃?먮뒗 ?꾨옒 ?뚯씪???앷릿??
 - `manifest.snapshot.yaml`
 - `sequence-summary.csv`
 - `sequence-summary.json`
 - `failed-runs.txt`
 
-각 run 디렉터리에는 아래 파일이 생긴다.
+媛?run ?붾젆?곕━?먮뒗 ?꾨옒 ?뚯씪???앷릿??
 - `effective.server.yaml`
 - `effective.client.yaml`
 - `server.stdout.log`
@@ -136,48 +132,45 @@ sequence 루트에는 아래 파일이 생긴다.
 - `rtt.csv`
 - `run-summary.json`
 
-## 8. 현재 지원 범위
+## 8. ?꾩옱 吏??踰붿쐞
 - `Scenario: Chatting`
-- `Runs[]` 기반 순차 실행
+- `Runs[]` 湲곕컲 ?쒖감 ?ㅽ뻾
 - `RepeatCount`
 - `ContinueOnError`
-- `ChattingDummyClient` 최종 summary 파싱
-- `ChattingServer`의 `ChattingStats`, `ContentStats` 마지막 줄 파싱
+- `ChattingDummyClient` 理쒖쥌 summary ?뚯떛
+- `ChattingServer`??`ChattingStats`, `ContentStats` 留덉?留?以??뚯떛
 
-## 9. 현재 제한 사항
-- YAML은 “제한형 파서”다.
-- 현재 잘 되는 범위:
+## 9. ?꾩옱 ?쒗븳 ?ы빆
+- YAML? ?쒖젣?쒗삎 ?뚯꽌?앸떎.
+- ?꾩옱 ???섎뒗 踰붿쐞:
   - scalar
-  - 중첩 map
+  - 以묒꺽 map
   - flat list
-  - `Runs:` 아래 `- Name: ...` 구조
-- 아직 미지원 또는 비권장:
+  - `Runs:` ?꾨옒 `- Name: ...` 援ъ“
+- ?꾩쭅 誘몄????먮뒗 鍮꾧텒??
   - anchor / alias
   - merge key
-  - 복잡한 multiline block scalar
-  - template에 없는 key 동적 추가
-- 현재 지원 시나리오는 `Chatting` 하나뿐이다.
+  - 蹂듭옟??multiline block scalar
+  - template???녿뒗 key ?숈쟻 異붽?
+- ?꾩옱 吏???쒕굹由ъ삤??`Chatting` ?섎굹肉먯씠??
 
-## 10. 자주 쓰는 실행 예
-### Smoke
+## 10. ?먯＜ ?곕뒗 ?ㅽ뻾 ??### Smoke
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\bench\Run-Benchmark.ps1 `
   -Manifest scripts\bench\manifests\chatting-smoke.yaml `
   -OutputLabel smoke
 ```
 
-### 다른 결과 라벨로 저장
-```powershell
+### ?ㅻⅨ 寃곌낵 ?쇰꺼濡????```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\bench\Run-Benchmark.ps1 `
   -Manifest scripts\bench\manifests\chatting-smoke.yaml `
   -OutputLabel iocp_baseline
 ```
 
-## 11. 다음 확장 포인트
-- `Chatting` 실제 비교 manifest 추가
+## 11. ?ㅼ쓬 ?뺤옣 ?ъ씤??- `Chatting` ?ㅼ젣 鍮꾧탳 manifest 異붽?
   - `Iocp`
   - `Rio Direct`
   - `Rio OwnerThread`
-- `RepeatCount=3` 이상 실험 preset 추가
-- `Echo` 시나리오 어댑터 추가
-- manifest `Matrix` 자동 확장 지원
+- `RepeatCount=3` ?댁긽 ?ㅽ뿕 preset 異붽?
+- `Echo` ?쒕굹由ъ삤 ?대뙌??異붽?
+- manifest `Matrix` ?먮룞 ?뺤옣 吏??

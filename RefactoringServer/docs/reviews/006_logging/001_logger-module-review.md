@@ -1,93 +1,93 @@
-# Logger Module Review
+﻿# Logger Module Review
 
-## 1. 문서 목적
-- `RefactoringServer/Foundation/Logging` 아래 1차 로거 모듈의 현재 구조와 판단 근거를 정리한다.
-- 왜 이 모듈을 `util`이 아니라 `logging` 카테고리로 분리하는지 기록한다.
-- 이후 `async logger`, `crash dump 연계`, `백엔드 공통 진단 로그`로 확장할 때 기준 문서로 사용한다.
+## 1. 臾몄꽌 紐⑹쟻
+- `RefactoringServer/Foundation/Logging` ?꾨옒 1李?濡쒓굅 紐⑤뱢???꾩옱 援ъ“? ?먮떒 洹쇨굅瑜??뺣━?쒕떎.
+- ????紐⑤뱢??`util`???꾨땲??`logging` 移댄뀒怨좊━濡?遺꾨━?섎뒗吏 湲곕줉?쒕떎.
+- ?댄썑 `async logger`, `crash dump ?곌퀎`, `諛깆뿏??怨듯넻 吏꾨떒 濡쒓렇`濡??뺤옣????湲곗? 臾몄꽌濡??ъ슜?쒕떎.
 
-## 2. 디렉터리 분류 판단
-- 로거는 범용 도우미 함수 묶음보다, 출력 정책과 운영 관측을 담당하는 독립 모듈에 가깝다.
-- 현재 코드도 `ILogger`, `FConsoleLogger`, `FFileLogger`, `FCompositeLogger`, `LogFormatting`처럼 역할이 명확히 묶여 있다.
-- 따라서 `docs/reviews/util`보다는 `docs/reviews/logging`이 더 적합하다.
-- 나중에 `metrics`, `crash dump`, `trace`가 생겨도 `logging` 카테고리에서 함께 찾는 편이 자연스럽다.
+## 2. ?붾젆?곕━ 遺꾨쪟 ?먮떒
+- 濡쒓굅??踰붿슜 ?꾩슦誘??⑥닔 臾띠쓬蹂대떎, 異쒕젰 ?뺤콉怨??댁쁺 愿痢≪쓣 ?대떦?섎뒗 ?낅┰ 紐⑤뱢??媛源앸떎.
+- ?꾩옱 肄붾뱶??`ILogger`, `FConsoleLogger`, `FFileLogger`, `FCompositeLogger`, `LogFormatting`泥섎읆 ??븷??紐낇솗??臾띠뿬 ?덈떎.
+- ?곕씪??`docs/reviews/util`蹂대떎??`docs/reviews/logging`?????곹빀?섎떎.
+- ?섏쨷??`metrics`, `crash dump`, `trace`媛 ?앷꺼??`logging` 移댄뀒怨좊━?먯꽌 ?④퍡 李얜뒗 ?몄씠 ?먯뿰?ㅻ읇??
 
-## 3. 현재 구현 범위
-- 인터페이스:
-  - [ILogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\ILogger.h)
-- 싱크 구현:
-  - [FConsoleLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\FConsoleLogger.h)
-  - [FFileLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\FFileLogger.h)
-  - [FCompositeLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\FCompositeLogger.h)
-- 공통 포맷:
-  - [LogFormatting.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\LogFormatting.h)
-  - [LogFormatting.cpp](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Logging\LogFormatting.cpp)
-- 서버 연결 지점:
-  - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 3. ?꾩옱 援ы쁽 踰붿쐞
+- ?명꽣?섏씠??
+  - [ILogger.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Logging\ILogger.h)
+- ?깊겕 援ы쁽:
+  - [FConsoleLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Logging\FConsoleLogger.h)
+  - [FFileLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Logging\FFileLogger.h)
+  - [FCompositeLogger.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Logging\FCompositeLogger.h)
+- 怨듯넻 ?щ㎎:
+  - [LogFormatting.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Logging\LogFormatting.h)
+  - [LogFormatting.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Logging\LogFormatting.cpp)
+- ?쒕쾭 ?곌껐 吏??
+  - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\FIocpServer.cpp)
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
 
-## 4. 구조 판단 근거
+## 4. 援ъ“ ?먮떒 洹쇨굅
 
-### 4-1. 전역 singleton 대신 명시적 주입
-- `SServerConfig`가 `SLogConfig`와 `std::shared_ptr<ILogger>`를 가진다.
-- 서버가 전역 로거를 직접 찾지 않고 설정으로 주입받기 때문에 테스트와 교체가 쉽다.
-- 기존 레거시 로거처럼 전역 singleton에 의존하지 않는다는 점이 현재 구조의 핵심 장점이다.
+### 4-1. ?꾩뿭 singleton ???紐낆떆??二쇱엯
+- `SServerConfig`媛 `SLogConfig`? `std::shared_ptr<ILogger>`瑜?媛吏꾨떎.
+- ?쒕쾭媛 ?꾩뿭 濡쒓굅瑜?吏곸젒 李얠? ?딄퀬 ?ㅼ젙?쇰줈 二쇱엯諛쏄린 ?뚮Ц???뚯뒪?몄? 援먯껜媛 ?쎈떎.
+- 湲곗〈 ?덇굅??濡쒓굅泥섎읆 ?꾩뿭 singleton???섏〈?섏? ?딅뒗?ㅻ뒗 ?먯씠 ?꾩옱 援ъ“???듭떖 ?μ젏?대떎.
 
-### 4-2. 출력 채널을 인터페이스로 분리
-- `ILogger`는 `Log(ELogLevel, category, message)` 하나만 노출한다.
-- 콘솔, 파일, 복합 로거가 같은 인터페이스를 구현하므로 호출측은 출력 채널을 몰라도 된다.
-- 이 구조 덕분에 `EchoServer`는 복합 로거를 쓰고, 이후 테스트 환경에서는 null logger나 메모리 logger로 바꾸기 쉽다.
+### 4-2. 異쒕젰 梨꾨꼸???명꽣?섏씠?ㅻ줈 遺꾨━
+- `ILogger`??`Log(ELogLevel, category, message)` ?섎굹留??몄텧?쒕떎.
+- 肄섏넄, ?뚯씪, 蹂듯빀 濡쒓굅媛 媛숈? ?명꽣?섏씠?ㅻ? 援ы쁽?섎?濡??몄텧痢≪? 異쒕젰 梨꾨꼸??紐곕씪???쒕떎.
+- ??援ъ“ ?뺣텇??`EchoServer`??蹂듯빀 濡쒓굅瑜??곌퀬, ?댄썑 ?뚯뒪???섍꼍?먯꽌??null logger??硫붾え由?logger濡?諛붽씀湲??쎈떎.
 
-### 4-3. 포맷과 출력 책임 분리
-- `FConsoleLogger`, `FFileLogger`는 직접 문자열 포맷을 만들지 않고 `Logging::BuildLine()`을 사용한다.
-- 포맷 정책이 [LogFormatting.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\LogFormatting.cpp)에 모여 있어, 로그 레이아웃 변경 시 수정 지점이 한 곳으로 줄어든다.
-- 날짜 문자열과 스레드 ID 포함 여부도 같은 경로에서 결정된다.
+### 4-3. ?щ㎎怨?異쒕젰 梨낆엫 遺꾨━
+- `FConsoleLogger`, `FFileLogger`??吏곸젒 臾몄옄???щ㎎??留뚮뱾吏 ?딄퀬 `Logging::BuildLine()`???ъ슜?쒕떎.
+- ?щ㎎ ?뺤콉??[LogFormatting.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Logging\LogFormatting.cpp)??紐⑥뿬 ?덉뼱, 濡쒓렇 ?덉씠?꾩썐 蹂寃????섏젙 吏?먯씠 ??怨녹쑝濡?以꾩뼱?좊떎.
+- ?좎쭨 臾몄옄?닿낵 ?ㅻ젅??ID ?ы븿 ?щ???媛숈? 寃쎈줈?먯꽌 寃곗젙?쒕떎.
 
-### 4-4. 초기 단계는 동기식이 합리적
-- 현재 `FConsoleLogger`, `FFileLogger`는 각각 `std::mutex` 기반 직렬화 출력이다.
-- lock-free 코어 방향과 별개로, 로거는 운영 보조 모듈이므로 1차 구현에서 단순성과 디버깅 용이성을 우선한 판단은 타당하다.
-- 특히 지금은 고성능 async logger보다 "실패 시 로그가 즉시 남는가"가 더 중요하다.
+### 4-4. 珥덇린 ?④퀎???숆린?앹씠 ?⑸━??- ?꾩옱 `FConsoleLogger`, `FFileLogger`??媛곴컖 `std::mutex` 湲곕컲 吏곷젹??異쒕젰?대떎.
+- lock-free 肄붿뼱 諛⑺뼢怨?蹂꾧컻濡? 濡쒓굅???댁쁺 蹂댁“ 紐⑤뱢?대?濡?1李?援ы쁽?먯꽌 ?⑥닚?깃낵 ?붾쾭源??⑹씠?깆쓣 ?곗꽑???먮떒? ??뱁븯??
+- ?뱁엳 吏湲덉? 怨좎꽦??async logger蹂대떎 "?ㅽ뙣 ??濡쒓렇媛 利됱떆 ?⑤뒗媛"媛 ??以묒슂?섎떎.
 
-## 5. 확인된 장점
-- 서버/애플리케이션이 같은 로깅 계약을 사용한다.
-- 카테고리별 파일 분리(`outputDirectory/category/yyyyMMdd_category.log`)가 이미 동작한다.
-- 최소 레벨 필터링, 콘솔 on/off, 파일 on/off, thread id 포함 여부가 모두 설정값으로 제어된다.
-- `FCompositeLogger`로 다중 싱크 구성이 가능하다.
+## 5. ?뺤씤???μ젏
+- ?쒕쾭/?좏뵆由ъ??댁뀡??媛숈? 濡쒓퉭 怨꾩빟???ъ슜?쒕떎.
+- 移댄뀒怨좊━蹂??뚯씪 遺꾨━(`outputDirectory/category/yyyyMMdd_category.log`)媛 ?대? ?숈옉?쒕떎.
+- 理쒖냼 ?덈꺼 ?꾪꽣留? 肄섏넄 on/off, ?뚯씪 on/off, thread id ?ы븿 ?щ?媛 紐⑤몢 ?ㅼ젙媛믪쑝濡??쒖뼱?쒕떎.
+- `FCompositeLogger`濡??ㅼ쨷 ?깊겕 援ъ꽦??媛?ν븯??
 
-## 6. 현재 한계와 리스크
+## 6. ?꾩옱 ?쒓퀎? 由ъ뒪??
+### 6-1. `FCompositeLogger`???숈쟻 蹂寃쎌뿉 ?덉쟾?섏? ?딆쓬
+- [FCompositeLogger.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Logging\FCompositeLogger.cpp)??`m_sinks` ?묎렐???숆린?붽? ?녿떎.
+- ?꾩옱 ?ъ슜 諛⑹떇? ?쒖옉 ??`AddSink()` ???고??꾩뿉???쎄린留??섎?濡?臾몄젣 媛?μ꽦????떎.
+- ?섏?留??고???以?sink 異붽?/?쒓굅瑜??덉슜??怨꾪쉷?대㈃ 蹂꾨룄 ?숆린???먮뒗 immutable snapshot ?꾨왂???꾩슂?섎떎.
 
-### 6-1. `FCompositeLogger`는 동적 변경에 안전하지 않음
-- [FCompositeLogger.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\FCompositeLogger.cpp)는 `m_sinks` 접근에 동기화가 없다.
-- 현재 사용 방식은 시작 시 `AddSink()` 후 런타임에는 읽기만 하므로 문제 가능성이 낮다.
-- 하지만 런타임 중 sink 추가/제거를 허용할 계획이면 별도 동기화 또는 immutable snapshot 전략이 필요하다.
+### 6-2. `FFileLogger`???뚯씪 I/O媛 ?꾩쟾 ?숆린??- [FFileLogger.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Logging\FFileLogger.cpp)??濡쒓렇留덈떎 寃쎈줈 怨꾩궛, ?붾젆?곕━ ?뺤씤, ?뚯씪 ?닿린/?곌린/?リ린瑜??섑뻾?쒕떎.
+- 吏湲??④퀎?먯꽑 ?⑥닚?섍퀬 ?덉쟾?섏?留? 濡쒓렇?됱씠 留롮? ?쒕쾭 遺???곹솴?먯꽌??鍮꾩슜??而ㅼ쭏 ???덈떎.
+- ?댄썑?먮뒗 ?뚯씪 ?몃뱾 罹먯떆???꾩슜 flush thread ?꾩엯??寃?좏븷 ???덈떎.
 
-### 6-2. `FFileLogger`는 파일 I/O가 완전 동기식
-- [FFileLogger.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Logging\FFileLogger.cpp)는 로그마다 경로 계산, 디렉터리 확인, 파일 열기/쓰기/닫기를 수행한다.
-- 지금 단계에선 단순하고 안전하지만, 로그량이 많은 서버 부하 상황에서는 비용이 커질 수 있다.
-- 이후에는 파일 핸들 캐시나 전용 flush thread 도입을 검토할 수 있다.
+### 6-3. ?ㅻ쪟 ?꾪뙆媛 ?쏀븿
+- ?뚯씪 ?닿린 ?ㅽ뙣 ???꾩옱??議곗슜??return ?쒕떎.
+- ?댁쁺 ?④퀎?먯꽑 ?뚯씪 ?곌린 ?ㅽ뙣瑜??泥?寃쎈줈(肄섏넄, fallback logger, once-only stderr)濡??④린???μ튂媛 ?꾩슂?섎떎.
 
-### 6-3. 오류 전파가 약함
-- 파일 열기 실패 시 현재는 조용히 return 한다.
-- 운영 단계에선 파일 쓰기 실패를 대체 경로(콘솔, fallback logger, once-only stderr)로 남기는 장치가 필요하다.
+## 7. ?꾩옱 諛곗튂 ?곹깭
+- 濡쒓굅 紐⑤뱢? ?댁젣 `NetworkLib` ?대?媛 ?꾨땲??[Foundation](D:\Project\ServerPortfolio\RefactoringServer\Foundation) ?꾨옒??諛곗튂?섏뼱 ?덈떎.
+- `NetworkLib`??濡쒓굅 援ы쁽??吏곸젒 媛吏吏 ?딄퀬, `Foundation::ILogger`? `Foundation::SLogConfig`瑜?李몄“?섎뒗 援ъ“濡?諛붾뚯뿀??
+- ??蹂寃쎌쑝濡?`Diagnostics` 媛숈? 怨듭슜 ?댁쁺 紐⑤뱢??媛숈? 濡쒓퉭 湲곕컲??怨듭쑀?????덈뒗 諛⑺뼢???뺣낫?먮떎.
 
-## 7. 현재 배치 상태
-- 로거 모듈은 이제 `NetworkLib` 내부가 아니라 [Foundation](D:\Project\ServerPortfolio\RefactoringServer\Foundation) 아래에 배치되어 있다.
-- `NetworkLib`는 로거 구현을 직접 가지지 않고, `Foundation::ILogger`와 `Foundation::SLogConfig`를 참조하는 구조로 바뀌었다.
-- 이 변경으로 `Diagnostics` 같은 공용 운영 모듈도 같은 로깅 기반을 공유할 수 있는 방향이 확보됐다.
+## 8. 寃利?洹쇨굅
+- 鍮뚮뱶:
+  - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\EchoServer.vcxproj)
+  - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\EchoClient.vcxproj)
+- ?고???
+  - `EchoServer.exe` ?ㅽ뻾
+  - `EchoClient.exe` ?ㅽ뻾
+  - `echo validation succeeded.` ?뺤씤
+- ?ㅼ젣 ?ъ슜 寃쎈줈:
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)?먯꽌 `FCompositeLogger + FConsoleLogger + FFileLogger` 議고빀 ?앹꽦
+  - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\FIocpServer.cpp)?먯꽌 ?쒖옉/醫낅즺/?ㅻ쪟/?몄뀡 ?대깽??濡쒓렇 ?몄텧
 
-## 8. 검증 근거
-- 빌드:
-  - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\EchoServer.vcxproj)
-  - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\EchoClient.vcxproj)
-- 런타임:
-  - `EchoServer.exe` 실행
-  - `EchoClient.exe` 실행
-  - `echo validation succeeded.` 확인
-- 실제 사용 경로:
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)에서 `FCompositeLogger + FConsoleLogger + FFileLogger` 조합 생성
-  - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\FIocpServer.cpp)에서 시작/종료/오류/세션 이벤트 로그 호출
+## 9. ?ㅼ쓬 ?묒뾽 ?꾨낫
+- `logging/testing-history.md` 異붽? ???뚯씪 ?앹꽦/異쒕젰 寃利??대젰 ?꾩쟻
+- `FNullLogger` ?먮뒗 ?뚯뒪?몄슜 硫붾え由??깊겕 異붽?
+- `FCompositeLogger` sink 援ъ꽦 ?꾨즺 ??immutable濡?怨좎젙?섎뒗 ?뺤콉 異붽?
+- ?뚯씪 ?몃뱾 ?ъ궗???먮뒗 async logger 2李??ㅺ퀎
 
-## 9. 다음 작업 후보
-- `logging/testing-history.md` 추가 후 파일 생성/출력 검증 이력 누적
-- `FNullLogger` 또는 테스트용 메모리 싱크 추가
-- `FCompositeLogger` sink 구성 완료 후 immutable로 고정하는 정책 추가
-- 파일 핸들 재사용 또는 async logger 2차 설계
+
+

@@ -1,133 +1,127 @@
-# Content Instance ID 할당 리뷰
+﻿# Content Instance ID ?좊떦 由щ럭
 
-## 1. 변경 배경
-- 기존 샘플은 `1001`, `2001`, `3001` 같은 하드코딩된 `contentInstanceId`를 사용했다.
-- 이 방식은 샘플 단계에서는 단순하지만, 콘텐츠 타입과 인스턴스 수가 늘면 충돌 방지와 운영 규칙을 사람이 계속 관리해야 한다.
-- 현재 구조에서는 `contentInstanceId`가 `ContentsRuntime` 전체에서 전역 unique 키이기 때문에, 수동 번호 체계는 오래 유지하기 어렵다.
+## 1. 蹂寃?諛곌꼍
+- 湲곗〈 ?섑뵆? `1001`, `2001`, `3001` 媛숈? ?섎뱶肄붾뵫??`contentInstanceId`瑜??ъ슜?덈떎.
+- ??諛⑹떇? ?섑뵆 ?④퀎?먯꽌???⑥닚?섏?留? 肄섑뀗痢???낃낵 ?몄뒪?댁뒪 ?섍? ?섎㈃ 異⑸룎 諛⑹?? ?댁쁺 洹쒖튃???щ엺??怨꾩냽 愿由ы빐???쒕떎.
+- ?꾩옱 援ъ“?먯꽌??`contentInstanceId`媛 `ContentsRuntime` ?꾩껜?먯꽌 ?꾩뿭 unique ?ㅼ씠湲??뚮Ц?? ?섎룞 踰덊샇 泥닿퀎???ㅻ옒 ?좎??섍린 ?대졄??
 
-## 2. 현재 코드 구조
-- 공용 증가값 allocator primitive
-  - [IIdAllocator.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Ids\IIdAllocator.h)
-  - [FDefaultIncrementIdAllocator.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Ids\FDefaultIncrementIdAllocator.h)
-  - [FDefaultIncrementIdAllocator.cpp](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Ids\FDefaultIncrementIdAllocator.cpp)
-- `ContentsRuntime` 도메인 wrapper
-  - [FContentInstanceIdAllocator.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\FContentInstanceIdAllocator.h)
-  - [FContentInstanceIdAllocator.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\FContentInstanceIdAllocator.cpp)
-- 비트 정책과 해석 helper
-  - [ContentRuntimeTypes.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\ContentRuntimeTypes.h)
-- 실제 사용 예
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
-  - [FAuthContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Auth\FAuthContent.cpp)
-  - [FLobbyContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Lobby\FLobbyContent.cpp)
-  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.cpp)
+## 2. ?꾩옱 肄붾뱶 援ъ“
+- 怨듭슜 利앷?媛?allocator primitive
+  - [IIdAllocator.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Ids\IIdAllocator.h)
+  - [FDefaultIncrementIdAllocator.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Ids\FDefaultIncrementIdAllocator.h)
+  - [FDefaultIncrementIdAllocator.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Ids\FDefaultIncrementIdAllocator.cpp)
+- `ContentsRuntime` ?꾨찓??wrapper
+  - [FContentInstanceIdAllocator.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Core\FContentInstanceIdAllocator.h)
+  - [FContentInstanceIdAllocator.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Core\FContentInstanceIdAllocator.cpp)
+- 鍮꾪듃 ?뺤콉怨??댁꽍 helper
+  - [ContentRuntimeTypes.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Core\ContentRuntimeTypes.h)
+- ?ㅼ젣 ?ъ슜 ??  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
+  - [FAuthContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Auth\FAuthContent.cpp)
+  - [FLobbyContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Lobby\FLobbyContent.cpp)
+  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.cpp)
 
-## 3. 책임 분리
+## 3. 梨낆엫 遺꾨━
 - `Foundation/Ids`
-  - 증가값을 발급하는 범용 primitive만 담당한다.
-  - `content`, `room`, `session`, `server` 같은 도메인 의미는 모른다.
+  - 利앷?媛믪쓣 諛쒓툒?섎뒗 踰붿슜 primitive留??대떦?쒕떎.
+  - `content`, `room`, `session`, `server` 媛숈? ?꾨찓???섎???紐⑤Ⅸ??
 - `ContentsRuntime/Core`
-  - `contentId + reserve + sequence`를 실제 `contentInstanceId`로 인코딩한다.
-  - 내부적으로 `contentId`별 독립 sequence allocator를 관리한다.
-  - `contentInstanceId`를 다시 `contentId`, `reserve`, `sequence`로 해석하는 helper를 제공한다.
+  - `contentId + reserve + sequence`瑜??ㅼ젣 `contentInstanceId`濡??몄퐫?⑺븳??
+  - ?대??곸쑝濡?`contentId`蹂??낅┰ sequence allocator瑜?愿由ы븳??
+  - `contentInstanceId`瑜??ㅼ떆 `contentId`, `reserve`, `sequence`濡??댁꽍?섎뒗 helper瑜??쒓났?쒕떎.
 
-즉 증가값 발급은 공용화하고, 도메인 규칙은 `ContentsRuntime`에 둔 구조다.
+利?利앷?媛?諛쒓툒? 怨듭슜?뷀븯怨? ?꾨찓??洹쒖튃? `ContentsRuntime`????援ъ“??
 
-## 4. 비트 레이아웃
-- `FContentInstanceId`는 `uint64_t`
-- 현재 비트 구성
-  - `contentId`: 16비트
-  - `reserve`: 4비트
-  - `sequence`: 44비트
-- `0`은 invalid 값으로 예약한다.
+## 4. 鍮꾪듃 ?덉씠?꾩썐
+- `FContentInstanceId`??`uint64_t`
+- ?꾩옱 鍮꾪듃 援ъ꽦
+  - `contentId`: 16鍮꾪듃
+  - `reserve`: 4鍮꾪듃
+  - `sequence`: 44鍮꾪듃
+- `0`? invalid 媛믪쑝濡??덉빟?쒕떎.
 
-핵심 helper:
+?듭떖 helper:
 - `MakeContentInstanceId(...)`
 - `ExtractContentId(...)`
 - `ExtractContentInstanceReserveBits(...)`
 - `ExtractContentInstanceSequence(...)`
 - `IsValidContentInstanceId(...)`
 
-## 5. 사용 흐름
-1. 상위 계층이 `FContentInstanceIdAllocator`를 만든다.
-2. `Allocate(contentId, reserveBits)`가 호출되면 해당 `contentId`용 sequence allocator를 찾거나 새로 만든다.
-3. 그 allocator에서 증가값을 받아 `contentInstanceId`를 만든다.
-4. 생성된 ID를 콘텐츠 생성자에 넘긴다.
-5. 콘텐츠는 `GetContentInstanceId()`에서 그 값을 그대로 반환한다.
-6. `FContentRuntime`는 이 값을 전역 key로 등록하고 라우팅에 사용한다.
+## 5. ?ъ슜 ?먮쫫
+1. ?곸쐞 怨꾩링??`FContentInstanceIdAllocator`瑜?留뚮뱺??
+2. `Allocate(contentId, reserveBits)`媛 ?몄텧?섎㈃ ?대떦 `contentId`??sequence allocator瑜?李얘굅???덈줈 留뚮뱺??
+3. 洹?allocator?먯꽌 利앷?媛믪쓣 諛쏆븘 `contentInstanceId`瑜?留뚮뱺??
+4. ?앹꽦??ID瑜?肄섑뀗痢??앹꽦?먯뿉 ?섍릿??
+5. 肄섑뀗痢좊뒗 `GetContentInstanceId()`?먯꽌 洹?媛믪쓣 洹몃?濡?諛섑솚?쒕떎.
+6. `FContentRuntime`????媛믪쓣 ?꾩뿭 key濡??깅줉?섍퀬 ?쇱슦?낆뿉 ?ъ슜?쒕떎.
 
-샘플 서버에서는 [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)에서
+?섑뵆 ?쒕쾭?먯꽌??[Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)?먯꽌
 - `AuthContent`
 - `LobbyContent`
-- 각 `RoomContent`
+- 媛?`RoomContent`
 
-생성 전에 allocator로 ID를 먼저 발급하고, 그 ID를 콘텐츠 생성자에 주입한다.
+?앹꽦 ?꾩뿉 allocator濡?ID瑜?癒쇱? 諛쒓툒?섍퀬, 洹?ID瑜?肄섑뀗痢??앹꽦?먯뿉 二쇱엯?쒕떎.
 
-## 6. 샘플 기준 사용 예
-- `AuthContent`
-  - [FAuthContent.h](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Auth\FAuthContent.h)
-  - 생성자에서 `contentInstanceId`를 받는다.
-  - `GetContentInstanceId()`는 하드코딩 상수가 아니라 멤버 `m_contentInstanceId`를 돌려준다.
+## 6. ?섑뵆 湲곗? ?ъ슜 ??- `AuthContent`
+  - [FAuthContent.h](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Auth\FAuthContent.h)
+  - ?앹꽦?먯뿉??`contentInstanceId`瑜?諛쏅뒗??
+  - `GetContentInstanceId()`???섎뱶肄붾뵫 ?곸닔媛 ?꾨땲??硫ㅻ쾭 `m_contentInstanceId`瑜??뚮젮以??
 - `LobbyContent`
-  - [FLobbyContent.h](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Lobby\FLobbyContent.h)
-  - `Auth`와 같은 패턴으로 주입받은 ID를 사용한다.
+  - [FLobbyContent.h](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Lobby\FLobbyContent.h)
+  - `Auth`? 媛숈? ?⑦꽩?쇰줈 二쇱엯諛쏆? ID瑜??ъ슜?쒕떎.
 - `RoomContent`
-  - [FEchoContent.h](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.h)
-  - 기존에도 생성자 주입이었고, 이제도 같은 방식으로 allocator 결과를 받는다.
+  - [FEchoContent.h](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.h)
+  - 湲곗〈?먮룄 ?앹꽦??二쇱엯?댁뿀怨? ?댁젣??媛숈? 諛⑹떇?쇰줈 allocator 寃곌낵瑜?諛쏅뒗??
 
-## 7. 주의사항
+## 7. 二쇱쓽?ы빆
 
-### 7.1 allocator 인스턴스를 논리적 allocation domain마다 하나로 관리해야 한다
-- 가장 중요한 주의사항이다.
-- `FContentInstanceIdAllocator`를 기본 생성하면 내부에서 `contentId`별 `FDefaultIncrementIdAllocator`를 필요할 때마다 만든다.
-- 같은 래퍼 인스턴스 안에서는 `contentId`별 sequence가 독립적으로 증가한다.
-- 하지만 서로 다른 `FContentInstanceIdAllocator` 인스턴스가 같은 `contentId`에 대해 동시에 발급하면 같은 `sequence`를 만들 수 있다.
+### 7.1 allocator ?몄뒪?댁뒪瑜??쇰━??allocation domain留덈떎 ?섎굹濡?愿由ы빐???쒕떎
+- 媛??以묒슂??二쇱쓽?ы빆?대떎.
+- `FContentInstanceIdAllocator`瑜?湲곕낯 ?앹꽦?섎㈃ ?대??먯꽌 `contentId`蹂?`FDefaultIncrementIdAllocator`瑜??꾩슂???뚮쭏??留뚮뱺??
+- 媛숈? ?섑띁 ?몄뒪?댁뒪 ?덉뿉?쒕뒗 `contentId`蹂?sequence媛 ?낅┰?곸쑝濡?利앷??쒕떎.
+- ?섏?留??쒕줈 ?ㅻⅨ `FContentInstanceIdAllocator` ?몄뒪?댁뒪媛 媛숈? `contentId`??????숈떆??諛쒓툒?섎㈃ 媛숈? `sequence`瑜?留뚮뱾 ???덈떎.
 
-즉 한 allocation domain 안에서 같은 `contentId`의 `contentInstanceId`를 발급할 때는
-- 같은 `FContentInstanceIdAllocator` 인스턴스를 공유하는 것이 안전하다.
+利???allocation domain ?덉뿉??媛숈? `contentId`??`contentInstanceId`瑜?諛쒓툒???뚮뒗
+- 媛숈? `FContentInstanceIdAllocator` ?몄뒪?댁뒪瑜?怨듭쑀?섎뒗 寃껋씠 ?덉쟾?섎떎.
 
-샘플 서버가 [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)에서 allocator 하나만 만들고 `Auth/Lobby/Room`에 모두 쓰는 이유가 이것이다.
+?섑뵆 ?쒕쾭媛 [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)?먯꽌 allocator ?섎굹留?留뚮뱾怨?`Auth/Lobby/Room`??紐⑤몢 ?곕뒗 ?댁쑀媛 ?닿쾬?대떎.
 
-### 7.2 `Release()`를 호출한다고 ID가 재사용되는 것은 아니다
-- 현재 기본 구현 [FDefaultIncrementIdAllocator.cpp](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Ids\FDefaultIncrementIdAllocator.cpp)의 `Release()`는 no-op이다.
-- 즉 현재 정책은 “단순 증가, 재사용 없음”이다.
-- ID를 회수하면 바로 다시 쓰일 거라고 기대하면 안 된다.
+### 7.2 `Release()`瑜??몄텧?쒕떎怨?ID媛 ?ъ궗?⑸릺??寃껋? ?꾨땲??- ?꾩옱 湲곕낯 援ы쁽 [FDefaultIncrementIdAllocator.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Ids\FDefaultIncrementIdAllocator.cpp)??`Release()`??no-op?대떎.
+- 利??꾩옱 ?뺤콉? ?쒕떒??利앷?, ?ъ궗???놁쓬?앹씠??
+- ID瑜??뚯닔?섎㈃ 諛붾줈 ?ㅼ떆 ?곗씪 嫄곕씪怨?湲곕??섎㈃ ???쒕떎.
 
-### 7.3 `IContent` 기본 구현은 invalid를 돌려준다
-- [IContent.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Core\IContent.h)
-- 현재 `GetContentInstanceId()` 기본 구현은 `kInvalidContentInstanceId`를 돌려준다.
-- 그래서 실제 콘텐츠 타입은
-  - 생성자에서 ID를 받아 저장하고
-  - `GetContentInstanceId()`를 override해서
-  - 유효한 값을 돌려줘야 한다.
+### 7.3 `IContent` 湲곕낯 援ы쁽? invalid瑜??뚮젮以??- [IContent.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Core\IContent.h)
+- ?꾩옱 `GetContentInstanceId()` 湲곕낯 援ы쁽? `kInvalidContentInstanceId`瑜??뚮젮以??
+- 洹몃옒???ㅼ젣 肄섑뀗痢???낆?
+  - ?앹꽦?먯뿉??ID瑜?諛쏆븘 ??ν븯怨?  - `GetContentInstanceId()`瑜?override?댁꽌
+  - ?좏슚??媛믪쓣 ?뚮젮以섏빞 ?쒕떎.
 
-이걸 빼먹으면 `FContentRuntime::RegisterContent()`에서 등록이 실패한다.
+?닿구 鍮쇰㉨?쇰㈃ `FContentRuntime::RegisterContent()`?먯꽌 ?깅줉???ㅽ뙣?쒕떎.
 
-### 7.4 `contentInstanceId`는 `ContentsRuntime` 전체에서 전역 unique 키다
-- `FContentRuntime`는 `contentSlots[contentInstanceId]` 형태로 저장한다.
-- 즉 같은 `contentId` 안에서만 unique면 되는 게 아니라, 모든 콘텐츠 타입을 통틀어 unique해야 한다.
-- 현재는 `contentId + sequence` 결합 정책 덕분에, sequence가 콘텐츠 타입별로 따로 증가해도 최종 `contentInstanceId`는 전역 unique가 된다.
+### 7.4 `contentInstanceId`??`ContentsRuntime` ?꾩껜?먯꽌 ?꾩뿭 unique ?ㅻ떎
+- `FContentRuntime`??`contentSlots[contentInstanceId]` ?뺥깭濡???ν븳??
+- 利?媛숈? `contentId` ?덉뿉?쒕쭔 unique硫??섎뒗 寃??꾨땲?? 紐⑤뱺 肄섑뀗痢???낆쓣 ?듯???unique?댁빞 ?쒕떎.
+- ?꾩옱??`contentId + sequence` 寃고빀 ?뺤콉 ?뺣텇?? sequence媛 肄섑뀗痢???낅퀎濡??곕줈 利앷??대룄 理쒖쥌 `contentInstanceId`???꾩뿭 unique媛 ?쒕떎.
 
-### 7.5 `reserve`는 아직 의미를 고정하지 않았다
-- 현재는 `0`만 사용한다.
-- 나중에 분산 서버 구조가 들어오면 `serverId` 같은 의미로 확장할 수 있도록 남겨둔 비트다.
-- 지금 단계에서 운영 의미를 섣불리 박아 넣지 않는 것이 맞다.
+### 7.5 `reserve`???꾩쭅 ?섎?瑜?怨좎젙?섏? ?딆븯??- ?꾩옱??`0`留??ъ슜?쒕떎.
+- ?섏쨷??遺꾩궛 ?쒕쾭 援ъ“媛 ?ㅼ뼱?ㅻ㈃ `serverId` 媛숈? ?섎?濡??뺤옣?????덈룄濡??④꺼??鍮꾪듃??
+- 吏湲??④퀎?먯꽌 ?댁쁺 ?섎?瑜??ｋ텋由?諛뺤븘 ?ｌ? ?딅뒗 寃껋씠 留욌떎.
 
-## 8. 왜 상속보다 wrapper/합성인가
-- `Foundation`의 기본 allocator는 “증가값 발급”만 책임져야 한다.
-- `ContentsRuntime`의 `contentId`, `reserve`, `sequence` 조합은 도메인 정책이다.
-- 그래서
-  - `Foundation` 기본 구현을 상속해서 바로 `contentInstanceId`를 만드는 구조보다
-  - `FContentInstanceIdAllocator`가 내부에 `IIdAllocator`를 들고 조합하는 구조가 더 명확하다.
+## 8. ???곸냽蹂대떎 wrapper/?⑹꽦?멸?
+- `Foundation`??湲곕낯 allocator???쒖쬆媛媛?諛쒓툒?앸쭔 梨낆엫?몄빞 ?쒕떎.
+- `ContentsRuntime`??`contentId`, `reserve`, `sequence` 議고빀? ?꾨찓???뺤콉?대떎.
+- 洹몃옒??  - `Foundation` 湲곕낯 援ы쁽???곸냽?댁꽌 諛붾줈 `contentInstanceId`瑜?留뚮뱶??援ъ“蹂대떎
+  - `FContentInstanceIdAllocator`媛 ?대???`IIdAllocator`瑜??ㅺ퀬 議고빀?섎뒗 援ъ“媛 ??紐낇솗?섎떎.
 
-이렇게 하면 나중에
-- 다른 도메인이
-- 같은 증가형 allocator primitive를 재사용할 수 있다.
+?대젃寃??섎㈃ ?섏쨷??- ?ㅻⅨ ?꾨찓?몄씠
+- 媛숈? 利앷???allocator primitive瑜??ъ궗?⑺븷 ???덈떎.
 
-## 9. 현재 결론
-- 증가값 발급 primitive는 `Foundation`
-- 도메인 인코딩 정책은 `ContentsRuntime`
-- 샘플 콘텐츠는 모두 생성자 주입으로 `contentInstanceId`를 받는다
-- 기본 allocator는 현재 “단순 증가, 재사용 없음” 정책이다
-- sequence는 현재 `contentId`별로 독립적으로 증가한다
+## 9. ?꾩옱 寃곕줎
+- 利앷?媛?諛쒓툒 primitive??`Foundation`
+- ?꾨찓???몄퐫???뺤콉? `ContentsRuntime`
+- ?섑뵆 肄섑뀗痢좊뒗 紐⑤몢 ?앹꽦??二쇱엯?쇰줈 `contentInstanceId`瑜?諛쏅뒗??- 湲곕낯 allocator???꾩옱 ?쒕떒??利앷?, ?ъ궗???놁쓬???뺤콉?대떎
+- sequence???꾩옱 `contentId`蹂꾨줈 ?낅┰?곸쑝濡?利앷??쒕떎
 
-이 구조가 지금 단계에서 가장 안전하고, 나중에 분산 서버나 동적 인스턴스 정책으로 확장하기도 좋다.
+??援ъ“媛 吏湲??④퀎?먯꽌 媛???덉쟾?섍퀬, ?섏쨷??遺꾩궛 ?쒕쾭???숈쟻 ?몄뒪?댁뒪 ?뺤콉?쇰줈 ?뺤옣?섍린??醫뗫떎.
+
+
+

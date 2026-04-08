@@ -1,93 +1,91 @@
-# NetworkLib 개요
+﻿# NetworkLib 媛쒖슂
 
-## 1. 역할
-- `NetworkLib`는 게임 로직을 직접 실행하는 계층이 아니다.
-- 비동기 네트워크 I/O, 세션 생명주기, 패킷 프레이밍/직렬화, 애플리케이션 패킷 전달 경계를 제공한다.
-- 상위 계층은 `sessionId + packet` 단위로만 네트워크를 다루고, 콘텐츠 실행 모델은 `ContentsRuntime`가 맡는다.
+## 1. ??븷
+- `NetworkLib`??寃뚯엫 濡쒖쭅??吏곸젒 ?ㅽ뻾?섎뒗 怨꾩링???꾨땲??
+- 鍮꾨룞湲??ㅽ듃?뚰겕 I/O, ?몄뀡 ?앸챸二쇨린, ?⑦궥 ?꾨젅?대컢/吏곷젹?? ?좏뵆由ъ??댁뀡 ?⑦궥 ?꾨떖 寃쎄퀎瑜??쒓났?쒕떎.
+- ?곸쐞 怨꾩링? `sessionId + packet` ?⑥쐞濡쒕쭔 ?ㅽ듃?뚰겕瑜??ㅻ（怨? 肄섑뀗痢??ㅽ뻾 紐⑤뜽? `ContentsRuntime`媛 留〓뒗??
 
-## 2. 현재 책임
-- socket 생성, accept, recv/send, completion 처리
-- 세션 생성/해제와 세션 상태 관리
-- transport header / content header / packet framing
-- packet reader/writer, generated packet 직렬화 지원
-- borrowed packet view와 zero-copy 보조 구조
-- RTT 계측, page pool 같은 성능 보조 기능
+## 2. ?꾩옱 梨낆엫
+- socket ?앹꽦, accept, recv/send, completion 泥섎━
+- ?몄뀡 ?앹꽦/?댁젣? ?몄뀡 ?곹깭 愿由?- transport header / content header / packet framing
+- packet reader/writer, generated packet 吏곷젹??吏??- borrowed packet view? zero-copy 蹂댁“ 援ъ“
+- RTT 怨꾩륫, page pool 媛숈? ?깅뒫 蹂댁“ 湲곕뒫
 
-## 3. 현재 비책임
-- 콘텐츠 스레드 실행 루프
-- 콘텐츠 전이 규칙
-- 로비, 룸, 매치 같은 게임 규칙
-- DB, Redis, 운영 명령 계층
+## 3. ?꾩옱 鍮꾩콉??- 肄섑뀗痢??ㅻ젅???ㅽ뻾 猷⑦봽
+- 肄섑뀗痢??꾩씠 洹쒖튃
+- 濡쒕퉬, 猷? 留ㅼ튂 媛숈? 寃뚯엫 洹쒖튃
+- DB, Redis, ?댁쁺 紐낅졊 怨꾩링
 
-## 4. 디렉터리 구조
+## 4. ?붾젆?곕━ 援ъ“
 - `Containers`
   - lock-free queue/stack
 - `Crypto`
-  - packet cipher 인터페이스와 기본 구현
+  - packet cipher ?명꽣?섏씠?ㅼ? 湲곕낯 援ы쁽
 - `Memory`
   - lock-free memory pool, TLS memory pool
 - `Packet/Buffer`
-  - [FPacketBuffer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Buffer\FPacketBuffer.h)
-  - [FRecvBuffer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Buffer\FRecvBuffer.h)
-  - [FSendBuffer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Buffer\FSendBuffer.h)
+  - [FPacketBuffer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Buffer\FPacketBuffer.h)
+  - [FRecvBuffer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Buffer\FRecvBuffer.h)
+  - [FSendBuffer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Buffer\FSendBuffer.h)
 - `Packet/Framing`
-  - [PacketTypes](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Framing\PacketTypes.h)
-  - [ContentHeader](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Framing\ContentHeader.h)
-  - [IPacketFramer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Framing\IPacketFramer.h)
-  - [FDefaultPacketFramer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Framing\FDefaultPacketFramer.h)
+  - [PacketTypes](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Framing\PacketTypes.h)
+  - [ContentHeader](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Framing\ContentHeader.h)
+  - [IPacketFramer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Framing\IPacketFramer.h)
+  - [FDefaultPacketFramer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Framing\FDefaultPacketFramer.h)
 - `Packet/Serialization`
-  - [FPacketReader](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Serialization\FPacketReader.h)
-  - [FPacketWriter](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Serialization\FPacketWriter.h)
-  - [FPacketSerialization](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Serialization\FPacketSerialization.h)
-  - [IContentPacket](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\Serialization\IContentPacket.h)
+  - [FPacketReader](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Serialization\FPacketReader.h)
+  - [FPacketWriter](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Serialization\FPacketWriter.h)
+  - [FPacketSerialization](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Serialization\FPacketSerialization.h)
+  - [IContentPacket](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\Serialization\IContentPacket.h)
 - `Packet/View`
-  - [FPacketView](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\View\FPacketView.h)
-  - [FBorrowedViewGuard](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Packet\View\FBorrowedViewGuard.h)
+  - [FPacketView](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\View\FPacketView.h)
+  - [FBorrowedViewGuard](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\View\FBorrowedViewGuard.h)
 - `Servers/Core`
-  - [BackendTypes](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\BackendTypes.h)
-  - [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.h)
-  - [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
-  - [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
-  - [FStubServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FStubServer.h)
+  - [BackendTypes](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\BackendTypes.h)
+  - [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FServerFactory.h)
+  - [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.h)
+  - [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)
+  - [FStubServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FStubServer.h)
 - `Servers/Session`
-  - [ISession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\ISession.h)
-  - [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
-  - [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
+  - [ISession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\ISession.h)
+  - [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.h)
+  - [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
 - `Servers`
-  - [IServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h)
-  - [IApplicationHandler](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IApplicationHandler.h)
+  - [IServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\IServer.h)
+  - [IApplicationHandler](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\IApplicationHandler.h)
 
-## 5. Backend 개요
-- public 경계는 [IServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\IServer.h) 하나로 유지한다.
-- backend 선택은 [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.h)가 맡는다.
-- 현재 backend 상태
-  - `Iocp` -> [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
-  - `Rio` -> [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.h)
-  - `BoostAsio` -> [FStubServer](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FStubServer.h)
+## 5. Backend 媛쒖슂
+- public 寃쎄퀎??[IServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\IServer.h) ?섎굹濡??좎??쒕떎.
+- backend ?좏깮? [FServerFactory](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FServerFactory.h)媛 留〓뒗??
+- ?꾩옱 backend ?곹깭
+  - `Iocp` -> [FIocpServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.h)
+  - `Rio` -> [FRioServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.h)
+  - `BoostAsio` -> [FStubServer](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FStubServer.h)
 
-## 6. IOCP 현재 상태
-- `FIocpServer`는 현재 `accept()` thread 기반이 아니라 `AcceptEx + IOCP completion` 기반이다.
-- accept는 `SAcceptContext[]` 고정 배열을 사용해 여러 slot을 미리 pre-post 한다.
-- accept completion은 worker의 `GetQueuedCompletionStatus()` 루프에서 recv/send completion과 함께 처리한다.
-- 현재는 `accept context slot pool`은 적용되어 있지만, `accepted socket reuse`는 기본 채택하지 않았다.
+## 6. IOCP ?꾩옱 ?곹깭
+- `FIocpServer`???꾩옱 `accept()` thread 湲곕컲???꾨땲??`AcceptEx + IOCP completion` 湲곕컲?대떎.
+- accept??`SAcceptContext[]` 怨좎젙 諛곗뿴???ъ슜???щ윭 slot??誘몃━ pre-post ?쒕떎.
+- accept completion? worker??`GetQueuedCompletionStatus()` 猷⑦봽?먯꽌 recv/send completion怨??④퍡 泥섎━?쒕떎.
+- ?꾩옱??`accept context slot pool`? ?곸슜?섏뼱 ?덉?留? `accepted socket reuse`??湲곕낯 梨꾪깮?섏? ?딆븯??
 
-## 7. RIO 현재 상태
-- `FRioServer`는 pure `RIO` baseline이 구현되어 있다.
-- 현재 비교 결과 기준으로 `Rio`의 기본 send 정책은 `Direct` 유지가 적절하다.
-- `OwnerThread` send 경로는 후속 최적화 실험 경로로 남겨둔다.
+## 7. RIO ?꾩옱 ?곹깭
+- `FRioServer`??pure `RIO` baseline??援ы쁽?섏뼱 ?덈떎.
+- ?꾩옱 鍮꾧탳 寃곌낵 湲곗??쇰줈 `Rio`??湲곕낯 send ?뺤콉? `Direct` ?좎?媛 ?곸젅?섎떎.
+- `OwnerThread` send 寃쎈줈???꾩냽 理쒖쟻???ㅽ뿕 寃쎈줈濡??④꺼?붾떎.
 
-## 8. Session 개요
-- 세션은 backend별 구현으로 나뉜다.
-- 공통 경계는 [ISession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\ISession.h)이다.
-- `IOCP` 경로는 [FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
-- `RIO` 경로는 [FRioSession](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h)
+## 8. Session 媛쒖슂
+- ?몄뀡? backend蹂?援ы쁽?쇰줈 ?섎돏??
+- 怨듯넻 寃쎄퀎??[ISession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\ISession.h)?대떎.
+- `IOCP` 寃쎈줈??[FIocpSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.h)
+- `RIO` 寃쎈줈??[FRioSession](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h)
 
-## 9. 상위 계층과의 경계
-- `NetworkLib`는 `sessionId + packet` 전달까지만 책임진다.
-- 콘텐츠 스레드, 콘텐츠 전이, 콘텐츠별 실행 모델은 `ContentsRuntime`가 맡는다.
-- 네트워크 계층과 게임 로직 실행 모델을 강하게 결합하지 않는 것이 현재 구조의 목표다.
+## 9. ?곸쐞 怨꾩링怨쇱쓽 寃쎄퀎
+- `NetworkLib`??`sessionId + packet` ?꾨떖源뚯?留?梨낆엫吏꾨떎.
+- 肄섑뀗痢??ㅻ젅?? 肄섑뀗痢??꾩씠, 肄섑뀗痢좊퀎 ?ㅽ뻾 紐⑤뜽? `ContentsRuntime`媛 留〓뒗??
+- ?ㅽ듃?뚰겕 怨꾩링怨?寃뚯엫 濡쒖쭅 ?ㅽ뻾 紐⑤뜽??媛뺥븯寃?寃고빀?섏? ?딅뒗 寃껋씠 ?꾩옱 援ъ“??紐⑺몴??
 
-## 10. 헤더 / PCH 규칙
-- 공용 인터페이스 헤더는 forward declaration을 우선 사용한다.
-- 자주 바뀌지 않는 공용 의존성은 [NetLibPch.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\NetLibPch.h)로 모은다.
-- 자세한 규칙은 [003_cpp-header-pch-convention.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\001_project\003_cpp-header-pch-convention.md)를 따른다.
+## 10. ?ㅻ뜑 / PCH 洹쒖튃
+- 怨듭슜 ?명꽣?섏씠???ㅻ뜑??forward declaration???곗꽑 ?ъ슜?쒕떎.
+- ?먯＜ 諛붾뚯? ?딅뒗 怨듭슜 ?섏〈?깆? [NetLibPch.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\NetLibPch.h)濡?紐⑥???
+- ?먯꽭??洹쒖튃? [003_cpp-header-pch-convention.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\001_project\003_cpp-header-pch-convention.md)瑜??곕Ⅸ??
+

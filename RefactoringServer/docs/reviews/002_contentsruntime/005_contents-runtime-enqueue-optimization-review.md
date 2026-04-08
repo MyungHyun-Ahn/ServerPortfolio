@@ -1,79 +1,69 @@
-# ContentsRuntime enqueue 경로 최적화 리뷰
+﻿# ContentsRuntime enqueue 寃쎈줈 理쒖쟻??由щ럭
 
-## 1. 목적
-- hot path 분석 결과를 바탕으로 실제 contention 지점을 줄였다.
-- 적용 대상은 두 가지였다.
-  1. `FContentRuntime::EnqueuePacket` 경량화
-  2. `FContentThread` packet inbox lock-free 프로토타입
+## 1. 紐⑹쟻
+- hot path 遺꾩꽍 寃곌낵瑜?諛뷀깢?쇰줈 ?ㅼ젣 contention 吏?먯쓣 以꾩???
+- ?곸슜 ??곸? ??媛吏???
+  1. `FContentRuntime::EnqueuePacket` 寃쎈웾??  2. `FContentThread` packet inbox lock-free ?꾨줈?좏???
+## 2. ?곸슜 ?댁슜
 
-## 2. 적용 내용
+### 2.1 `FContentRuntime::EnqueuePacket` 寃쎈웾??- ?뚯씪:
+  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp)
+- 蹂寃???
+  - `sessionId -> contentId` 議고쉶媛 `unordered_map + mutex` 湲곕컲
+  - packet留덈떎 ?꾩뿭 ?쎌쓣 嫄곗튂硫??쇱슦??議고쉶
+- 蹂寃???
+  - `sessionId` ?섏쐞 鍮꾪듃瑜?slot index濡??ъ슜?섎뒗 route table ?꾩엯
+  - packet hot path??route table 吏곸젒 議고쉶
+  - runtime ?쎌? `shared_mutex` 湲곕컲?쇰줈 議곗젙?섍퀬, packet enqueue??`shared_lock` 寃쎈줈 ?ъ슜
 
-### 2.1 `FContentRuntime::EnqueuePacket` 경량화
-- 파일:
-  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
-- 변경 전:
-  - `sessionId -> contentId` 조회가 `unordered_map + mutex` 기반
-  - packet마다 전역 락을 거치며 라우팅 조회
-- 변경 후:
-  - `sessionId` 하위 비트를 slot index로 사용하는 route table 도입
-  - packet hot path는 route table 직접 조회
-  - runtime 락은 `shared_mutex` 기반으로 조정하고, packet enqueue는 `shared_lock` 경로 사용
-
-### 2.2 packet inbox lock-free 프로토타입
-- 파일:
-  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)
-- 변경 전:
-  - `packetQueue`가 `std::deque + mutex`
-- 변경 후:
-  - `FLockFreeQueue<SQueuedOwnedPacket*>` 기반 packet inbox 추가
-  - queue item은 TLS pool 재사용
-  - producer는 락 없이 enqueue
-  - consumer는 frame loop에서 drain 후 기존 owned packet 처리 루프 재사용
-
-## 3. 되돌리기 방법
-- `packet inbox` lock-free는 프로토타입이라 쉽게 되돌릴 수 있게 유지했다.
-- 토글 위치:
-  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Threading\FContentThread.cpp)
-- 스위치:
+### 2.2 packet inbox lock-free ?꾨줈?좏???- ?뚯씪:
+  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Threading\FContentThread.cpp)
+- 蹂寃???
+  - `packetQueue`媛 `std::deque + mutex`
+- 蹂寃???
+  - `FLockFreeQueue<SQueuedOwnedPacket*>` 湲곕컲 packet inbox 異붽?
+  - queue item? TLS pool ?ъ궗??  - producer?????놁씠 enqueue
+  - consumer??frame loop?먯꽌 drain ??湲곗〈 owned packet 泥섎━ 猷⑦봽 ?ъ궗??
+## 3. ?섎룎由ш린 諛⑸쾿
+- `packet inbox` lock-free???꾨줈?좏??낆씠???쎄쾶 ?섎룎由????덇쾶 ?좎??덈떎.
+- ?좉? ?꾩튂:
+  - [FContentThread.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Threading\FContentThread.cpp)
+- ?ㅼ쐞移?
   - `kUseLockFreePacketInboxPrototype`
-- `false`로 바꾸면 기존 `std::deque + mutex` 경로로 바로 복귀한다.
+- `false`濡?諛붽씀硫?湲곗〈 `std::deque + mutex` 寃쎈줈濡?諛붾줈 蹂듦??쒕떎.
 
-## 4. 수치 비교
-- 변경 전
-  - `runtimeEnqueueLockUs=88376.00`
+## 4. ?섏튂 鍮꾧탳
+- 蹂寃???  - `runtimeEnqueueLockUs=88376.00`
   - `runtimeEnqueueMaxLockUs=2470.40`
   - `echoPacketEnqueueLockUs=64276.10`
   - `echoPacketEnqueueMaxLockUs=1699.80`
-- 변경 후
-  - `runtimeEnqueueLockUs=19765.10`
+- 蹂寃???  - `runtimeEnqueueLockUs=19765.10`
   - `runtimeEnqueueMaxLockUs=53.40`
   - `echoPacketEnqueueLockUs=0.00`
   - `echoPacketEnqueueMaxLockUs=0.00`
 
-## 5. 기능 검증
-- 단발 스모크 통과
+## 5. 湲곕뒫 寃利?- ?⑤컻 ?ㅻえ???듦낵
   - [contents_lockfree_smoke2_client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\contents_lockfree_smoke2_client.log)
   - `echo validation succeeded.`
-- 반복 스모크 통과
+- 諛섎났 ?ㅻえ???듦낵
   - [contents_lockfree_smoke3_client.log](D:\Project\ServerPortfolio\RefactoringServer\Out\contents_lockfree_smoke3_client.log)
   - `echo validation succeeded. sessions=1 responses=6 ... holdSeconds=1`
 
-## 6. 장시간 안정성 결과
-- 6시간 race injection 검증 통과
+## 6. ?μ떆媛??덉젙??寃곌낵
+- 6?쒓컙 race injection 寃利??듦낵
   - [launcher_6h_20260403_032550.log](D:\Project\ServerPortfolio\RefactoringServer\Out\contents-race-validation\launcher_6h_20260403_032550.log)
   - [client_20260403_032550.log](D:\Project\ServerPortfolio\RefactoringServer\Out\contents-race-validation\client_20260403_032550.log)
   - [server_20260403_032550.log](D:\Project\ServerPortfolio\RefactoringServer\Out\contents-race-validation\server_20260403_032550.log)
-- 핵심 결과
+- ?듭떖 寃곌낵
   - `echo validation succeeded. sessions=100 responses=10375394 ... holdSeconds=21600`
-  - 마지막 구간에서도 `enqueueFailTPS=0`
+  - 留덉?留?援ш컙?먯꽌??`enqueueFailTPS=0`
   - `echoPacketEnqueueLockUs=0.00`
-  - 세션들은 정상적으로 `client disconnected`, `echo content leave`, `Session closed`로 정리됨
-
-## 7. 결론
-- 1단계 경량화의 주 효과는 `FContentRuntime::EnqueuePacket`였다.
-- 2단계 lock-free 프로토타입은 packet inbox 경합을 사실상 제거했다.
-- 현재 기준으로는
-  - route table 기반 runtime enqueue
+  - ?몄뀡?ㅼ? ?뺤긽?곸쑝濡?`client disconnected`, `echo content leave`, `Session closed`濡??뺣━??
+## 7. 寃곕줎
+- 1?④퀎 寃쎈웾?붿쓽 二??④낵??`FContentRuntime::EnqueuePacket`???
+- 2?④퀎 lock-free ?꾨줈?좏??낆? packet inbox 寃쏀빀???ъ떎???쒓굅?덈떎.
+- ?꾩옱 湲곗??쇰줈??  - route table 湲곕컲 runtime enqueue
   - lock-free packet inbox prototype
-  조합이 충분히 안정적으로 보인다.
-- 다만 완전한 최종 결론이라기보다, 현재 프로젝트 단계에서 실사용 가능한 수준으로 판단할 수 있다.
+  議고빀??異⑸텇???덉젙?곸쑝濡?蹂댁씤??
+- ?ㅻ쭔 ?꾩쟾??理쒖쥌 寃곕줎?대씪湲곕낫?? ?꾩옱 ?꾨줈?앺듃 ?④퀎?먯꽌 ?ㅼ궗??媛?ν븳 ?섏??쇰줈 ?먮떒?????덈떎.
+

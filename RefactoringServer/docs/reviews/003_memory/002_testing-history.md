@@ -4,10 +4,10 @@
 - ??臾몄꽌??`FLockFreeMemoryPool`, `FTlsMemoryPoolManager` 愿???뚯뒪??怨꾪쉷怨??ㅽ뻾 ?대젰????怨녹뿉 紐⑥븘 ??湲곕줉 臾몄꽌??
 - ?꾩옱 援ъ“ ?먮떒怨??ㅺ퀎 洹쇨굅??[memory-pool-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\003_memory\001_memory-pool-review.md)瑜??곗꽑?쒕떎.
 
-## 2. ?뚯뒪?????- [`FLockFreeMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Include\NetworkLib\Memory\FLockFreeMemoryPool.h)
-- [`FTlsMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Include\NetworkLib\Memory\FTlsMemoryPool.h)
-- [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\Main.cpp)
-- [`TlsMemoryPoolSoakTest/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\TlsMemoryPoolSoakTest\Main.cpp)
+## 2. ?뚯뒪?????- [`FLockFreeMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Include\NetworkLib\Memory\FLockFreeMemoryPool.h)
+- [`FTlsMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Include\NetworkLib\Memory\FTlsMemoryPool.h)
+- [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)
+- [`TlsMemoryPoolSoakTest/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\TlsMemoryPoolSoakTest\Main.cpp)
 
 ## 3. 湲곕낯 寃利???ぉ
 - `TLS memory pool parallel`
@@ -45,4 +45,6 @@
 ## 6. ?꾩옱 ?댁꽍
 - ?꾩옱 ?뚯뒪??踰붿쐞?먯꽌??TLS local cache? shared pool 議고빀?먯꽌 紐낅갚???꾩닔 吏뺥썑瑜?蹂댁씠吏 ?딆븯??
 - ?댄썑 `BucketSize`, `BucketCount`, `UseQueue` ?뺤콉??諛붽씀硫?癒쇱? `LockFreeTests`, 洹몃떎??`TlsMemoryPoolSoakTest`瑜?媛숈? 湲곗??쇰줈 ?ㅼ떆 ?ㅽ뻾?쒕떎.
+
+
 

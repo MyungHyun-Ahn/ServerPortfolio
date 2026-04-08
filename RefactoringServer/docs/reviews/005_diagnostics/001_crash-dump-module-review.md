@@ -1,84 +1,85 @@
-# Crash Dump Module Review
+﻿# Crash Dump Module Review
 
-## 1. 문서 목적
-- `RefactoringServer/Foundation/Diagnostics` 아래 1차 크래시 덤프 모듈 구현 결과를 정리한다.
-- 기존 `MHLib`의 `CCrashDump`에서 무엇을 가져오고 무엇을 버렸는지 근거를 남긴다.
-- 현재 구현의 확인된 동작 범위와 남은 리스크를 분리해서 기록한다.
+## 1. 臾몄꽌 紐⑹쟻
+- `RefactoringServer/Foundation/Diagnostics` ?꾨옒 1李??щ옒???ㅽ봽 紐⑤뱢 援ы쁽 寃곌낵瑜??뺣━?쒕떎.
+- 湲곗〈 `MHLib`??`CCrashDump`?먯꽌 臾댁뾿??媛?몄삤怨?臾댁뾿??踰꾨졇?붿? 洹쇨굅瑜??④릿??
+- ?꾩옱 援ы쁽???뺤씤???숈옉 踰붿쐞? ?⑥? 由ъ뒪?щ? 遺꾨━?댁꽌 湲곕줉?쒕떎.
 
-## 2. 현재 구현 범위
-- 공개 타입:
-  - [CrashDumpTypes.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Diagnostics\CrashDumpTypes.h)
-- 공개 API:
-  - [FCrashDump.h](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Diagnostics\FCrashDump.h)
-- 구현:
-  - [FCrashDump.cpp](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Diagnostics\FCrashDump.cpp)
-- 연결 지점:
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 2. ?꾩옱 援ы쁽 踰붿쐞
+- 怨듦컻 ???
+  - [CrashDumpTypes.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Diagnostics\CrashDumpTypes.h)
+- 怨듦컻 API:
+  - [FCrashDump.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Diagnostics\FCrashDump.h)
+- 援ы쁽:
+  - [FCrashDump.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Diagnostics\FCrashDump.cpp)
+- ?곌껐 吏??
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
 
-## 3. 구조 판단 근거
+## 3. 援ъ“ ?먮떒 洹쇨굅
 
-### 3-1. `NetworkLib` 내부가 아니라 `Foundation/Diagnostics`에 둔 이유
-- 크래시 덤프는 네트워크 코어 기능이 아니라 공용 진단 모듈이다.
-- 이후 `NetworkLib`, `EchoServer`, 차후의 `WorldServer`, 테스트 실행기까지 같은 진단 경로를 공유할 가능성이 크다.
-- 로거가 이미 [Foundation](D:\Project\ServerPortfolio\RefactoringServer\Foundation)로 이동한 상태라, 덤프 모듈도 같은 공용 계층에 두는 편이 의존 방향이 자연스럽다.
+### 3-1. `NetworkLib` ?대?媛 ?꾨땲??`Foundation/Diagnostics`?????댁쑀
+- ?щ옒???ㅽ봽???ㅽ듃?뚰겕 肄붿뼱 湲곕뒫???꾨땲??怨듭슜 吏꾨떒 紐⑤뱢?대떎.
+- ?댄썑 `NetworkLib`, `EchoServer`, 李⑦썑??`WorldServer`, ?뚯뒪???ㅽ뻾湲곌퉴吏 媛숈? 吏꾨떒 寃쎈줈瑜?怨듭쑀??媛?μ꽦???щ떎.
+- 濡쒓굅媛 ?대? [Foundation](D:\Project\ServerPortfolio\RefactoringServer\Foundation)濡??대룞???곹깭?? ?ㅽ봽 紐⑤뱢??媛숈? 怨듭슜 怨꾩링???먮뒗 ?몄씠 ?섏〈 諛⑺뼢???먯뿰?ㅻ읇??
 
-### 3-2. 설정 타입을 별도 진단 타입으로 분리한 이유
-- 서버 백엔드 설정과 덤프 설정은 변경 주기와 책임이 다르다.
-- 현재 [SCrashDumpConfig](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Diagnostics\CrashDumpTypes.h)는 출력 경로, dump 종류, handler 설치 여부, 단일 dump 제한 여부를 진단 맥락에서만 다룬다.
-- 이 분리 덕분에 `BackendTypes`에 운영 진단 옵션이 계속 섞이는 문제를 피할 수 있다.
+### 3-2. ?ㅼ젙 ??낆쓣 蹂꾨룄 吏꾨떒 ??낆쑝濡?遺꾨━???댁쑀
+- ?쒕쾭 諛깆뿏???ㅼ젙怨??ㅽ봽 ?ㅼ젙? 蹂寃?二쇨린? 梨낆엫???ㅻⅤ??
+- ?꾩옱 [SCrashDumpConfig](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Diagnostics\CrashDumpTypes.h)??異쒕젰 寃쎈줈, dump 醫낅쪟, handler ?ㅼ튂 ?щ?, ?⑥씪 dump ?쒗븳 ?щ?瑜?吏꾨떒 留λ씫?먯꽌留??ㅻ，??
+- ??遺꾨━ ?뺣텇??`BackendTypes`???댁쁺 吏꾨떒 ?듭뀡??怨꾩냽 ?욎씠??臾몄젣瑜??쇳븷 ???덈떎.
 
-### 3-3. manual dump API를 제한적 외부 공개로 둔 이유
-- [WriteManualDumpForDiagnostics()](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Diagnostics\FCrashDump.h)는 실제 예외 없이도 dump 경로를 검증할 수 있게 해준다.
-- 이 API는 테스트 코드, 운영 명령, 개발 진단 경로에서 유용하다.
-- 반면 일반 게임 로직에서 상시 호출할 API는 아니므로, 함수명 자체에 진단 용도임을 드러내도록 했다.
+### 3-3. manual dump API瑜??쒗븳???몃? 怨듦컻濡????댁쑀
+- [WriteManualDumpForDiagnostics()](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Diagnostics\FCrashDump.h)???ㅼ젣 ?덉쇅 ?놁씠??dump 寃쎈줈瑜?寃利앺븷 ???덇쾶 ?댁???
+- ??API???뚯뒪??肄붾뱶, ?댁쁺 紐낅졊, 媛쒕컻 吏꾨떒 寃쎈줈?먯꽌 ?좎슜?섎떎.
+- 諛섎㈃ ?쇰컲 寃뚯엫 濡쒖쭅?먯꽌 ?곸떆 ?몄텧??API???꾨땲誘濡? ?⑥닔紐??먯껜??吏꾨떒 ?⑸룄?꾩쓣 ?쒕윭?대룄濡??덈떎.
 
-### 3-4. 전역 로거 결합을 제거한 이유
-- 기존 `MHLib` 버전은 전역 로거 의존이 강했다.
-- 현재 구현은 [SCrashDumpConfig](D:\Project\ServerPortfolio\RefactoringServer\Foundation\Diagnostics\CrashDumpTypes.h)의 `std::shared_ptr<ILogger>`를 선택적으로 주입받는다.
-- 로거가 없을 때도 `OutputDebugStringA`로 최소 진단 경로는 유지한다.
+### 3-4. ?꾩뿭 濡쒓굅 寃고빀???쒓굅???댁쑀
+- 湲곗〈 `MHLib` 踰꾩쟾? ?꾩뿭 濡쒓굅 ?섏〈??媛뺥뻽??
+- ?꾩옱 援ы쁽? [SCrashDumpConfig](D:\Project\ServerPortfolio\RefactoringServer\Libraries\Foundation\Diagnostics\CrashDumpTypes.h)??`std::shared_ptr<ILogger>`瑜??좏깮?곸쑝濡?二쇱엯諛쏅뒗??
+- 濡쒓굅媛 ?놁쓣 ?뚮룄 `OutputDebugStringA`濡?理쒖냼 吏꾨떒 寃쎈줈???좎??쒕떎.
 
-## 4. 확인된 동작
+## 4. ?뺤씤???숈옉
 - `SetUnhandledExceptionFilter`
 - `_set_invalid_parameter_handler`
 - `_set_purecall_handler`
 - `_CrtSetReportHook`
 - `MiniDumpWriteDump`
-- 수동 dump 생성 API
-- dump 중복 생성 제한
+- ?섎룞 dump ?앹꽦 API
+- dump 以묐났 ?앹꽦 ?쒗븳
 
-## 5. 검증 근거
-- 빌드:
-  - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\EchoServer.vcxproj)
-  - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\EchoClient.vcxproj)
-- 수동 dump 검증:
+## 5. 寃利?洹쇨굅
+- 鍮뚮뱶:
+  - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\EchoServer.vcxproj)
+  - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\EchoClient.vcxproj)
+- ?섎룞 dump 寃利?
   - `EchoServer.exe --manual-dump`
-  - 실제 dump 파일 생성 확인
-- 일반 런타임 검증:
+  - ?ㅼ젣 dump ?뚯씪 ?앹꽦 ?뺤씤
+- ?쇰컲 ?고???寃利?
   - `EchoServer.exe`
   - `EchoClient.exe`
-  - `echo validation succeeded.` 확인
+  - `echo validation succeeded.` ?뺤씤
 
-## 6. 현재 구현에서 확인된 장점
-- 로거와의 결합은 남기되, 로거 부재 시에도 최소 동작이 가능하다.
-- dump 출력 경로와 dump 종류를 설정으로 제어할 수 있다.
-- `EchoServer`에서 수동 dump 경로를 바로 검증할 수 있어 초기 회귀 확인이 쉽다.
-- 실행 파일 기준 경로를 사용하도록 해 로그와 dump가 작업 디렉터리에 흩어지지 않게 정리했다.
+## 6. ?꾩옱 援ы쁽?먯꽌 ?뺤씤???μ젏
+- 濡쒓굅???寃고빀? ?④린?? 濡쒓굅 遺???쒖뿉??理쒖냼 ?숈옉??媛?ν븯??
+- dump 異쒕젰 寃쎈줈? dump 醫낅쪟瑜??ㅼ젙?쇰줈 ?쒖뼱?????덈떎.
+- `EchoServer`?먯꽌 ?섎룞 dump 寃쎈줈瑜?諛붾줈 寃利앺븷 ???덉뼱 珥덇린 ?뚭? ?뺤씤???쎈떎.
+- ?ㅽ뻾 ?뚯씪 湲곗? 寃쎈줈瑜??ъ슜?섎룄濡???濡쒓렇? dump媛 ?묒뾽 ?붾젆?곕━???⑹뼱吏吏 ?딄쾶 ?뺣━?덈떎.
 
-## 7. 남은 리스크와 한계
+## 7. ?⑥? 由ъ뒪?ъ? ?쒓퀎
 
-### 7-1. 비동기 업로드나 후처리는 없다
-- 현재는 로컬 파일 dump 생성만 담당한다.
-- symbol 정리, 업로드, 리포트 서버 전송은 2차 범위다.
+### 7-1. 鍮꾨룞湲??낅줈?쒕굹 ?꾩쿂由щ뒗 ?녿떎
+- ?꾩옱??濡쒖뺄 ?뚯씪 dump ?앹꽦留??대떦?쒕떎.
+- symbol ?뺣━, ?낅줈?? 由ы룷???쒕쾭 ?꾩넚? 2李?踰붿쐞??
 
-### 7-2. handler 내부 정책은 최소형이다
-- invalid parameter, CRT report, purecall은 현재 예외를 발생시켜 일반 dump 경로로 합류한다.
-- 정책 자체는 단순하지만, 세부 분류나 추가 문맥 기록은 아직 없다.
+### 7-2. handler ?대? ?뺤콉? 理쒖냼?뺤씠??- invalid parameter, CRT report, purecall? ?꾩옱 ?덉쇅瑜?諛쒖깮?쒖폒 ?쇰컲 dump 寃쎈줈濡??⑸쪟?쒕떎.
+- ?뺤콉 ?먯껜???⑥닚?섏?留? ?몃? 遺꾨쪟??異붽? 臾몃㎘ 湲곕줉? ?꾩쭅 ?녿떎.
 
-### 7-3. 단일 프로세스 기준 검증만 끝났다
-- 현재는 `EchoServer` 단독 기준으로 manual dump와 기본 왕복만 검증했다.
-- 이후 `WorldServer`나 다른 실행기에도 같은 초기화/종료 패턴을 적용해 재검증할 필요가 있다.
+### 7-3. ?⑥씪 ?꾨줈?몄뒪 湲곗? 寃利앸쭔 ?앸궗??- ?꾩옱??`EchoServer` ?⑤룆 湲곗??쇰줈 manual dump? 湲곕낯 ?뺣났留?寃利앺뻽??
+- ?댄썑 `WorldServer`???ㅻⅨ ?ㅽ뻾湲곗뿉??媛숈? 珥덇린??醫낅즺 ?⑦꽩???곸슜???ш?利앺븷 ?꾩슂媛 ?덈떎.
 
-## 8. 다음 작업 후보
-- `Foundation/Diagnostics`에 `CrashContext` 또는 dump 파일명 정책 helper 분리
-- 운영 명령 또는 디버그 핫키에서 manual dump API를 호출하는 경로 추가
-- dump 생성 전 마지막 로그 flush 지점 보강
+## 8. ?ㅼ쓬 ?묒뾽 ?꾨낫
+- `Foundation/Diagnostics`??`CrashContext` ?먮뒗 dump ?뚯씪紐??뺤콉 helper 遺꾨━
+- ?댁쁺 紐낅졊 ?먮뒗 ?붾쾭洹??ロ궎?먯꽌 manual dump API瑜??몄텧?섎뒗 寃쎈줈 異붽?
+- dump ?앹꽦 ??留덉?留?濡쒓렇 flush 吏??蹂닿컯
+
+
+

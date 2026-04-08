@@ -1,55 +1,53 @@
-# IOCP EchoServer Flow Review
+﻿# IOCP EchoServer Flow Review
 
-## 1. 목적
-- 현재 `Backend: Iocp` 기준으로 `EchoClient -> EchoServer -> ContentsRuntime -> EchoServer -> EchoClient` 흐름을 호출 스택 중심으로 정리한다.
-- 특히 accept 경로는 예전 `accept()` thread가 아니라 현재 구현된 `AcceptEx + IOCP completion` 기준으로 설명한다.
+## 1. 紐⑹쟻
+- ?꾩옱 `Backend: Iocp` 湲곗??쇰줈 `EchoClient -> EchoServer -> ContentsRuntime -> EchoServer -> EchoClient` ?먮쫫???몄텧 ?ㅽ깮 以묒떖?쇰줈 ?뺣━?쒕떎.
+- ?뱁엳 accept 寃쎈줈???덉쟾 `accept()` thread媛 ?꾨땲???꾩옱 援ы쁽??`AcceptEx + IOCP completion` 湲곗??쇰줈 ?ㅻ챸?쒕떎.
 
-## 2. 대상 파일
-- 서버 시작 / application 경계
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 2. ????뚯씪
+- ?쒕쾭 ?쒖옉 / application 寃쎄퀎
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
 - IOCP backend
-  - [FIocpServer.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.h)
-  - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
+  - [FIocpServer.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.h)
+  - [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.cpp)
 - IOCP session
-  - [FIocpSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.h)
-  - [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FIocpSession.cpp)
-- 콘텐츠 경계
-  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
-  - [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Bridge\IContentBridge.h)
+  - [FIocpSession.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.h)
+  - [FIocpSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FIocpSession.cpp)
+- 肄섑뀗痢?寃쎄퀎
+  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp)
+  - [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Bridge\IContentBridge.h)
 - Echo content
-  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.cpp)
-- 클라이언트
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
+  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.cpp)
+- ?대씪?댁뼵??  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\Main.cpp)
 
-## 3. 구조 요약
-- `EchoClient`는 raw Winsock 기반이지만 packet serialization / framing / cipher는 `NetworkLib`를 쓴다.
-- `EchoServer`는 `FEchoApplication`을 통해 transport와 `ContentsRuntime`를 연결한다.
-- IOCP backend는 현재 `AcceptEx`를 여러 개 pre-post 하고, accept completion도 worker의 `GetQueuedCompletionStatus()`에서 처리한다.
-- send 경로는 현재 `SendPacket(sessionId, FOutgoingContentPacket&&)` 기준이다.
-- `NetworkLib` transport header는 애플리케이션 계층에 직접 노출되지 않는다.
+## 3. 援ъ“ ?붿빟
+- `EchoClient`??raw Winsock 湲곕컲?댁?留?packet serialization / framing / cipher??`NetworkLib`瑜??대떎.
+- `EchoServer`??`FEchoApplication`???듯빐 transport? `ContentsRuntime`瑜??곌껐?쒕떎.
+- IOCP backend???꾩옱 `AcceptEx`瑜??щ윭 媛?pre-post ?섍퀬, accept completion??worker??`GetQueuedCompletionStatus()`?먯꽌 泥섎━?쒕떎.
+- send 寃쎈줈???꾩옱 `SendPacket(sessionId, FOutgoingContentPacket&&)` 湲곗??대떎.
+- `NetworkLib` transport header???좏뵆由ъ??댁뀡 怨꾩링??吏곸젒 ?몄텧?섏? ?딅뒗??
 
-## 4. EchoClient에서 Rq를 만드는 흐름
-### 4-1. 세션 루프
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
+## 4. EchoClient?먯꽌 Rq瑜?留뚮뱶???먮쫫
+### 4-1. ?몄뀡 猷⑦봽
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\Main.cpp)
   - `main()`
   - `RunSingleSession(sessionIndex, options, rttMetricsRuntime)`
 
-### 4-2. 연결
+### 4-2. ?곌껐
 - `RunSingleSession(...)`
   - `TryConnectSocket(options, clientSocket, errorMessage)`
 - `TryConnectSocket(...)`
   - `socket()`
   - `connect()`
-  - 필요 시 `SO_RCVTIMEO`
+  - ?꾩슂 ??`SO_RCVTIMEO`
 
 ### 4-3. bootstrap
-- `RunSingleSession(...)` 안에서
-  - `FLoginRq` 전송 / `FLoginRp` 수신
-  - `FRoomListRq` 전송 / 응답 수신
-  - `FRoomEnterRq` 전송 / `FRoomEnterRp` 수신
-- bootstrap이 끝난 뒤에만 `EchoRq` 전송 루프로 들어간다.
+- `RunSingleSession(...)` ?덉뿉??  - `FLoginRq` ?꾩넚 / `FLoginRp` ?섏떊
+  - `FRoomListRq` ?꾩넚 / ?묐떟 ?섏떊
+  - `FRoomEnterRq` ?꾩넚 / `FRoomEnterRp` ?섏떊
+- bootstrap???앸궃 ?ㅼ뿉留?`EchoRq` ?꾩넚 猷⑦봽濡??ㅼ뼱媛꾨떎.
 
-### 4-4. EchoRq 직렬화와 전송
+### 4-4. EchoRq 吏곷젹?붿? ?꾩넚
 - `RunSingleSession(...)`
   - `Generated::Echo::FEchoRq requestPacket`
   - `NetworkLib::Packet::Serialization::SerializeContentPacket(requestPacket)`
@@ -57,27 +55,26 @@
   - `packetFramer.BuildPacket(...)`
   - `SendPacketWithOptionalChunking(...)`
 
-## 5. EchoServer 시작 흐름
-### 5-1. backend 선택
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+## 5. EchoServer ?쒖옉 ?먮쫫
+### 5-1. backend ?좏깮
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
   - `FEchoServerConfigLoader::LoadFromFile(...)`
   - `ApplyEchoServerConfigDocument(...)`
   - `FServerFactory::Create(serverConfig.backendKind)`
 
-`Backend: Iocp`면:
-- [FServerFactory.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FServerFactory.cpp)
-  - `FIocpServer` 생성
+`Backend: Iocp`硫?
+- [FServerFactory.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FServerFactory.cpp)
+  - `FIocpServer` ?앹꽦
 
-### 5-2. Start 호출
+### 5-2. Start ?몄텧
 - `server->Start(serverConfig, echoApplication)`
-- `echoApplication`은 `IApplicationHandler` 구현체다.
+- `echoApplication`? `IApplicationHandler` 援ы쁽泥대떎.
 
-## 6. IOCP AcceptEx 호출 스택
-### 6-1. Start 내부 초기화
-- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
+## 6. IOCP AcceptEx ?몄텧 ?ㅽ깮
+### 6-1. Start ?대? 珥덇린??- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.cpp)
   - `FIocpServer::Start(...)`
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `InitializeWinsock()`
 2. `CreateIoCompletionPort(INVALID_HANDLE_VALUE, ...)`
 3. `OpenListenSocket()`
@@ -89,46 +86,43 @@
 
 ### 6-2. AcceptEx pre-post
 - `FIocpServer::InitializeAcceptContexts()`
-  - `m_acceptContextCount` 계산
-  - `SAcceptContext[]` 생성
-  - 각 slot마다 `PostAccept(slotIndex)` 호출
+  - `m_acceptContextCount` 怨꾩궛
+  - `SAcceptContext[]` ?앹꽦
+  - 媛?slot留덈떎 `PostAccept(slotIndex)` ?몄텧
 
 - `FIocpServer::PostAccept(slotIndex)`
-  - 필요 시 이전 `acceptedSocket` 정리
-  - `WSASocketW(...)`로 새 accept socket 생성
-  - `m_acceptEx(...)` 호출
-  - `WSA_IO_PENDING`이면 정상 경로
+  - ?꾩슂 ???댁쟾 `acceptedSocket` ?뺣━
+  - `WSASocketW(...)`濡???accept socket ?앹꽦
+  - `m_acceptEx(...)` ?몄텧
+  - `WSA_IO_PENDING`?대㈃ ?뺤긽 寃쎈줈
 
-즉 현재 IOCP 서버는
-- blocking `accept()` thread가 없고
-- accept request도 IOCP completion plane으로 들어오도록 pre-post 한다.
+利??꾩옱 IOCP ?쒕쾭??- blocking `accept()` thread媛 ?녾퀬
+- accept request??IOCP completion plane?쇰줈 ?ㅼ뼱?ㅻ룄濡?pre-post ?쒕떎.
 
-### 6-3. AcceptEx completion 처리
+### 6-3. AcceptEx completion 泥섎━
 - `FIocpServer::WorkerLoop()`
   - `GetQueuedCompletionStatus(...)`
-  - `completionKey == kAcceptCompletionKey`면 accept completion branch 진입
+  - `completionKey == kAcceptCompletionKey`硫?accept completion branch 吏꾩엯
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `HandleAcceptCompletion(*acceptContext, queuedResult != FALSE, completionError)`
-2. 성공 시 `AttachAcceptedSocket(acceptContext.acceptedSocket)`
-3. 그 뒤 같은 slot에 `PostAccept(acceptContext->slotIndex)` 재게시
+2. ?깃났 ??`AttachAcceptedSocket(acceptContext.acceptedSocket)`
+3. 洹???媛숈? slot??`PostAccept(acceptContext->slotIndex)` ?ш쾶??
+利?accept??recv/send? 媛숈? completion plane?먯꽌 ?덈떎.
 
-즉 accept도 recv/send와 같은 completion plane에서 돈다.
+### 6-4. ?꾩옱 accept pool ?댁꽍
+- `SAcceptContext[]`??怨좎젙 湲몄씠 slot pool濡??ъ궗?⑸맂??
+- ?ㅻ쭔 `acceptedSocket`? slot ?덉뿉???좎??섎뜑?쇰룄 留?repost留덈떎 ?덈줈 留뚮뱺??
+- ?곕씪???꾩옱 援ъ“??  - `accept context slot pool`: ?덉쓬
+  - `accepted socket reuse`: ?놁쓬
 
-### 6-4. 현재 accept pool 해석
-- `SAcceptContext[]`는 고정 길이 slot pool로 재사용된다.
-- 다만 `acceptedSocket`은 slot 안에서 유지되더라도 매 repost마다 새로 만든다.
-- 따라서 현재 구조는
-  - `accept context slot pool`: 있음
-  - `accepted socket reuse`: 없음
-
-### 6-5. AttachAcceptedSocket 호출 스택
+### 6-5. AttachAcceptedSocket ?몄텧 ?ㅽ깮
 - `FIocpServer::AttachAcceptedSocket(clientSocket)`
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `setsockopt(SO_UPDATE_ACCEPT_CONTEXT)`
-2. 필요 시 `SO_SNDBUF`
-3. 비어 있는 session slot 탐색
+2. ?꾩슂 ??`SO_SNDBUF`
+3. 鍮꾩뼱 ?덈뒗 session slot ?먯깋
 4. `FIocpSession::Create()`
 5. `FIocpSession::Initialize(...)`
 6. `CreateIoCompletionPort(clientSocket, m_iocpHandle, ...)`
@@ -137,7 +131,7 @@
 9. `PostRecv(*newSessionContext)`
 
 ## 7. IOCP recv -> application -> ContentsRuntime
-### 7-1. 첫 recv post
+### 7-1. 泥?recv post
 - `FIocpServer::PostRecv(FIocpSession&)`
   - `BuildRecvWsabufs(...)`
   - `WSARecv(...)`
@@ -145,78 +139,75 @@
 ### 7-2. worker completion loop
 - `FIocpServer::WorkerLoop()`
   - `GetQueuedCompletionStatus(...)`
-  - accept completion이면 accept branch
-  - 아니면 `FIocpSession::SIoContext` 복원
-  - `ioType == Recv`면 recv branch
-  - `ioType == Send`면 send branch
+  - accept completion?대㈃ accept branch
+  - ?꾨땲硫?`FIocpSession::SIoContext` 蹂듭썝
+  - `ioType == Recv`硫?recv branch
+  - `ioType == Send`硫?send branch
 
-### 7-3. recv completion 처리
-- recv branch 안에서
-  - `CommitRecvBytes(transferredBytes)`
+### 7-3. recv completion 泥섎━
+- recv branch ?덉뿉??  - `CommitRecvBytes(transferredBytes)`
   - `m_packetFramer->TryExtractPacketView(...)`
-  - checksum 검증
-  - 필요 시 `packetCipher->Decode(...)`
+  - checksum 寃利?  - ?꾩슂 ??`packetCipher->Decode(...)`
   - `TryParseContentPacketView(...)`
   - `m_applicationHandler->OnPacketReceived(*this, sessionId, contentPacketView)`
   - consumed bytes discard
   - `PostRecv(*sessionContext)`
 
 ## 8. EchoServer application dispatch
-### 8-1. 연결 직후
-- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
+### 8-1. ?곌껐 吏곹썑
+- [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
   - `FEchoApplication::OnClientConnected(sessionId)`
   - `m_contentRuntime.EnterSession(sessionId, kAuthContentId)`
 
-### 8-2. packet 수신 후
-- `FEchoApplication::OnPacketReceived(server, sessionId, packetView)`
-  - 필요 시 trace/log
+### 8-2. packet ?섏떊 ??- `FEchoApplication::OnPacketReceived(server, sessionId, packetView)`
+  - ?꾩슂 ??trace/log
   - `m_contentRuntime.EnqueuePacket(sessionId, packetView.opcode, packetView.payload, packetView.payloadLength)`
 
 ## 9. ContentsRuntime -> Echo content
-- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
+- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp)
   - `FContentRuntime::EnqueuePacket(...)`
   - route lookup
   - target `FContentThread` enqueue
 
-- [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.cpp)
+- [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.cpp)
   - `FEchoContent::OnPacket(...)`
   - opcode switch
   - `HandleEchoRq(...)`
   - `HandleRoomListRq(...)`
   - `HandleRoomChangeRq(...)`
 
-## 10. EchoRp send 호출 스택
-### 10-1. content 계층
+## 10. EchoRp send ?몄텧 ?ㅽ깮
+### 10-1. content 怨꾩링
 - `FEchoContent::HandleEchoRq(...)`
   - `Generated::Echo::FEchoRp responsePacket`
   - `ContentsRuntime::Bridge::SendContentPacket(bridge, sessionId, responsePacket)`
 
-### 10-2. bridge / runtime 계층
-- [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Bridge\IContentBridge.h)
+### 10-2. bridge / runtime 怨꾩링
+- [IContentBridge.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Bridge\IContentBridge.h)
   - `SendContentPacket(...)`
   - `NetworkLib::Packet::Serialization::BuildOutgoingContentPacket(packet)`
   - `bridge.SendPacket(sessionId, outgoingPacket)`
 
-- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp)
+- [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp)
   - `FContentRuntime::SendPacket(...)`
   - `server->SendPacket(sessionId, std::move(packet))`
 
-### 10-3. IOCP send 계층
-- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
+### 10-3. IOCP send 怨꾩링
+- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.cpp)
   - `FIocpServer::SendPacket(...)`
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `AcquireSession(sessionId)`
-2. `packet.MoveBuffer()`로 content payload 획득
-3. 필요 시 cipher encode
-4. 필요 시 framer `BuildPacketParts(...)`
+2. `packet.MoveBuffer()`濡?content payload ?띾뱷
+3. ?꾩슂 ??cipher encode
+4. ?꾩슂 ??framer `BuildPacketParts(...)`
 5. `sessionContext->EnqueueSendBuffer(...)`
 6. `PostSend(*sessionContext)`
 
 ### 10-4. WSASend post
 - `FIocpServer::PostSend(FIocpSession&)`
 
-주요 순서:
+二쇱슂 ?쒖꽌:
 1. `TryBeginSend()`
 2. `FillSendBatch(...)`
 3. `sendContext.Prepare(EIoType::Send, &sessionContext)`
@@ -228,18 +219,21 @@
   - `FinishSendIo()`
   - `ReleaseActiveSendBuffers()`
   - `EndSend()`
-  - queued send가 남아 있으면 다시 `PostSend(*sessionContext)`
+  - queued send媛 ?⑥븘 ?덉쑝硫??ㅼ떆 `PostSend(*sessionContext)`
 
-## 11. EchoClient에서 Rp를 받는 흐름
+## 11. EchoClient?먯꽌 Rp瑜?諛쏅뒗 ?먮쫫
 - `RunSingleSession(...)`
   - `ReceiveSinglePacket(...)`
   - `packetFramer.TryExtractPacket(...)`
   - `packetCipher.Decode(...)`
   - `DeserializeContentPacket<Generated::Echo::FEchoRp>(...)`
-- 받은 `EchoRp.message`를 검증한 뒤 다음 `EchoRq` 또는 `RoomChangeRq`로 진행한다.
+- 諛쏆? `EchoRp.message`瑜?寃利앺븳 ???ㅼ쓬 `EchoRq` ?먮뒗 `RoomChangeRq`濡?吏꾪뻾?쒕떎.
 
-## 12. 현재 판단
-- IOCP accept path는 이제 `accept()` thread 기반이 아니라 `AcceptEx + IOCP completion` 기반이다.
-- accept context slot pool은 적용되어 있다.
-- `accepted socket reuse`는 아직 기본 채택하지 않았고, 현재는 매 repost마다 새 socket을 만든다.
-- 현재 판단으로는 socket 재사용은 기본값으로 강제하기보다 별도 실험 옵션 수준이 더 적절하다.
+## 12. ?꾩옱 ?먮떒
+- IOCP accept path???댁젣 `accept()` thread 湲곕컲???꾨땲??`AcceptEx + IOCP completion` 湲곕컲?대떎.
+- accept context slot pool? ?곸슜?섏뼱 ?덈떎.
+- `accepted socket reuse`???꾩쭅 湲곕낯 梨꾪깮?섏? ?딆븯怨? ?꾩옱??留?repost留덈떎 ??socket??留뚮뱺??
+- ?꾩옱 ?먮떒?쇰줈??socket ?ъ궗?⑹? 湲곕낯媛믪쑝濡?媛뺤젣?섍린蹂대떎 蹂꾨룄 ?ㅽ뿕 ?듭뀡 ?섏??????곸젅?섎떎.
+
+
+

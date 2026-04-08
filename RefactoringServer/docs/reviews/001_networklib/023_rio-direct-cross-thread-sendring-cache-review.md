@@ -1,148 +1,140 @@
-# RIO Direct Cross-Thread SendRing Cache Review
+﻿# RIO Direct Cross-Thread SendRing Cache Review
 
-## 1. 목적
-- `EchoServer` 기준에서 `RIO Direct`가 `RIO OwnerThread`보다 불리하게 나온 원인을 정리한다.
-- 이번 문서의 핵심 가설은 `Direct`의 주원인이 단순 `sendRingMutex` 대기보다, `content worker`와 `RIO owner worker`가 같은 session send ring 상태를 번갈아 만지면서 발생하는 cache 무효화와 cache line ping-pong이라는 것이다.
-- 이 문서는 확정 결론이 아니라 현재 코드와 측정 결과를 바탕으로 한 `우선 가설 정리 문서`다.
+## 1. 紐⑹쟻
+- `EchoServer` 湲곗??먯꽌 `RIO Direct`媛 `RIO OwnerThread`蹂대떎 遺덈━?섍쾶 ?섏삩 ?먯씤???뺣━?쒕떎.
+- ?대쾲 臾몄꽌???듭떖 媛?ㅼ? `Direct`??二쇱썝?몄씠 ?⑥닚 `sendRingMutex` ?湲곕낫?? `content worker`? `RIO owner worker`媛 媛숈? session send ring ?곹깭瑜?踰덇컝??留뚯?硫댁꽌 諛쒖깮?섎뒗 cache 臾댄슚?붿? cache line ping-pong?대씪??寃껋씠??
+- ??臾몄꽌???뺤젙 寃곕줎???꾨땲???꾩옱 肄붾뱶? 痢≪젙 寃곌낵瑜?諛뷀깢?쇰줈 ??`?곗꽑 媛???뺣━ 臾몄꽌`??
 
-## 2. 배경
-- 관련 결과 정리:
+## 2. 諛곌꼍
+- 愿??寃곌낵 ?뺣━:
   - [022_echo-server-windowsserver-2h-4mode-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\022_echo-server-windowsserver-2h-4mode-review.md)
-- 관련 구현 문서:
+- 愿??援ы쁽 臾몄꽌:
   - [014_rio-echo-server-flow-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\014_rio-echo-server-flow-review.md)
   - [015_rio-send-dispatch-mode-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\015_rio-send-dispatch-mode-review.md)
   - [019_rio-session-send-ring-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\019_rio-session-send-ring-review.md)
 
-이번에 문제를 본 조건:
+?대쾲??臾몄젣瑜?蹂?議곌굔:
 - `EchoServer`
 - `PayloadSize = 16`
 - `SessionCount = 250`
 - `HoldSeconds = 7200`
 - `IntervalMs = 0`
 - `WorkerThreadCount = 4`
-- 서버와 클라이언트를 같은 머신에서 동시 실행
+- ?쒕쾭? ?대씪?댁뼵?몃? 媛숈? 癒몄떊?먯꽌 ?숈떆 ?ㅽ뻾
 
-## 3. 관찰
-- `Windows Server 4코어`의 `EchoServer 2시간 4모드` 결과에서는 `RIO OwnerThread`가 `RIO Direct`보다 처리량이 크게 높고 CPU와 평균 RTT도 더 좋았다.
-- 반면 `EchoServer` 설정 자체는 `sendThreadCount = 1`, `responsesPerThread = 1`이라서, 같은 세션에 대해 여러 content thread가 동시에 응답을 쏘는 강한 producer 경쟁은 크지 않다.
+## 3. 愿李?- `Windows Server 4肄붿뼱`??`EchoServer 2?쒓컙 4紐⑤뱶` 寃곌낵?먯꽌??`RIO OwnerThread`媛 `RIO Direct`蹂대떎 泥섎━?됱씠 ?ш쾶 ?믨퀬 CPU? ?됯퇏 RTT????醫뗭븯??
+- 諛섎㈃ `EchoServer` ?ㅼ젙 ?먯껜??`sendThreadCount = 1`, `responsesPerThread = 1`?대씪?? 媛숈? ?몄뀡??????щ윭 content thread媛 ?숈떆???묐떟???섎뒗 媛뺥븳 producer 寃쎌웳? ?ъ? ?딅떎.
 
-근거:
-- [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.cpp#L293)
+洹쇨굅:
+- [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.cpp#L293)
 - [022_echo-server-windowsserver-2h-4mode-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\022_echo-server-windowsserver-2h-4mode-review.md)
 
-즉 이번 케이스는 "`동시 producer가 많아서 Direct lock 경합이 심했다`"로만 설명하기 어렵다.
+利??대쾲 耳?댁뒪??"`?숈떆 producer媛 留롮븘??Direct lock 寃쏀빀???ы뻽??"濡쒕쭔 ?ㅻ챸?섍린 ?대졄??
 
-## 4. 현재 코드 경로
-### 4-1. Echo 응답은 content worker에서 바로 `server->SendPacket()`으로 내려간다
-- `FEchoContent`는 기본 설정에서 echo 요청 1개당 응답 1개를 바로 보낸다.
-  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Contents\Echo\FEchoContent.cpp#L293)
-- `ContentsRuntime`는 이 응답을 곧바로 transport의 `SendPacket()`으로 전달한다.
-  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\ContentsRuntime\Routing\FContentRuntime.cpp#L654)
+## 4. ?꾩옱 肄붾뱶 寃쎈줈
+### 4-1. Echo ?묐떟? content worker?먯꽌 諛붾줈 `server->SendPacket()`?쇰줈 ?대젮媛꾨떎
+- `FEchoContent`??湲곕낯 ?ㅼ젙?먯꽌 echo ?붿껌 1媛쒕떦 ?묐떟 1媛쒕? 諛붾줈 蹂대궦??
+  - [FEchoContent.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Contents\Echo\FEchoContent.cpp#L293)
+- `ContentsRuntime`?????묐떟??怨㏓컮濡?transport??`SendPacket()`?쇰줈 ?꾨떖?쒕떎.
+  - [FContentRuntime.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\ContentsRuntime\Routing\FContentRuntime.cpp#L654)
 
-즉 `Direct` 모드의 send submit 진입 스레드는 contents worker 쪽이다.
+利?`Direct` 紐⑤뱶??send submit 吏꾩엯 ?ㅻ젅?쒕뒗 contents worker 履쎌씠??
 
-### 4-2. `Direct`는 content worker가 session send ring을 직접 만진다
-- `FRioServer::SendPacket()`에서 `Direct`면 바로 `AppendPacketToSendRing(..., true)` 후 `PostSend()`를 수행한다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L232)
-- 이때 `AppendPacketToSendRing()`은 `sendRingMutex` 안에서
-  - cipher encode
-  - checksum 계산
+### 4-2. `Direct`??content worker媛 session send ring??吏곸젒 留뚯쭊??- `FRioServer::SendPacket()`?먯꽌 `Direct`硫?諛붾줈 `AppendPacketToSendRing(..., true)` ??`PostSend()`瑜??섑뻾?쒕떎.
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L232)
+- ?대븣 `AppendPacketToSendRing()`? `sendRingMutex` ?덉뿉??  - cipher encode
+  - checksum 怨꾩궛
   - framing
   - send ring append
-를 수행한다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L868)
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L931)
-- 이어서 `PostSend()`도 `Direct`면 다시 `sendRingMutex`를 잡고 `TryPrepareNextSend()`를 호출한다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L997)
+瑜??섑뻾?쒕떎.
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L868)
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L931)
+- ?댁뼱??`PostSend()`??`Direct`硫??ㅼ떆 `sendRingMutex`瑜??↔퀬 `TryPrepareNextSend()`瑜??몄텧?쒕떎.
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L997)
 
-### 4-3. send completion은 RIO owner worker가 처리한다
-- RIO completion은 worker loop에서 처리된다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L1349)
-- send completion이 오면 `HandleSendCompletion()`에서 `Direct` 모드는 다시 `sendRingMutex`를 잡고 `CompleteCurrentSend()`를 수행한다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L1484)
+### 4-3. send completion? RIO owner worker媛 泥섎━?쒕떎
+- RIO completion? worker loop?먯꽌 泥섎━?쒕떎.
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L1349)
+- send completion???ㅻ㈃ `HandleSendCompletion()`?먯꽌 `Direct` 紐⑤뱶???ㅼ떆 `sendRingMutex`瑜??↔퀬 `CompleteCurrentSend()`瑜??섑뻾?쒕떎.
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L1484)
 
-즉 `Direct`는
-- send submit: contents worker
+利?`Direct`??- send submit: contents worker
 - send completion: RIO owner worker
-가 같은 session send ring 상태를 번갈아 만진다.
+媛 媛숈? session send ring ?곹깭瑜?踰덇컝??留뚯쭊??
 
-### 4-4. `OwnerThread`는 ring 조작을 owner worker로 모은다
-- `OwnerThread`는 `SendPacket()` 시점에 ring을 직접 만지지 않고, lock-free queue에 packet만 적재한다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L232)
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L1066)
-- 이후 owner worker가 send command를 drain하면서 ring append와 `PostSend()`를 처리한다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L763)
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L800)
-- 이 경로에서는 `AppendPacketToSendRing(..., false)`를 사용하므로 send ring은 실질적으로 단일 owner thread가 만진다.
-  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L805)
+### 4-4. `OwnerThread`??ring 議곗옉??owner worker濡?紐⑥???- `OwnerThread`??`SendPacket()` ?쒖젏??ring??吏곸젒 留뚯?吏 ?딄퀬, lock-free queue??packet留??곸옱?쒕떎.
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L232)
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L1066)
+- ?댄썑 owner worker媛 send command瑜?drain?섎㈃??ring append? `PostSend()`瑜?泥섎━?쒕떎.
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L763)
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L800)
+- ??寃쎈줈?먯꽌??`AppendPacketToSendRing(..., false)`瑜??ъ슜?섎?濡?send ring? ?ㅼ쭏?곸쑝濡??⑥씪 owner thread媛 留뚯쭊??
+  - [FRioServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L805)
 
-## 5. 핵심 가설
-### 5-1. `EchoServer`에서는 강한 mutex 경쟁보다 cross-thread ping-pong이 더 유력하다
-- 현재 `EchoServer` 기본 경로에서는 한 요청당 한 응답이라 같은 세션에 대해 여러 content thread가 동시에 `SendPacket()`을 때리는 구조가 아니다.
-- 따라서 `sendRingMutex`가 여러 producer 사이에서 오래 block되는 형태의 경합은 이번 워크로드에서 주원인일 가능성이 낮다.
-- 하지만 `Direct`는 contents worker와 owner worker가 같은 session send ring 상태를 교대로 갱신한다.
+## 5. ?듭떖 媛??### 5-1. `EchoServer`?먯꽌??媛뺥븳 mutex 寃쎌웳蹂대떎 cross-thread ping-pong?????좊젰?섎떎
+- ?꾩옱 `EchoServer` 湲곕낯 寃쎈줈?먯꽌?????붿껌?????묐떟?대씪 媛숈? ?몄뀡??????щ윭 content thread媛 ?숈떆??`SendPacket()`???뚮━??援ъ“媛 ?꾨땲??
+- ?곕씪??`sendRingMutex`媛 ?щ윭 producer ?ъ씠?먯꽌 ?ㅻ옒 block?섎뒗 ?뺥깭??寃쏀빀? ?대쾲 ?뚰겕濡쒕뱶?먯꽌 二쇱썝?몄씪 媛?μ꽦????떎.
+- ?섏?留?`Direct`??contents worker? owner worker媛 媛숈? session send ring ?곹깭瑜?援먮?濡?媛깆떊?쒕떎.
 
-특히 다음 상태가 자주 바뀐다.
+?뱁엳 ?ㅼ쓬 ?곹깭媛 ?먯＜ 諛붾먮떎.
 - `m_sendRingReadOffset`
 - `m_sendRingWriteOffset`
 - `m_sendRingUsedBytes`
 - `m_sendRingInFlightBytes`
 - `m_sendRequestContext`
-- `m_sendRingBuffer`의 실제 payload 영역
+- `m_sendRingBuffer`???ㅼ젣 payload ?곸뿭
 
-근거:
-- [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FRioSession.h#L145)
+洹쇨굅:
+- [FRioSession.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FRioSession.h#L145)
 
-이 구조면
-- contents worker가 append/prepare를 위해 ring 상태를 write
-- owner worker가 completion 시 ring 상태를 write
-- 다시 contents worker가 다음 send를 위해 same cache line을 write
-하는 식으로 cache line ownership이 계속 이동한다.
+??援ъ“硫?- contents worker媛 append/prepare瑜??꾪빐 ring ?곹깭瑜?write
+- owner worker媛 completion ??ring ?곹깭瑜?write
+- ?ㅼ떆 contents worker媛 ?ㅼ쓬 send瑜??꾪빐 same cache line??write
+?섎뒗 ?앹쑝濡?cache line ownership??怨꾩냽 ?대룞?쒕떎.
 
-이것이 loopback echo처럼 요청/응답 회전이 매우 빠른 환경에서는 mutex 대기보다 더 큰 비용으로 보일 수 있다.
+?닿쾬??loopback echo泥섎읆 ?붿껌/?묐떟 ?뚯쟾??留ㅼ슦 鍮좊Ⅸ ?섍꼍?먯꽌??mutex ?湲곕낫??????鍮꾩슜?쇰줈 蹂댁씪 ???덈떎.
 
-### 5-2. `Direct`는 임계구역이 길어서 ping-pong 영향이 더 커진다
-- `sendRingMutex` 안에서 offset 갱신만 하는 것이 아니라 encode, checksum, framing, append까지 모두 수행한다.
-- 그러면 lock hold time도 길어지고, 같은 cache line을 붙잡고 있는 시간도 늘어난다.
-- 경쟁 스레드 수가 많지 않아도, 두 스레드 사이에서 ownership 이전 비용이 반복되면 누적 손실이 커질 수 있다.
+### 5-2. `Direct`???꾧퀎援ъ뿭??湲몄뼱??ping-pong ?곹뼢????而ㅼ쭊??- `sendRingMutex` ?덉뿉??offset 媛깆떊留??섎뒗 寃껋씠 ?꾨땲??encode, checksum, framing, append源뚯? 紐⑤몢 ?섑뻾?쒕떎.
+- 洹몃윭硫?lock hold time??湲몄뼱吏怨? 媛숈? cache line??遺숈옟怨??덈뒗 ?쒓컙???섏뼱?쒕떎.
+- 寃쎌웳 ?ㅻ젅???섍? 留롮? ?딆븘?? ???ㅻ젅???ъ씠?먯꽌 ownership ?댁쟾 鍮꾩슜??諛섎났?섎㈃ ?꾩쟻 ?먯떎??而ㅼ쭏 ???덈떎.
 
-### 5-3. `OwnerThread`는 ring locality를 얻는 대신 handoff 비용을 낸다
-- `OwnerThread`는 contents worker가 직접 ring을 만지지 않는다.
-- 대신 lock-free queue enqueue와 send command enqueue가 들어간다.
-- 이 구조는 handoff 비용은 있지만, session send ring 자체는 owner worker 한 곳에 묶인다.
+### 5-3. `OwnerThread`??ring locality瑜??삳뒗 ???handoff 鍮꾩슜???몃떎
+- `OwnerThread`??contents worker媛 吏곸젒 ring??留뚯?吏 ?딅뒗??
+- ???lock-free queue enqueue? send command enqueue媛 ?ㅼ뼱媛꾨떎.
+- ??援ъ“??handoff 鍮꾩슜? ?덉?留? session send ring ?먯껜??owner worker ??怨녹뿉 臾띠씤??
 
-즉 `EchoServer` 같은 작은 payload, 빠른 turn-around, 같은 머신 loopback 조건에서는:
-- `Direct`의 cross-thread ring ping-pong 비용
-- `OwnerThread`의 handoff 비용
-중 전자가 더 커져서 `OwnerThread`가 유리했을 가능성이 높다.
+利?`EchoServer` 媛숈? ?묒? payload, 鍮좊Ⅸ turn-around, 媛숈? 癒몄떊 loopback 議곌굔?먯꽌??
+- `Direct`??cross-thread ring ping-pong 鍮꾩슜
+- `OwnerThread`??handoff 鍮꾩슜
+以??꾩옄媛 ??而ㅼ졇??`OwnerThread`媛 ?좊━?덉쓣 媛?μ꽦???믩떎.
 
-## 6. 왜 ChattingServer와 다른가
-- `ChattingServer`는 broadcast, room routing, contents runtime queue, dummy client event backlog가 같이 섞인 end-to-end workload다.
-- 이 환경에서는 owner handoff 비용, owner queue backlog, contents scheduling 차이가 더 크게 드러날 수 있다.
-- 반면 이번 `EchoServer`는 거의 `small packet echo hot path`에 가까워서 ring locality 차이가 더 직접적으로 드러난다.
+## 6. ??ChattingServer? ?ㅻⅨ媛
+- `ChattingServer`??broadcast, room routing, contents runtime queue, dummy client event backlog媛 媛숈씠 ?욎씤 end-to-end workload??
+- ???섍꼍?먯꽌??owner handoff 鍮꾩슜, owner queue backlog, contents scheduling 李⑥씠媛 ???ш쾶 ?쒕윭?????덈떎.
+- 諛섎㈃ ?대쾲 `EchoServer`??嫄곗쓽 `small packet echo hot path`??媛源뚯썙??ring locality 李⑥씠媛 ??吏곸젒?곸쑝濡??쒕윭?쒕떎.
 
-즉:
-- `EchoServer` 결과를 transport microbenchmark로 보고
-- `ChattingServer` 결과를 contents end-to-end benchmark로 따로 해석해야 한다.
+利?
+- `EchoServer` 寃곌낵瑜?transport microbenchmark濡?蹂닿퀬
+- `ChattingServer` 寃곌낵瑜?contents end-to-end benchmark濡??곕줈 ?댁꽍?댁빞 ?쒕떎.
 
-## 7. 현재 판단
-- 현재 코드와 결과를 함께 보면, `EchoServer`에서 `Direct`가 `OwnerThread`보다 느린 이유를 `sendRingMutex`의 강한 대기 경합 하나로 설명하는 것은 부족하다.
-- 오히려 더 설득력 있는 가설은:
-  - `Direct`에서 contents worker와 owner worker가 같은 session send ring 상태를 번갈아 조작하고
-  - 그 과정에서 cache invalidation / cache line ping-pong이 누적되며
-  - 거기에 긴 임계구역과 잦은 lock/unlock, per-packet submit 패턴이 합쳐졌다는 것이다.
+## 7. ?꾩옱 ?먮떒
+- ?꾩옱 肄붾뱶? 寃곌낵瑜??④퍡 蹂대㈃, `EchoServer`?먯꽌 `Direct`媛 `OwnerThread`蹂대떎 ?먮┛ ?댁쑀瑜?`sendRingMutex`??媛뺥븳 ?湲?寃쏀빀 ?섎굹濡??ㅻ챸?섎뒗 寃껋? 遺議깊븯??
+- ?ㅽ엳?????ㅻ뱷???덈뒗 媛?ㅼ?:
+  - `Direct`?먯꽌 contents worker? owner worker媛 媛숈? session send ring ?곹깭瑜?踰덇컝??議곗옉?섍퀬
+  - 洹?怨쇱젙?먯꽌 cache invalidation / cache line ping-pong???꾩쟻?섎ŉ
+  - 嫄곌린??湲??꾧퀎援ъ뿭怨???? lock/unlock, per-packet submit ?⑦꽩???⑹퀜議뚮떎??寃껋씠??
 
-## 8. 확인이 필요한 계측
+## 8. ?뺤씤???꾩슂??怨꾩륫
 - `sendRingMutex wait time`
 - `sendRingMutex hold time`
-- `Direct`에서 session별 send submit 스레드 분포
+- `Direct`?먯꽌 session蹂?send submit ?ㅻ젅??遺꾪룷
 - `RIOSend calls/sec`
 - `avg bytes per RIOSend`
-- send completion 이후 다음 `PostSend()`까지의 지연
-- session send ring 관련 필드의 cache locality를 확인할 수 있는 ETW / sampling profiler 데이터
+- send completion ?댄썑 ?ㅼ쓬 `PostSend()`源뚯???吏??- session send ring 愿???꾨뱶??cache locality瑜??뺤씤?????덈뒗 ETW / sampling profiler ?곗씠??
+## 9. ?ㅼ쓬 ?≪뀡
+- `Direct`?먯꽌 `encode / checksum / framing`??lock 諛뽰쑝濡?鍮쇰뒗 ?ㅽ뿕
+- `Append + TryPrepareNextSend`瑜???踰덉쓽 lock 援ш컙?쇰줈 ?⑹튂???ㅽ뿕
+- completion path?먯꽌 `CompleteCurrentSend + TryPrepareNextSend`瑜???踰덉쓽 lock 援ш컙?쇰줈 ?⑹튂???ㅽ뿕
+- ??蹂寃??꾪썑濡?`EchoServer` 媛숈? same-machine loopback 議곌굔?먯꽌 ?ъ륫??
 
-## 9. 다음 액션
-- `Direct`에서 `encode / checksum / framing`을 lock 밖으로 빼는 실험
-- `Append + TryPrepareNextSend`를 한 번의 lock 구간으로 합치는 실험
-- completion path에서 `CompleteCurrentSend + TryPrepareNextSend`를 한 번의 lock 구간으로 합치는 실험
-- 위 변경 전후로 `EchoServer` 같은 same-machine loopback 조건에서 재측정
+

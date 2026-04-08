@@ -1,56 +1,56 @@
-# C++ Header / PCH Convention
+﻿# C++ Header / PCH Convention
 
-## 1. 목적
-- 헤더 의존성을 줄여 빌드 영향 범위를 작게 유지한다.
-- 자주 바뀌지 않는 STL/Windows 의존성과 `NetworkLib` 공용 타입 묶음은 PCH로 올린다.
-- 공개 인터페이스는 forward declaration 우선, 구현 상세는 PCH 우선으로 정리한다.
+## 1. 紐⑹쟻
+- ?ㅻ뜑 ?섏〈?깆쓣 以꾩뿬 鍮뚮뱶 ?곹뼢 踰붿쐞瑜??묎쾶 ?좎??쒕떎.
+- ?먯＜ 諛붾뚯? ?딅뒗 STL/Windows ?섏〈?깃낵 `NetworkLib` 怨듭슜 ???臾띠쓬? PCH濡??щ┛??
+- 怨듦컻 ?명꽣?섏씠?ㅻ뒗 forward declaration ?곗꽑, 援ы쁽 ?곸꽭??PCH ?곗꽑?쇰줈 ?뺣━?쒕떎.
 
-## 2. 기본 원칙
-- `.cpp` 파일은 자기 모듈의 `Pch.h`를 가장 먼저 include한다.
-- 헤더 파일에서는 `#include`를 기본값으로 두지 않는다.
-- 먼저 forward declaration 또는 PCH로 해결 가능한지 확인한다.
-- 아래 경우에만 헤더 include를 예외적으로 허용한다.
-  - 기반 클래스 정의가 직접 필요한 경우
-  - 값 멤버로 완전형이 필요한 경우
-  - 템플릿/inline 구현 때문에 완전형이 필요한 경우
-  - 공개 API 의미상 실제 타입 노출이 꼭 필요한 경우
+## 2. 湲곕낯 ?먯튃
+- `.cpp` ?뚯씪? ?먭린 紐⑤뱢??`Pch.h`瑜?媛??癒쇱? include?쒕떎.
+- ?ㅻ뜑 ?뚯씪?먯꽌??`#include`瑜?湲곕낯媛믪쑝濡??먯? ?딅뒗??
+- 癒쇱? forward declaration ?먮뒗 PCH濡??닿껐 媛?ν븳吏 ?뺤씤?쒕떎.
+- ?꾨옒 寃쎌슦?먮쭔 ?ㅻ뜑 include瑜??덉쇅?곸쑝濡??덉슜?쒕떎.
+  - 湲곕컲 ?대옒???뺤쓽媛 吏곸젒 ?꾩슂??寃쎌슦
+  - 媛?硫ㅻ쾭濡??꾩쟾?뺤씠 ?꾩슂??寃쎌슦
+  - ?쒗뵆由?inline 援ы쁽 ?뚮Ц???꾩쟾?뺤씠 ?꾩슂??寃쎌슦
+  - 怨듦컻 API ?섎????ㅼ젣 ????몄텧??瑗??꾩슂??寃쎌슦
 
-## 3. NetworkLib 공용 PCH
-- `NetworkLib` 공용 묶음은 [`NetLibPch.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\NetLibPch.h)에서 관리한다.
-- 소비 프로젝트는 자기 `Pch.h`에서 `#include "NetLibPch.h"` 한 줄로 공용 `NetworkLib` PCH를 가져온다.
-- `Packet` 하위 헤더는 현재 규칙상 project include를 두지 않고 `NetLibPch.h` 기반으로 동작한다.
+## 3. NetworkLib 怨듭슜 PCH
+- `NetworkLib` 怨듭슜 臾띠쓬? [`NetLibPch.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\NetLibPch.h)?먯꽌 愿由ы븳??
+- ?뚮퉬 ?꾨줈?앺듃???먭린 `Pch.h`?먯꽌 `#include "NetLibPch.h"` ??以꾨줈 怨듭슜 `NetworkLib` PCH瑜?媛?몄삩??
+- `Packet` ?섏쐞 ?ㅻ뜑???꾩옱 洹쒖튃??project include瑜??먯? ?딄퀬 `NetLibPch.h` 湲곕컲?쇰줈 ?숈옉?쒕떎.
 
-## 4. NetworkLib 헤더 규칙
+## 4. NetworkLib ?ㅻ뜑 洹쒖튃
 - `NetworkLib/Packet/*`
 - `NetworkLib/Memory/*`
 - `NetworkLib/Crypto/*`
 - `NetworkLib/Containers/*`
 
-위 저수준 계층 헤더는 현재 규칙상 project include를 두지 않는다.
+????섏? 怨꾩링 ?ㅻ뜑???꾩옱 洹쒖튃??project include瑜??먯? ?딅뒗??
 
-## 5. Packet 헤더 규칙
+## 5. Packet ?ㅻ뜑 洹쒖튃
 - `Packet/Buffer/*`
 - `Packet/Framing/*`
 - `Packet/Serialization/*`
 - `Packet/View/*`
 
-위 헤더들은 project include를 두지 않는다.
+???ㅻ뜑?ㅼ? project include瑜??먯? ?딅뒗??
 
-- 필요한 타입은 `NetLibPch.h`에서 선행 include한다.
-- PCH를 쓰는 일반 프로젝트는 추가 include 없이 packet 헤더를 사용할 수 있다.
-- PCH를 쓰지 않는 예외 프로젝트는 `Main.cpp` 같은 진입 파일에서 `NetLibPch.h`를 먼저 include해야 한다.
+- ?꾩슂????낆? `NetLibPch.h`?먯꽌 ?좏뻾 include?쒕떎.
+- PCH瑜??곕뒗 ?쇰컲 ?꾨줈?앺듃??異붽? include ?놁씠 packet ?ㅻ뜑瑜??ъ슜?????덈떎.
+- PCH瑜??곗? ?딅뒗 ?덉쇅 ?꾨줈?앺듃??`Main.cpp` 媛숈? 吏꾩엯 ?뚯씪?먯꽌 `NetLibPch.h`瑜?癒쇱? include?댁빞 ?쒕떎.
 
-## 6. 공개 인터페이스 규칙
-- `Servers/IServer.h`, `Servers/IApplicationHandler.h` 같은 공개 인터페이스는 forward declaration 우선이다.
-- 구현 디렉터리인 `Servers/Core/*`, `Servers/Session/*`, `Packet/*`은 PCH 기반으로 최대한 가볍게 유지한다.
+## 6. 怨듦컻 ?명꽣?섏씠??洹쒖튃
+- `Servers/IServer.h`, `Servers/IApplicationHandler.h` 媛숈? 怨듦컻 ?명꽣?섏씠?ㅻ뒗 forward declaration ?곗꽑?대떎.
+- 援ы쁽 ?붾젆?곕━??`Servers/Core/*`, `Servers/Session/*`, `Packet/*`? PCH 湲곕컲?쇰줈 理쒕???媛蹂띻쾶 ?좎??쒕떎.
 
-## 7. 금지 사항
-- 같은 STL/Windows include를 헤더마다 반복해서 넣지 않는다.
-- forward declaration으로 충분한 대상을 습관적으로 include하지 않는다.
-- 이유 없이 헤더 include를 늘리지 않는다.
+## 7. 湲덉? ?ы빆
+- 媛숈? STL/Windows include瑜??ㅻ뜑留덈떎 諛섎났?댁꽌 ?ｌ? ?딅뒗??
+- forward declaration?쇰줈 異⑸텇????곸쓣 ?듦??곸쑝濡?include?섏? ?딅뒗??
+- ?댁쑀 ?놁씠 ?ㅻ뜑 include瑜??섎━吏 ?딅뒗??
 
-## 8. 리뷰 체크리스트
-- 이 include가 정말 헤더에서 필요한가
-- forward declaration으로 대체 가능한가
-- `NetLibPch.h`로 올릴 수 있는 안정적인 의존성인가
-- PCH 없는 예외 프로젝트가 있다면 `NetLibPch.h` 선행 include가 보장되는가
+## 8. 由щ럭 泥댄겕由ъ뒪??- ??include媛 ?뺣쭚 ?ㅻ뜑?먯꽌 ?꾩슂?쒓?
+- forward declaration?쇰줈 ?泥?媛?ν븳媛
+- `NetLibPch.h`濡??щ┫ ???덈뒗 ?덉젙?곸씤 ?섏〈?깆씤媛
+- PCH ?녿뒗 ?덉쇅 ?꾨줈?앺듃媛 ?덈떎硫?`NetLibPch.h` ?좏뻾 include媛 蹂댁옣?섎뒗媛
+

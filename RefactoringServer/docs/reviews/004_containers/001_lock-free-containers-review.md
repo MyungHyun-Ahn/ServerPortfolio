@@ -12,12 +12,12 @@
 
 ## 1. 범위
 - 대상 코드
-  - [`FLockFreeQueue.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Include\NetworkLib\Containers\FLockFreeQueue.h)
-  - [`FLockFreeStack.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Include\NetworkLib\Containers\FLockFreeStack.h)
-  - [`LockFreeCommon.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Include\NetworkLib\Containers\LockFreeCommon.h)
+  - [`FLockFreeQueue.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Include\NetworkLib\Containers\FLockFreeQueue.h)
+  - [`FLockFreeStack.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Include\NetworkLib\Containers\FLockFreeStack.h)
+  - [`LockFreeCommon.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Include\NetworkLib\Containers\LockFreeCommon.h)
 - 대상 테스트
-  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\Main.cpp)
-  - [`LockFreeQueueSoakTest/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\LockFreeQueueSoakTest\Main.cpp)
+  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)
+  - [`LockFreeQueueSoakTest/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeQueueSoakTest\Main.cpp)
 
 ## 2. 현재 구조와 방향
 - 기존 포트폴리오 자산을 새 `RefactoringServer/NetworkLib` 경로로 이관했다.
@@ -45,13 +45,13 @@
 - dummy node 기반 Michael-Scott queue 형태를 사용한다.
 - `Dequeue()`는 `head->next == nullptr`일 때 비었다고 판단한다.
 - 구조 검증 근거
-  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\Main.cpp)의 `static_assert(sizeof(TQueue) == sizeof(std::int64_t) * 2)`
+  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)의 `static_assert(sizeof(TQueue) == sizeof(std::int64_t) * 2)`
 
 ### 4-2. `FLockFreeStack`
 - tagged pointer 기반 단일 top 스택 구조다.
 - `Pop()`은 `m_top == nullptr`이면 false를 반환한다.
 - 구조 검증 근거
-  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\Main.cpp)의 `static_assert(sizeof(TStack) == sizeof(std::int64_t))`
+  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)의 `static_assert(sizeof(TStack) == sizeof(std::int64_t))`
 
 ### 4-3. `LockFreeCommon`
 - tagged pointer 조합과 64비트 CAS 래퍼를 공통으로 제공한다.
@@ -94,4 +94,6 @@
 - 실제 송신 큐 또는 세션 이벤트 큐에 `FLockFreeQueue` 적용 검토
 - queue/stack 벤치마크 추가
 - `approx size`가 필요한지 여부는 컨테이너가 아니라 관측 계층 기준으로 재검토
+
+
 

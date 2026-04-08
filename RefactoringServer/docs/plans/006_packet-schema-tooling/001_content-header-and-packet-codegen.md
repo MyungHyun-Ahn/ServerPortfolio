@@ -149,8 +149,8 @@
 - Tool project:
   - `RefactoringServer/Tools/PacketGenerator`
 - Convenience scripts:
-  - `RefactoringServer/scripts/Generate-Packets.ps1`
-  - `RefactoringServer/scripts/Generate-Packets.cmd`
+  - `RefactoringServer/scripts/generate/Generate-Packets.ps1`
+  - `RefactoringServer/scripts/generate/Generate-Packets.cmd`
 
 ## 8. Example YAML
 

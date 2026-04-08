@@ -1,101 +1,101 @@
-# Packet Cipher Review
+﻿# Packet Cipher Review
 
-## 1. 문서 목적
-- `RefactoringServer/NetworkLib/Crypto` 아래 패킷 암호화 모듈의 현재 구조와 판단 근거를 정리한다.
-- 레거시 `CEncryption`에서 무엇을 가져오고 무엇을 버렸는지 기록한다.
-- `IPacketCipher`, `FDefaultPacketCipher`, `FNullPacketCipher`의 역할 구분과 현재 검증 범위를 남긴다.
+## 1. 臾몄꽌 紐⑹쟻
+- `RefactoringServer/NetworkLib/Crypto` ?꾨옒 ?⑦궥 ?뷀샇??紐⑤뱢???꾩옱 援ъ“? ?먮떒 洹쇨굅瑜??뺣━?쒕떎.
+- ?덇굅??`CEncryption`?먯꽌 臾댁뾿??媛?몄삤怨?臾댁뾿??踰꾨졇?붿? 湲곕줉?쒕떎.
+- `IPacketCipher`, `FDefaultPacketCipher`, `FNullPacketCipher`????븷 援щ텇怨??꾩옱 寃利?踰붿쐞瑜??④릿??
 
-## 2. 현재 구현 범위
-- 공용 타입:
-  - [PacketCipherTypes.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\PacketCipherTypes.h)
-- 인터페이스:
-  - [IPacketCipher.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\IPacketCipher.h)
-- 기본 구현:
-  - [FDefaultPacketCipher.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\FDefaultPacketCipher.h)
-  - [FDefaultPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\FDefaultPacketCipher.cpp)
-- no-op 구현:
-  - [FNullPacketCipher.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\FNullPacketCipher.h)
-  - [FNullPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\FNullPacketCipher.cpp)
-- 검증 코드:
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\Main.cpp)
+## 2. ?꾩옱 援ы쁽 踰붿쐞
+- 怨듭슜 ???
+  - [PacketCipherTypes.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\PacketCipherTypes.h)
+- ?명꽣?섏씠??
+  - [IPacketCipher.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\IPacketCipher.h)
+- 湲곕낯 援ы쁽:
+  - [FDefaultPacketCipher.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\FDefaultPacketCipher.h)
+  - [FDefaultPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\FDefaultPacketCipher.cpp)
+- no-op 援ы쁽:
+  - [FNullPacketCipher.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\FNullPacketCipher.h)
+  - [FNullPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\FNullPacketCipher.cpp)
+- 寃利?肄붾뱶:
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)
 
-## 3. 구조 판단 근거
+## 3. 援ъ“ ?먮떒 洹쇨굅
 
-### 3-1. `Foundation`이 아니라 `NetworkLib` 내부에 둔 이유
-- 현재 로직은 범용 보안 라이브러리라기보다 패킷 송수신 경계에서 바이트를 변환하는 네트워크 계층 기능에 가깝다.
-- 세션/프레이밍/패킷 정책과 함께 움직일 가능성이 커서 `NetworkLib` 내부에 두는 편이 자연스럽다.
+### 3-1. `Foundation`???꾨땲??`NetworkLib` ?대??????댁쑀
+- ?꾩옱 濡쒖쭅? 踰붿슜 蹂댁븞 ?쇱씠釉뚮윭由щ씪湲곕낫???⑦궥 ?≪닔??寃쎄퀎?먯꽌 諛붿씠?몃? 蹂?섑븯???ㅽ듃?뚰겕 怨꾩링 湲곕뒫??媛源앸떎.
+- ?몄뀡/?꾨젅?대컢/?⑦궥 ?뺤콉怨??④퍡 ?吏곸씪 媛?μ꽦??而ㅼ꽌 `NetworkLib` ?대????먮뒗 ?몄씠 ?먯뿰?ㅻ읇??
 
-### 3-2. 전역 `PACKET_KEY`를 없앤 이유
-- 레거시 구현은 전역 키에 기대기 때문에 테스트와 교체가 어렵다.
-- 현재는 [SDefaultPacketCipherConfig](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\PacketCipherTypes.h)로 `packetKey`를 명시적으로 가진다.
-- 이 구조 덕분에 상위 계층에서 구현체별 설정을 분리해 넘길 수 있다.
+### 3-2. ?꾩뿭 `PACKET_KEY`瑜??놁븻 ?댁쑀
+- ?덇굅??援ы쁽? ?꾩뿭 ?ㅼ뿉 湲곕?湲??뚮Ц???뚯뒪?몄? 援먯껜媛 ?대졄??
+- ?꾩옱??[SDefaultPacketCipherConfig](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\PacketCipherTypes.h)濡?`packetKey`瑜?紐낆떆?곸쑝濡?媛吏꾨떎.
+- ??援ъ“ ?뺣텇???곸쐞 怨꾩링?먯꽌 援ы쁽泥대퀎 ?ㅼ젙??遺꾨━???섍만 ???덈떎.
 
-### 3-3. `IPacketCipher`를 먼저 둔 이유
-- 상위 계층이 구현체 이름에 묶이지 않게 하기 위한 경계다.
-- 현재 필요성은 다음과 같다.
-  - 암호화 미사용 정책
-  - 테스트용 no-op 정책
-  - 향후 다른 패킷 변환 알고리즘 추가
-- 지금은 구현체가 많지 않아도, 인터페이스를 먼저 두는 편이 장기적으로 안전하다.
+### 3-3. `IPacketCipher`瑜?癒쇱? ???댁쑀
+- ?곸쐞 怨꾩링??援ы쁽泥??대쫫??臾띠씠吏 ?딄쾶 ?섍린 ?꾪븳 寃쎄퀎??
+- ?꾩옱 ?꾩슂?깆? ?ㅼ쓬怨?媛숇떎.
+  - ?뷀샇??誘몄궗???뺤콉
+  - ?뚯뒪?몄슜 no-op ?뺤콉
+  - ?ν썑 ?ㅻⅨ ?⑦궥 蹂???뚭퀬由ъ쬁 異붽?
+- 吏湲덉? 援ы쁽泥닿? 留롮? ?딆븘?? ?명꽣?섏씠?ㅻ? 癒쇱? ?먮뒗 ?몄씠 ?κ린?곸쑝濡??덉쟾?섎떎.
 
-### 3-4. `FDefaultPacketCipher`와 `FNullPacketCipher`를 분리한 이유
-- [FDefaultPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\FDefaultPacketCipher.cpp)는 레거시 알고리즘을 현재 구조로 옮긴 기본 구현이다.
-- [FNullPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Crypto\FNullPacketCipher.cpp)는 payload를 건드리지 않는 no-op 구현이다.
-- 이 두 구현체만으로도 `IPacketCipher`가 단순 래퍼가 아니라 실제 정책 교체 지점임을 확인할 수 있다.
+### 3-4. `FDefaultPacketCipher`? `FNullPacketCipher`瑜?遺꾨━???댁쑀
+- [FDefaultPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\FDefaultPacketCipher.cpp)???덇굅???뚭퀬由ъ쬁???꾩옱 援ъ“濡???릿 湲곕낯 援ы쁽?대떎.
+- [FNullPacketCipher.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Crypto\FNullPacketCipher.cpp)??payload瑜?嫄대뱶由ъ? ?딅뒗 no-op 援ы쁽?대떎.
+- ????援ы쁽泥대쭔?쇰줈??`IPacketCipher`媛 ?⑥닚 ?섑띁媛 ?꾨땲???ㅼ젣 ?뺤콉 援먯껜 吏?먯엫???뺤씤?????덈떎.
 
-## 4. 알고리즘 판단
-- `FDefaultPacketCipher`는 이전 plain state와 이전 encoded state를 다음 바이트 계산에 섞는다.
-- 따라서 단순한 바이트별 독립 XOR보다 패턴 반복이 줄어든다.
-- 다만 이 구현은 강한 암호학적 보안 cipher라기보다 게임 서버 패킷 난독화/변환용 기본 구현으로 보는 것이 맞다.
+## 4. ?뚭퀬由ъ쬁 ?먮떒
+- `FDefaultPacketCipher`???댁쟾 plain state? ?댁쟾 encoded state瑜??ㅼ쓬 諛붿씠??怨꾩궛???욌뒗??
+- ?곕씪???⑥닚??諛붿씠?몃퀎 ?낅┰ XOR蹂대떎 ?⑦꽩 諛섎났??以꾩뼱?좊떎.
+- ?ㅻ쭔 ??援ы쁽? 媛뺥븳 ?뷀샇?숈쟻 蹂댁븞 cipher?쇨린蹂대떎 寃뚯엫 ?쒕쾭 ?⑦궥 ?쒕룆??蹂?섏슜 湲곕낯 援ы쁽?쇰줈 蹂대뒗 寃껋씠 留욌떎.
 
-## 5. 확인된 장점
-- 전역 상태 없이 설정 기반으로 동작한다.
-- 인터페이스와 구현체가 분리돼 있다.
-- no-op 구현체가 있어 테스트와 정책 교체가 쉬워졌다.
-- 체크섬 계산도 같은 경계 안에서 일관되게 제공한다.
+## 5. ?뺤씤???μ젏
+- ?꾩뿭 ?곹깭 ?놁씠 ?ㅼ젙 湲곕컲?쇰줈 ?숈옉?쒕떎.
+- ?명꽣?섏씠?ㅼ? 援ы쁽泥닿? 遺꾨━???덈떎.
+- no-op 援ы쁽泥닿? ?덉뼱 ?뚯뒪?몄? ?뺤콉 援먯껜媛 ?ъ썙議뚮떎.
+- 泥댄겕??怨꾩궛??媛숈? 寃쎄퀎 ?덉뿉???쇨??섍쾶 ?쒓났?쒕떎.
 
-## 6. 현재 적용 상태
-- 현재 `Default` 패킷 암호화는 `NetworkLib` 코어 내부 송수신 경계가 아니라 응용 계층 검증용으로 먼저 연결돼 있다.
-- 적용 지점:
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\Main.cpp)
-  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\Main.cpp)
-- 현재 검증 방식:
-  - 요청/응답 payload 앞 1바이트를 `randomKey`로 사용
-  - 나머지 payload를 `FDefaultPacketCipher`로 인코딩/디코딩
-  - `EchoClient`가 복호화 후 원문 `echo-test`와 일치하는지 확인
+## 6. ?꾩옱 ?곸슜 ?곹깭
+- ?꾩옱 `Default` ?⑦궥 ?뷀샇?붾뒗 `NetworkLib` 肄붿뼱 ?대? ?≪닔??寃쎄퀎媛 ?꾨땲???묒슜 怨꾩링 寃利앹슜?쇰줈 癒쇱? ?곌껐???덈떎.
+- ?곸슜 吏??
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
+  - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\Main.cpp)
+- ?꾩옱 寃利?諛⑹떇:
+  - ?붿껌/?묐떟 payload ??1諛붿씠?몃? `randomKey`濡??ъ슜
+  - ?섎㉧吏 payload瑜?`FDefaultPacketCipher`濡??몄퐫???붿퐫??  - `EchoClient`媛 蹂듯샇?????먮Ц `echo-test`? ?쇱튂?섎뒗吏 ?뺤씤
 
-## 7. 현재 한계와 리스크
+## 7. ?꾩옱 ?쒓퀎? 由ъ뒪??
+### 7-1. `NetworkLib` 肄붿뼱 ?≪닔??寃쎄퀎?먮뒗 ?꾩쭅 吏곸젒 ?곌껐?섏? ?딆븯??- ?꾩옱??`EchoServer`/`EchoClient` ?묒슜 怨꾩링?먯꽌 ?붾났?명솕瑜??섑뻾?쒕떎.
+- ?ㅼ젣 `NetworkLib` ?대? send/recv 寃쎄퀎, ?⑦궥 ?꾨젅?대컢 怨꾩링, session 寃쎄퀎?먮뒗 ?꾩쭅 誘몄쟻?⑹씠??
 
-### 7-1. `NetworkLib` 코어 송수신 경계에는 아직 직접 연결되지 않았다
-- 현재는 `EchoServer`/`EchoClient` 응용 계층에서 암복호화를 수행한다.
-- 실제 `NetworkLib` 내부 send/recv 경계, 패킷 프레이밍 계층, session 경계에는 아직 미적용이다.
+### 7-2. ?명꽣?섏씠??寃쎄퀎???앷꼈吏留??앹꽦 ?뺤콉? ?꾩쭅 ?녿떎
+- 吏湲덉? ?뚯뒪??肄붾뱶?먯꽌 吏곸젒 援ы쁽泥대? ?앹꽦?쒕떎.
+- ?댄썑 ?쒕쾭 ?ㅼ젙怨??⑺넗由??뺤콉???곌껐?댁빞 ?ㅼ젣 ?댁쁺 寃쎈줈?먯꽌 ?섎?媛 ?앷릿??
 
-### 7-2. 인터페이스 경계는 생겼지만 생성 정책은 아직 없다
-- 지금은 테스트 코드에서 직접 구현체를 생성한다.
-- 이후 서버 설정과 팩토리 정책을 연결해야 실제 운영 경로에서 의미가 생긴다.
+### 7-3. `FNullPacketCipher`??泥댄겕?ъ? 怨꾩궛?쒕떎
+- no-op cipher?쇰룄 ?꾩옱??泥댄겕??怨꾩궛???쒓났?쒕떎.
+- ???뺤콉??留욌뒗吏???댄썑 ?⑦궥 ?꾨젅?대컢 怨꾩링 ?ㅺ퀎? ?④퍡 ?ㅼ떆 寃?좏븷 ???덈떎.
 
-### 7-3. `FNullPacketCipher`도 체크섬은 계산한다
-- no-op cipher라도 현재는 체크섬 계산을 제공한다.
-- 이 정책이 맞는지는 이후 패킷 프레이밍 계층 설계와 함께 다시 검토할 수 있다.
-
-## 8. 검증 근거
-- 빌드:
-  - [NetworkLib.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\NetworkLib.vcxproj)
-  - [LockFreeTests.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\LockFreeTests.vcxproj)
-  - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoServer\EchoServer.vcxproj)
-  - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\EchoClient\EchoClient.vcxproj)
-- 실행:
+## 8. 寃利?洹쇨굅
+- 鍮뚮뱶:
+  - [NetworkLib.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\NetworkLib.vcxproj)
+  - [LockFreeTests.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\LockFreeTests.vcxproj)
+  - [EchoServer.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\EchoServer.vcxproj)
+  - [EchoClient.vcxproj](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\EchoClient.vcxproj)
+- ?ㅽ뻾:
   - [LockFreeTests.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\LockFreeTests.exe)
   - [EchoServer.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoServer.exe)
   - [EchoClient.exe](D:\Project\ServerPortfolio\RefactoringServer\Out\EchoClient.exe)
-- 확인된 테스트:
+- ?뺤씤???뚯뒪??
   - `Packet cipher round trip`
   - `Null packet cipher`
-  - 암호화된 `echo-test` 요청/응답 왕복
-- 두 테스트 모두 `IPacketCipher` 포인터 경유로 호출했고 PASS를 확인했다.
- - `EchoClient`는 복호화 후 `response: echo-test`, `echo validation succeeded.`를 출력했다.
+  - ?뷀샇?붾맂 `echo-test` ?붿껌/?묐떟 ?뺣났
+- ???뚯뒪??紐⑤몢 `IPacketCipher` ?ъ씤??寃쎌쑀濡??몄텧?덇퀬 PASS瑜??뺤씤?덈떎.
+ - `EchoClient`??蹂듯샇????`response: echo-test`, `echo validation succeeded.`瑜?異쒕젰?덈떎.
 
-## 9. 다음 작업 후보
-- 서버 설정에서 cipher 선택 정책 연결
-- 패킷 프레이밍 계층과 연동
-- `EchoServer` 송수신 경로에 실제 적용
+## 9. ?ㅼ쓬 ?묒뾽 ?꾨낫
+- ?쒕쾭 ?ㅼ젙?먯꽌 cipher ?좏깮 ?뺤콉 ?곌껐
+- ?⑦궥 ?꾨젅?대컢 怨꾩링怨??곕룞
+- `EchoServer` ?≪닔??寃쎈줈???ㅼ젣 ?곸슜
+
+
+

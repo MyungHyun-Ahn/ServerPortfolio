@@ -1,15 +1,15 @@
-# ChattingServer 128B 10M Backend Benchmark Review
+﻿# ChattingServer 128B 10M Backend Benchmark Review
 
-## 1. 목적
-- `ChattingServer`에서 일반적인 채팅 메시지 크기에 가까운 `128B payload` 기준으로 `IOCP`, `RIO Direct`, `RIO OwnerThread`를 `10분` 동안 비교한 결과를 정리한다.
-- 이번 문서는 `8KiB` 큰 패킷 stress test와 분리해서, 실제 채팅에 가까운 조건에서 어떤 백엔드가 더 유리한지 확인하는 데 목적이 있다.
+## 1. 紐⑹쟻
+- `ChattingServer`?먯꽌 ?쇰컲?곸씤 梨꾪똿 硫붿떆吏 ?ш린??媛源뚯슫 `128B payload` 湲곗??쇰줈 `IOCP`, `RIO Direct`, `RIO OwnerThread`瑜?`10遺? ?숈븞 鍮꾧탳??寃곌낵瑜??뺣━?쒕떎.
+- ?대쾲 臾몄꽌??`8KiB` ???⑦궥 stress test? 遺꾨━?댁꽌, ?ㅼ젣 梨꾪똿??媛源뚯슫 議곌굔?먯꽌 ?대뼡 諛깆뿏?쒓? ???좊━?쒖? ?뺤씤?섎뒗 ??紐⑹쟻???덈떎.
 
-## 2. 조건
+## 2. 議곌굔
 - manifest:
   - [chatting-rio-vs-iocp-128b-10m.yaml](D:\Project\ServerPortfolio\RefactoringServer\scripts\bench\manifests\chatting-rio-vs-iocp-128b-10m.yaml)
-- 결과 루트:
+- 寃곌낵 猷⑦듃:
   - [20260407_181046_rio_vs_iocp_128b_10m](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m)
-- 공통 설정:
+- 怨듯넻 ?ㅼ젙:
   - `MeasureSeconds = 600`
   - `PayloadSizeBytes = 128`
   - `MaxChatPayloadBytes = 256`
@@ -22,84 +22,85 @@
   - `RoomCount = 50`
   - `RoomCapacity = 256`
   - `RioSendRingSizeBytes = 65536`
-- 실행 결과:
+- ?ㅽ뻾 寃곌낵:
   - [sequence-summary.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\sequence-summary.csv)
   - [iocp_default_128b_150_hotspot_10m](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\iocp_default_128b_150_hotspot_10m)
   - [rio_direct_128b_150_hotspot_10m](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\rio_direct_128b_150_hotspot_10m)
   - [rio_owner_128b_150_hotspot_10m](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\rio_owner_128b_150_hotspot_10m)
 
-## 3. 측정 기준
-- 주 처리량 지표는 `chattingSuccess / elapsedSeconds`로 계산한다.
-  - 이번 더미는 `ChattingRq`를 보낸 뒤 `ChattingRp`를 기다리는 구조라, 총 성공 건수를 전체 시간으로 나눈 값이 가장 비교하기 쉽다.
-  - 관련 코드:
-    - [Main.cpp#L1135](D:\Project\ServerPortfolio\RefactoringServer\ChattingDummyClient\Main.cpp#L1135)
-    - [Main.cpp#L1138](D:\Project\ServerPortfolio\RefactoringServer\ChattingDummyClient\Main.cpp#L1138)
-- `broadcast avg/s`는 `broadcastReceive / elapsedSeconds`로 계산한다.
-- RTT는 각 `rtt.csv`에서 `stage = chatting-response`의 **마지막 누적 행** 기준 `overall_avg_ms`를 사용한다.
+## 3. 痢≪젙 湲곗?
+- 二?泥섎━??吏?쒕뒗 `chattingSuccess / elapsedSeconds`濡?怨꾩궛?쒕떎.
+  - ?대쾲 ?붾???`ChattingRq`瑜?蹂대궦 ??`ChattingRp`瑜?湲곕떎由щ뒗 援ъ“?? 珥??깃났 嫄댁닔瑜??꾩껜 ?쒓컙?쇰줈 ?섎늿 媛믪씠 媛??鍮꾧탳?섍린 ?쎈떎.
+  - 愿??肄붾뱶:
+    - [Main.cpp#L1135](D:\Project\ServerPortfolio\RefactoringServer\Chatting\ChattingDummyClient\Main.cpp#L1135)
+    - [Main.cpp#L1138](D:\Project\ServerPortfolio\RefactoringServer\Chatting\ChattingDummyClient\Main.cpp#L1138)
+- `broadcast avg/s`??`broadcastReceive / elapsedSeconds`濡?怨꾩궛?쒕떎.
+- RTT??媛?`rtt.csv`?먯꽌 `stage = chatting-response`??**留덉?留??꾩쟻 ??* 湲곗? `overall_avg_ms`瑜??ъ슜?쒕떎.
   - [iocp rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\iocp_default_128b_150_hotspot_10m\rtt.csv)
   - [rio_direct rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\rio_direct_128b_150_hotspot_10m\rtt.csv)
   - [rio_owner rtt.csv](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\rio_owner_128b_150_hotspot_10m\rtt.csv)
-- `sequence-summary.csv`의 `sendTPS`, `recvTPS`, `cpuPercent`는 종료 시점 snapshot 성격이 있으므로 보조 지표로만 사용한다.
+- `sequence-summary.csv`??`sendTPS`, `recvTPS`, `cpuPercent`??醫낅즺 ?쒖젏 snapshot ?깃꺽???덉쑝誘濡?蹂댁“ 吏?쒕줈留??ъ슜?쒕떎.
 
-## 4. 결과 요약
+## 4. 寃곌낵 ?붿빟
 | Mode | chattingSuccess | chat avg/s | broadcastReceive | broadcast avg/s | chatting RTT avg | chatting RTT max1 | reconnect | unexpectedDisconnect |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `IOCP` | `91,831` | `153.05` | `10,288,760` | `17,147.36` | `959.506 ms` | `1388.835 ms` | `0` | `0` |
 | `RIO Direct` | `99,324` | `165.53` | `11,016,743` | `18,360.63` | `887.294 ms` | `1065.032 ms` | `0` | `0` |
 | `RIO OwnerThread` | `88,142` | `146.90` | `9,871,537` | `16,452.01` | `999.514 ms` | `1080.473 ms` | `0` | `0` |
 
-부가 지표:
+遺媛 吏??
 
-| Mode | final cpuPercent | final workingSetMB | 관찰된 send ring 사용량 |
+| Mode | final cpuPercent | final workingSetMB | 愿李곕맂 send ring ?ъ슜??|
 | --- | ---: | ---: | --- |
-| `IOCP` | `0.38%` | `28.73 MB` | 해당 없음 |
-| `RIO Direct` | `3.61%` | `27.81 MB` | 로그 기준 `maxObservedSessionSendRingUsedBytes = 1217` |
-| `RIO OwnerThread` | `0.67%` | `37.81 MB` | 로그 기준 `maxObservedSessionSendRingUsedBytes = 2324` |
+| `IOCP` | `0.38%` | `28.73 MB` | ?대떦 ?놁쓬 |
+| `RIO Direct` | `3.61%` | `27.81 MB` | 濡쒓렇 湲곗? `maxObservedSessionSendRingUsedBytes = 1217` |
+| `RIO OwnerThread` | `0.67%` | `37.81 MB` | 濡쒓렇 湲곗? `maxObservedSessionSendRingUsedBytes = 2324` |
 
-로그 근거:
+濡쒓렇 洹쇨굅:
 - [rio_direct server.stdout.log](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\rio_direct_128b_150_hotspot_10m\server.stdout.log)
 - [rio_owner server.stdout.log](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\rio_owner_128b_150_hotspot_10m\server.stdout.log)
 
-## 5. 해석
-### 5-1. 이번 10분 조건에서는 `RIO Direct`가 가장 좋다
-- `chat avg/s` 기준으로 `RIO Direct`는 `IOCP` 대비 약 `8.15%` 높다.
-- `broadcast avg/s`도 `RIO Direct`가 가장 높다.
-- RTT도 `RIO Direct`가 가장 낮다.
-  - `IOCP` 대비 평균 RTT 약 `7.53%` 개선
-  - `RIO OwnerThread` 대비 평균 RTT 약 `11.23%` 개선
+## 5. ?댁꽍
+### 5-1. ?대쾲 10遺?議곌굔?먯꽌??`RIO Direct`媛 媛??醫뗫떎
+- `chat avg/s` 湲곗??쇰줈 `RIO Direct`??`IOCP` ?鍮???`8.15%` ?믩떎.
+- `broadcast avg/s`??`RIO Direct`媛 媛???믩떎.
+- RTT??`RIO Direct`媛 媛????떎.
+  - `IOCP` ?鍮??됯퇏 RTT ??`7.53%` 媛쒖꽑
+  - `RIO OwnerThread` ?鍮??됯퇏 RTT ??`11.23%` 媛쒖꽑
 
-### 5-2. `RIO OwnerThread`는 안정적이지만, 이번 조건에서는 handoff 비용이 더 크게 보인다
-- `RIO Direct`는 송신 호출 시점에 바로 ring append 후 `PostSend`로 이어진다.
-  - [FRioServer.cpp#L234](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L234)
-  - [FRioServer.cpp#L239](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L239)
-- `RIO OwnerThread`는 먼저 owner queue에 적재한 뒤, owner worker가 나중에 drain 하면서 `AppendPacketToSendRing`과 `PostSend`를 수행한다.
-  - [FRioServer.cpp#L234](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L234)
-  - [FRioServer.cpp#L803](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L803)
-  - [FRioServer.cpp#L815](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FRioServer.cpp#L815)
-- 이번 더미는 세션당 `1 outstanding chat` 구조라서, `ChattingRp`가 늦어지면 다음 `ChattingRq`도 늦어진다.
-  - 즉 per-message handoff 비용이 RTT와 처리량에 직접 반영된다.
+### 5-2. `RIO OwnerThread`???덉젙?곸씠吏留? ?대쾲 議곌굔?먯꽌??handoff 鍮꾩슜?????ш쾶 蹂댁씤??- `RIO Direct`???≪떊 ?몄텧 ?쒖젏??諛붾줈 ring append ??`PostSend`濡??댁뼱吏꾨떎.
+  - [FRioServer.cpp#L234](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L234)
+  - [FRioServer.cpp#L239](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L239)
+- `RIO OwnerThread`??癒쇱? owner queue???곸옱???? owner worker媛 ?섏쨷??drain ?섎㈃??`AppendPacketToSendRing`怨?`PostSend`瑜??섑뻾?쒕떎.
+  - [FRioServer.cpp#L234](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L234)
+  - [FRioServer.cpp#L803](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L803)
+  - [FRioServer.cpp#L815](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FRioServer.cpp#L815)
+- ?대쾲 ?붾????몄뀡??`1 outstanding chat` 援ъ“?쇱꽌, `ChattingRp`媛 ??뼱吏硫??ㅼ쓬 `ChattingRq`????뼱吏꾨떎.
+  - 利?per-message handoff 鍮꾩슜??RTT? 泥섎━?됱뿉 吏곸젒 諛섏쁺?쒕떎.
 
-### 5-3. `128B`에서는 send ring이 병목이 아니었다
-- 세 모드 모두 `reconnect = 0`, `unexpectedDisconnect = 0`, `timeout = 0`, `permanentFailure = 0`으로 끝났다.
-- `RIO OwnerThread` 로그에도 `RIO send stall detected`가 없었다.
+### 5-3. `128B`?먯꽌??send ring??蹂묐ぉ???꾨땲?덈떎
+- ??紐⑤뱶 紐⑤몢 `reconnect = 0`, `unexpectedDisconnect = 0`, `timeout = 0`, `permanentFailure = 0`?쇰줈 ?앸궗??
+- `RIO OwnerThread` 濡쒓렇?먮룄 `RIO send stall detected`媛 ?놁뿀??
   - [rio_owner server.stdout.log](D:\Project\ServerPortfolio\RefactoringServer\Out\bench\20260407_181046_rio_vs_iocp_128b_10m\rio_owner_128b_150_hotspot_10m\server.stdout.log)
-- 관찰된 ring 사용량도 `1217B`, `2324B` 수준이라 `64KiB` ring은 충분했다.
-- 따라서 이번 결과 차이는 `send ring 용량 부족`보다 `dispatch path 차이`와 `worker scheduling` 영향으로 보는 편이 맞다.
+- 愿李곕맂 ring ?ъ슜?됰룄 `1217B`, `2324B` ?섏??대씪 `64KiB` ring? 異⑸텇?덈떎.
+- ?곕씪???대쾲 寃곌낵 李⑥씠??`send ring ?⑸웾 遺議?蹂대떎 `dispatch path 李⑥씠`? `worker scheduling` ?곹뼢?쇰줈 蹂대뒗 ?몄씠 留욌떎.
 
-## 6. 주의
-- 이전에 `rtt.csv`의 첫 번째 `chatting-response` 행만 보면 `OwnerThread`가 더 낮아 보일 수 있었는데, 그 값은 초기 1분 누적값일 뿐이다.
-- 최종 비교는 반드시 `rtt.csv`의 마지막 `chatting-response` 행을 기준으로 해야 한다.
-- 같은 이유로 `sequence-summary.csv`의 마지막 `sendTPS` 하나만 보고 전체 처리량 우열을 판단하면 왜곡될 수 있다.
+## 6. 二쇱쓽
+- ?댁쟾??`rtt.csv`??泥?踰덉㎏ `chatting-response` ?됰쭔 蹂대㈃ `OwnerThread`媛 ????븘 蹂댁씪 ???덉뿀?붾뜲, 洹?媛믪? 珥덇린 1遺??꾩쟻媛믪씪 肉먯씠??
+- 理쒖쥌 鍮꾧탳??諛섎뱶??`rtt.csv`??留덉?留?`chatting-response` ?됱쓣 湲곗??쇰줈 ?댁빞 ?쒕떎.
+- 媛숈? ?댁쑀濡?`sequence-summary.csv`??留덉?留?`sendTPS` ?섎굹留?蹂닿퀬 ?꾩껜 泥섎━???곗뿴???먮떒?섎㈃ ?쒓끝?????덈떎.
 
-## 7. 결론
-- `128B / 150 sessions / hotspot 90% / 10분` 조건에서는 `RIO Direct`가 가장 좋은 균형을 보였다.
-  - 가장 높은 `chat avg/s`
-  - 가장 높은 `broadcast avg/s`
-  - 가장 낮은 `chatting-response RTT`
-- `RIO OwnerThread`는 큰 패킷 stress 상황과 달리 이번 조건에서 안정성 문제는 없었지만, 처리량과 RTT 모두 `RIO Direct`보다 뒤처졌다.
-- 따라서 앞으로 `일반 채팅 크기` 기준 비교의 baseline은 이번 `128B 10분` 결과로 두고, `8KiB`는 별도의 stress / send-ring 한계 검증으로 분리해서 보는 것이 적절하다.
+## 7. 寃곕줎
+- `128B / 150 sessions / hotspot 90% / 10遺? 議곌굔?먯꽌??`RIO Direct`媛 媛??醫뗭? 洹좏삎??蹂댁???
+  - 媛???믪? `chat avg/s`
+  - 媛???믪? `broadcast avg/s`
+  - 媛????? `chatting-response RTT`
+- `RIO OwnerThread`?????⑦궥 stress ?곹솴怨??щ━ ?대쾲 議곌굔?먯꽌 ?덉젙??臾몄젣???놁뿀吏留? 泥섎━?됯낵 RTT 紐⑤몢 `RIO Direct`蹂대떎 ?ㅼ쿂議뚮떎.
+- ?곕씪???욎쑝濡?`?쇰컲 梨꾪똿 ?ш린` 湲곗? 鍮꾧탳??baseline? ?대쾲 `128B 10遺? 寃곌낵濡??먭퀬, `8KiB`??蹂꾨룄??stress / send-ring ?쒓퀎 寃利앹쑝濡?遺꾨━?댁꽌 蹂대뒗 寃껋씠 ?곸젅?섎떎.
 
-## 8. 다음 액션
+## 8. ?ㅼ쓬 ?≪뀡
 - `128 / 256 / 512 / 1024B` payload sweep
 - `SessionCount` sweep
-- `RIO OwnerThread`가 불리해지는 구간에서 owner queue backlog와 worker scheduling 지표 추가
+- `RIO OwnerThread`媛 遺덈━?댁???援ш컙?먯꽌 owner queue backlog? worker scheduling 吏??異붽?
+
+

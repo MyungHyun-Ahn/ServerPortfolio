@@ -1,78 +1,76 @@
-# ContentsRuntime 트러블슈팅
+﻿# ContentsRuntime ?몃윭釉붿뒋??
+## 1. 紐⑹쟻
 
-## 1. 목적
+??臾몄꽌??`ContentsRuntime`? `EchoServer/EchoClient`瑜?遺숈뿬??寃利앺븯??怨쇱젙?먯꽌 諛쒓껄??臾몄젣瑜??ㅼ쓬 湲곗??쇰줈 ?뺣━?쒕떎.
 
-이 문서는 `ContentsRuntime`와 `EchoServer/EchoClient`를 붙여서 검증하는 과정에서 발견한 문제를 다음 기준으로 정리한다.
+- ?대뼡 利앹긽???덉뿀?붽?
+- ?대뼡 議곌굔?먯꽌 ?ы쁽?섏뿀?붽?
+- ?먯씤???대뼸寃?醫곹? 媛붾뒗媛
+- 臾댁뾿???뺤젙?섏뿀怨? 臾댁뾿???꾩쭅 媛?ㅼ씤媛
+- ?대뼡 ?섏젙/?ㅽ뿕???덇퀬 寃곌낵媛 ?대븷?붽?
 
-- 어떤 증상이 있었는가
-- 어떤 조건에서 재현되었는가
-- 원인을 어떻게 좁혀 갔는가
-- 무엇이 확정되었고, 무엇이 아직 가설인가
-- 어떤 수정/실험을 했고 결과가 어땠는가
+?꾩옱源뚯? ?뺣━ ??곸? ?ㅼ쓬 ??媛吏??
 
-현재까지 정리 대상은 다음 두 가지다.
+1. 珥덇린 bootstrap ?꾩씠 race
+2. `Lobby -> Room -> RoomChange -> RoomEcho` ?먮쫫?먯꽌 ?쒕Ъ寃?諛쒖깮?섎뒗 `echo-response timeout`
 
-1. 초기 bootstrap 전이 race
-2. `Lobby -> Room -> RoomChange -> RoomEcho` 흐름에서 드물게 발생하는 `echo-response timeout`
+## 2. bootstrap ?꾩씠 race
 
-## 2. bootstrap 전이 race
+### 2.1 利앹긽
 
-### 2.1 증상
+- ?대씪?댁뼵?멸? `chat-bootstrap` ?④퀎?먯꽌 硫덉텛怨?`10060 timeout` 諛쒖깮
+- ?쒕쾭 濡쒓렇?먮뒗 `login succeeded`, `echo content enter`, `auth content leave`源뚯?留??덇퀬, ?댄썑 snapshot ?묐떟 濡쒓렇媛 ?놁쓬
 
-- 클라이언트가 `chat-bootstrap` 단계에서 멈추고 `10060 timeout` 발생
-- 서버 로그에는 `login succeeded`, `echo content enter`, `auth content leave`까지만 있고, 이후 snapshot 응답 로그가 없음
-
-### 2.2 재현 조건
+### 2.2 ?ы쁽 議곌굔
 
 - `Run-ContentsRuntimeRaceValidation.ps1`
 - `RaceMode=sleep0`
 - `RacePeriod=1`
 - `100 sessions`
 
-### 2.3 원인 추적 과정
+### 2.3 ?먯씤 異붿쟻 怨쇱젙
 
-1. 클라이언트 recv timeout 계측을 추가해 어느 단계에서 멈추는지 확인했다.
-   - 결과: `chat-bootstrap`
-2. 서버 send 실패 가능성을 먼저 점검했다.
-   - `LoginRp`, `RoomSnapshotRp`, `RoomBinarySnapshotNoti` send 실패 로그는 보이지 않았다.
-3. bootstrap trace를 넣어서 `LoginRp` 수신 후 `RoomSnapshotRq`가 언제 들어오는지 확인했다.
-4. 최종적으로 `FAuthContent`의 처리 순서를 확인했다.
-   - 기존 순서:
-     1. `LoginRp` 전송 enqueue
+1. ?대씪?댁뼵??recv timeout 怨꾩륫??異붽????대뒓 ?④퀎?먯꽌 硫덉텛?붿? ?뺤씤?덈떎.
+   - 寃곌낵: `chat-bootstrap`
+2. ?쒕쾭 send ?ㅽ뙣 媛?μ꽦??癒쇱? ?먭??덈떎.
+   - `LoginRp`, `RoomSnapshotRp`, `RoomBinarySnapshotNoti` send ?ㅽ뙣 濡쒓렇??蹂댁씠吏 ?딆븯??
+3. bootstrap trace瑜??ｌ뼱??`LoginRp` ?섏떊 ??`RoomSnapshotRq`媛 ?몄젣 ?ㅼ뼱?ㅻ뒗吏 ?뺤씤?덈떎.
+4. 理쒖쥌?곸쑝濡?`FAuthContent`??泥섎━ ?쒖꽌瑜??뺤씤?덈떎.
+   - 湲곗〈 ?쒖꽌:
+     1. `LoginRp` ?꾩넚 enqueue
      2. `MoveSession`
-   - 이 경우 클라이언트가 `LoginRp`를 받자마자 `RoomSnapshotRq`를 보내면, 서버 라우팅이 아직 `AuthContent`를 가리키는 순간이 생겼다.
+   - ??寃쎌슦 ?대씪?댁뼵?멸? `LoginRp`瑜?諛쏆옄留덉옄 `RoomSnapshotRq`瑜?蹂대궡硫? ?쒕쾭 ?쇱슦?낆씠 ?꾩쭅 `AuthContent`瑜?媛由ы궎???쒓컙???앷꼈??
 
-### 2.4 확정 원인
+### 2.4 ?뺤젙 ?먯씤
 
-- `다음 콘텐츠 요청을 허용하는 Rp`보다 `MoveSession`이 늦게 실행되면서 생긴 전이 race
+- `?ㅼ쓬 肄섑뀗痢??붿껌???덉슜?섎뒗 Rp`蹂대떎 `MoveSession`????쾶 ?ㅽ뻾?섎㈃???앷릿 ?꾩씠 race
 
-### 2.5 적용한 해결
+### 2.5 ?곸슜???닿껐
 
-- 순서를 다음처럼 변경했다.
+- ?쒖꽌瑜??ㅼ쓬泥섎읆 蹂寃쏀뻽??
   1. `MoveSession`
   2. `LoginRp`
 
-### 2.6 결과
+### 2.6 寃곌낵
 
-- bootstrap timeout은 사라졌다.
-- 이 경험을 바탕으로 별도 문서 [003_content-transition-rules.md](/d:/Project/ServerPortfolio/RefactoringServer/docs/reviews/002_contentsruntime/003_content-transition-rules.md)에 콘텐츠 전이 규칙을 정리했다.
+- bootstrap timeout? ?щ씪議뚮떎.
+- ??寃쏀뿕??諛뷀깢?쇰줈 蹂꾨룄 臾몄꽌 [003_content-transition-rules.md](/d:/Project/ServerPortfolio/RefactoringServer/docs/reviews/002_contentsruntime/003_content-transition-rules.md)??肄섑뀗痢??꾩씠 洹쒖튃???뺣━?덈떎.
 
-## 3. Room 흐름 timeout
+## 3. Room ?먮쫫 timeout
 
-### 3.1 최초 증상
+### 3.1 理쒖큹 利앹긽
 
-- 장시간 또는 반복 room-change 중 특정 세션이 `echo-response` 단계에서 `10060 timeout`
-- 대표 로그:
+- ?μ떆媛??먮뒗 諛섎났 room-change 以??뱀젙 ?몄뀡??`echo-response` ?④퀎?먯꽌 `10060 timeout`
+- ???濡쒓렇:
   - [client_20260403_185203.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_longrun/client_20260403_185203.err.log)
   - `session[0] failed: recv failed at stage=echo-response sessionIndex=0 error=10060 (timeout)`
-- 서버는 살아 있지만 트래픽이 끝난 뒤 idle 상태로 남아 있는 경우가 있었다.
+- ?쒕쾭???댁븘 ?덉?留??몃옒?쎌씠 ?앸궃 ??idle ?곹깭濡??⑥븘 ?덈뒗 寃쎌슦媛 ?덉뿀??
 
-### 3.2 최초 재현 조건
+### 3.2 理쒖큹 ?ы쁽 議곌굔
 
-- 서버
+- ?쒕쾭
   - `--headless --room-count 50 --room-capacity 4 --contents-fail-fast`
-- 클라이언트
-  - `--sessions 100`
+- ?대씪?댁뼵??  - `--sessions 100`
   - `--count 2`
   - `--hold-seconds 7200`
   - `--interval-ms 200`
@@ -81,18 +79,17 @@
   - `--max-room-enter-retries 20`
   - `--max-room-change-retries 5`
 
-## 4. 원인 추적 과정
+## 4. ?먯씤 異붿쟻 怨쇱젙
 
-### 4.1 짧은 재현 조건으로 압축
+### 4.1 吏㏃? ?ы쁽 議곌굔?쇰줈 ?뺤텞
 
-문제를 더 빨리 드러내기 위해 다음과 같은 공격적 조건으로 반복 재현했다.
+臾몄젣瑜???鍮⑤━ ?쒕윭?닿린 ?꾪빐 ?ㅼ쓬怨?媛숈? 怨듦꺽??議곌굔?쇰줈 諛섎났 ?ы쁽?덈떎.
 
-- 서버
+- ?쒕쾭
   - `--headless --room-count 50 --room-capacity 4 --contents-fail-fast`
-- 클라이언트
-  - `--sessions 20~100`
+- ?대씪?댁뼵??  - `--sessions 20~100`
   - `--count 2`
-  - `--payload-size 9 또는 16`
+  - `--payload-size 9 ?먮뒗 16`
   - `--hold-seconds 300`
   - `--interval-ms 0`
   - `--recv-timeout-ms 5000`
@@ -100,321 +97,307 @@
   - `--max-room-enter-retries 20`
   - `--max-room-change-retries 5~10`
 
-### 4.2 실패 세션 trace 추가
+### 4.2 ?ㅽ뙣 ?몄뀡 trace 異붽?
 
-- 클라이언트에 `--trace-session-index`
-- 서버에 bootstrap trace를 넣어서 특정 세션의 흐름을 따라갔다.
+- ?대씪?댁뼵?몄뿉 `--trace-session-index`
+- ?쒕쾭??bootstrap trace瑜??ｌ뼱???뱀젙 ?몄뀡???먮쫫???곕씪媛붾떎.
 
-짧은 단일 세션 trace에서 확인된 사실:
+吏㏃? ?⑥씪 ?몄뀡 trace?먯꽌 ?뺤씤???ъ떎:
 
-- `RoomChangeRp`를 받기 전에 클라이언트가 `EchoRq`를 보내지는 않는다.
-- 정상 세션에서는 아래 흐름이 모두 보였다.
-  - 서버 ingress
+- `RoomChangeRp`瑜?諛쏄린 ?꾩뿉 ?대씪?댁뼵?멸? `EchoRq`瑜?蹂대궡吏???딅뒗??
+- ?뺤긽 ?몄뀡?먯꽌???꾨옒 ?먮쫫??紐⑤몢 蹂댁???
+  - ?쒕쾭 ingress
   - `FContentRuntime::EnqueuePacket` accepted / posted
   - thread dequeue
   - room `OnPacket`
   - `echo request accepted`
   - `echo response sent`
 
-즉 단일 세션 짧은 재현으로는 문제가 드러나지 않았다.
+利??⑥씪 ?몄뀡 吏㏃? ?ы쁽?쇰줈??臾몄젣媛 ?쒕윭?섏? ?딆븯??
 
-### 4.3 all-session trace로 전환
+### 4.3 all-session trace濡??꾪솚
 
-특정 세션 하나를 미리 찍는 방식으로는 실패 세션을 놓치기 쉬워서, 이후에는 다음 방식으로 바꿨다.
+?뱀젙 ?몄뀡 ?섎굹瑜?誘몃━ 李띾뒗 諛⑹떇?쇰줈???ㅽ뙣 ?몄뀡???볦튂湲??ъ썙?? ?댄썑?먮뒗 ?ㅼ쓬 諛⑹떇?쇰줈 諛붽엥??
 
-- `--bootstrap-trace`만 켜고 `--trace-user-id`는 지정하지 않음
-- `tracedSessionId == nullptr`일 때 모든 세션 trace를 남기도록 변경
+- `--bootstrap-trace`留?耳쒓퀬 `--trace-user-id`??吏?뺥븯吏 ?딆쓬
+- `tracedSessionId == nullptr`????紐⑤뱺 ?몄뀡 trace瑜??④린?꾨줉 蹂寃?
+紐⑹쟻:
 
-목적:
-
-- 실패가 난 뒤 `client.err.log`에서 `sessionIndex`를 먼저 찾고
+- ?ㅽ뙣媛 ????`client.err.log`?먯꽌 `sessionIndex`瑜?癒쇱? 李얘퀬
 - `userId = 1000 + sessionIndex`
-- 서버 `login succeeded` 로그에서 대응하는 `sessionId`를 찾은 다음
-- 그 `sessionId` 기준으로 서버 흐름을 역추적하기 위함
+- ?쒕쾭 `login succeeded` 濡쒓렇?먯꽌 ??묓븯??`sessionId`瑜?李얠? ?ㅼ쓬
+- 洹?`sessionId` 湲곗??쇰줈 ?쒕쾭 ?먮쫫????텛?곹븯湲??꾪븿
 
-### 4.4 generation / local state 가설 점검
+### 4.4 generation / local state 媛???먭?
 
-의심했던 가설:
+?섏떖?덈뜕 媛??
 
-- room content 내부의 `m_sessionGenerations`가 runtime route table보다 늦게 갱신되어 stale packet으로 버리는 것
+- room content ?대???`m_sessionGenerations`媛 runtime route table蹂대떎 ??쾶 媛깆떊?섏뼱 stale packet?쇰줈 踰꾨━??寃?
+?쒕룄:
 
-시도:
+- 釉뚮━吏 湲곗? authoritative route / instance 議고쉶 異붽?
+- local generation mismatch瑜?蹂댁젙?섎뒗 ?꾪솕 ?ㅽ뿕
 
-- 브리지 기준 authoritative route / instance 조회 추가
-- local generation mismatch를 보정하는 완화 실험
+寃곌낵:
 
-결과:
+- 蹂댁“?곸씤 媛?ㅻ줈???좏슚?덉?留? ?닿쾬留뚯쑝濡?臾몄젣瑜??ㅻ챸?섍굅???닿껐?섏???紐삵뻽??
 
-- 보조적인 가설로는 유효했지만, 이것만으로 문제를 설명하거나 해결하지는 못했다.
+### 4.5 OnEnter ?꾨즺 ??completion callback 諛⑹떇 ?곸슜
 
-### 4.5 OnEnter 완료 후 completion callback 방식 적용
-
-사용자 제안 전 실험했던 방향:
+?ъ슜???쒖븞 ???ㅽ뿕?덈뜕 諛⑺뼢:
 
 - `MoveSessionToInstanceWithCompletion(...)`
-- target content thread의 `OnEnter` 완료 후 success `Rp`를 보내도록 변경
-
-적용 대상:
+- target content thread??`OnEnter` ?꾨즺 ??success `Rp`瑜?蹂대궡?꾨줉 蹂寃?
+?곸슜 ???
 
 - `RoomEnterRp success`
 - `RoomChangeRp success`
 
-의도:
+?섎룄:
 
-- bootstrap 버그와 같은 계열이라면 `Rp`를 너무 빨리 보내서 생기는 문제일 수 있으므로, 실제 `OnEnter`가 끝난 뒤에만 success `Rp`를 보내면 해결될 수 있다고 판단했다.
+- bootstrap 踰꾧렇? 媛숈? 怨꾩뿴?대씪硫?`Rp`瑜??덈Т 鍮⑤━ 蹂대궡???앷린??臾몄젣?????덉쑝誘濡? ?ㅼ젣 `OnEnter`媛 ?앸궃 ?ㅼ뿉留?success `Rp`瑜?蹂대궡硫??닿껐?????덈떎怨??먮떒?덈떎.
 
-결과:
+寃곌낵:
 
-- 문제는 완전히 사라지지 않았다.
-- 즉 `RoomChangeRp`를 `OnEnter` 이후로 늦추는 것만으로는 충분하지 않았다.
+- 臾몄젣???꾩쟾???щ씪吏吏 ?딆븯??
+- 利?`RoomChangeRp`瑜?`OnEnter` ?댄썑濡???텛??寃껊쭔?쇰줈??異⑸텇?섏? ?딆븯??
 
-### 4.6 최신 상태에서 확인된 사실
+### 4.6 理쒖떊 ?곹깭?먯꽌 ?뺤씤???ъ떎
 
-현재까지 확인된 사실은 다음과 같다.
+?꾩옱源뚯? ?뺤씤???ъ떎? ?ㅼ쓬怨?媛숇떎.
 
-- 클라이언트는 `RoomChangeRp success`를 받은 뒤에만 `EchoRq`를 보낸다.
-- 짧은 단일 세션 deep trace에서는 다음 네 지점 모두 정상이다.
-  1. 두 번째 `EchoRq`가 서버 ingress까지 도달
-  2. `EnqueuePacket` 전후에서 사라지지 않음
-  3. target room `OnPacket`까지 도달
-  4. `EchoRp` send도 성공
-- 따라서 문제는 단순한 단일 세션 타이밍 버그라기보다, 다중 세션 / 장시간 / 특정 상태 조합에서만 드물게 드러나는 race일 가능성이 높다.
+- ?대씪?댁뼵?몃뒗 `RoomChangeRp success`瑜?諛쏆? ?ㅼ뿉留?`EchoRq`瑜?蹂대궦??
+- 吏㏃? ?⑥씪 ?몄뀡 deep trace?먯꽌???ㅼ쓬 ??吏??紐⑤몢 ?뺤긽?대떎.
+  1. ??踰덉㎏ `EchoRq`媛 ?쒕쾭 ingress源뚯? ?꾨떖
+  2. `EnqueuePacket` ?꾪썑?먯꽌 ?щ씪吏吏 ?딆쓬
+  3. target room `OnPacket`源뚯? ?꾨떖
+  4. `EchoRp` send???깃났
+- ?곕씪??臾몄젣???⑥닚???⑥씪 ?몄뀡 ??대컢 踰꾧렇?쇨린蹂대떎, ?ㅼ쨷 ?몄뀡 / ?μ떆媛?/ ?뱀젙 ?곹깭 議고빀?먯꽌留??쒕Ъ寃??쒕윭?섎뒗 race??媛?μ꽦???믩떎.
 
-## 5. 최근 재현 실험
+## 5. 理쒓렐 ?ы쁽 ?ㅽ뿕
 
-### 5.1 3분 / 200세션 / all-session trace
+### 5.1 3遺?/ 200?몄뀡 / all-session trace
 
-설정:
+?ㅼ젙:
 
-- 서버
+- ?쒕쾭
   - `--headless --room-count 100 --room-capacity 4 --contents-fail-fast --bootstrap-trace`
-- 클라이언트
-  - `--sessions 200 --count 2 --payload-size 16 --hold-seconds 180 --interval-ms 0 --packets-per-send 2 --recv-timeout-ms 5000 --room-change-probability-percent 100 --max-room-enter-retries 20 --max-room-change-retries 10 --bootstrap-trace --quiet`
+- ?대씪?댁뼵??  - `--sessions 200 --count 2 --payload-size 16 --hold-seconds 180 --interval-ms 0 --packets-per-send 2 --recv-timeout-ms 5000 --room-change-probability-percent 100 --max-room-enter-retries 20 --max-room-change-retries 10 --bootstrap-trace --quiet`
 
-결과:
+寃곌낵:
 
 - [server_20260404_005105.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/server_20260404_005105.log)
 - [client_20260404_005105.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/client_20260404_005105.err.log)
-- 성공
+- ?깃났
 
-### 5.2 3분 / 250세션 / room contention 강화
+### 5.2 3遺?/ 250?몄뀡 / room contention 媛뺥솕
 
-설정:
+?ㅼ젙:
 
-- 서버
+- ?쒕쾭
   - `--room-count 20 --room-capacity 3`
-- 클라이언트
-  - `--sessions 250 --count 1 --interval-ms 0 --room-change-probability-percent 100`
+- ?대씪?댁뼵??  - `--sessions 250 --count 1 --interval-ms 0 --room-change-probability-percent 100`
 
-결과:
+寃곌낵:
 
 - [client_20260404_005542_contention.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/client_20260404_005542_contention.err.log)
-- 실패는 났지만 우리가 찾는 버그가 아니라 정상 실패였다.
+- ?ㅽ뙣???ъ?留??곕━媛 李얜뒗 踰꾧렇媛 ?꾨땲???뺤긽 ?ㅽ뙣???
   - `session[4] failed: no joinable room available.`
 
-해석:
+?댁꽍:
 
-- room contention을 너무 강하게 주면 rare race보다 `방 없음` 정상 실패가 먼저 튀어나온다.
+- room contention???덈Т 媛뺥븯寃?二쇰㈃ rare race蹂대떎 `諛??놁쓬` ?뺤긽 ?ㅽ뙣媛 癒쇱? ??대굹?⑤떎.
 
-### 5.3 3분 / 250세션 / balanced 설정
+### 5.3 3遺?/ 250?몄뀡 / balanced ?ㅼ젙
 
-설정:
+?ㅼ젙:
 
-- 서버
+- ?쒕쾭
   - `--room-count 80 --room-capacity 4`
-- 클라이언트
-  - `--sessions 250 --count 1 --interval-ms 0 --room-change-probability-percent 100`
+- ?대씪?댁뼵??  - `--sessions 250 --count 1 --interval-ms 0 --room-change-probability-percent 100`
 
-결과:
+寃곌낵:
 
 - [server_20260404_005919_balanced.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/server_20260404_005919_balanced.log)
 - [client_20260404_005919_balanced.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_short_repro/client_20260404_005919_balanced.err.log)
-- 성공
+- ?깃났
 
-## 6. 분석용 race injection 실험
+## 6. 遺꾩꽍??race injection ?ㅽ뿕
 
-문제가 희귀하다고 판단해, 장시간만 기다리지 않고 전이 경계에 race window를 인위적으로 넓히는 실험을 추가했다.
+臾몄젣媛 ?ш??섎떎怨??먮떒?? ?μ떆媛꾨쭔 湲곕떎由ъ? ?딄퀬 ?꾩씠 寃쎄퀎??race window瑜??몄쐞?곸쑝濡??볧엳???ㅽ뿕??異붽??덈떎.
 
-### 6.1 전이 응답 직전 injection
+### 6.1 ?꾩씠 ?묐떟 吏곸쟾 injection
 
-추가 옵션:
+異붽? ?듭뀡:
 
 - `--transition-race-injection`
 - `--transition-race-mode sleep0`
 
-적용 위치:
+?곸슜 ?꾩튂:
 
-- `RoomEnterRp success` 전송 직전
-- `RoomChangeRp success` 전송 직전
+- `RoomEnterRp success` ?꾩넚 吏곸쟾
+- `RoomChangeRp success` ?꾩넚 吏곸쟾
 
-결과:
+寃곌낵:
 
 - [server_20260404_010614.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/server_20260404_010614.log)
 - [client_20260404_010614.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/client_20260404_010614.err.log)
-- 3분 / 250세션 기준 성공
+- 3遺?/ 250?몄뀡 湲곗? ?깃났
 
-### 6.2 전이 응답 직전 + RoomChangeRp 직후 + 첫 EchoRq 직전 injection
+### 6.2 ?꾩씠 ?묐떟 吏곸쟾 + RoomChangeRp 吏곹썑 + 泥?EchoRq 吏곸쟾 injection
 
-추가 옵션:
+異붽? ?듭뀡:
 
 - `--transition-race-injection --transition-race-mode sleep0`
 - `--post-room-change-race-injection --post-room-change-race-mode sleep0`
 - `--first-echo-race-injection --first-echo-race-mode sleep0`
 
-의도:
+?섎룄:
 
-- `OnEnter 완료 -> RoomChangeRp`
-- `RoomChangeRp -> 첫 EchoRq`
-- target room에서 전이 직후 첫 `EchoRq` 처리
+- `OnEnter ?꾨즺 -> RoomChangeRp`
+- `RoomChangeRp -> 泥?EchoRq`
+- target room?먯꽌 ?꾩씠 吏곹썑 泥?`EchoRq` 泥섎━
 
-세 경계를 모두 벌려서 재현률을 높여 보려는 실험
+??寃쎄퀎瑜?紐⑤몢 踰뚮젮???ы쁽瑜좎쓣 ?믪뿬 蹂대젮???ㅽ뿕
 
-결과 1:
+寃곌낵 1:
 
 - [server_20260404_011134_double.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/server_20260404_011134_double.log)
 - [client_20260404_011134_double.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/client_20260404_011134_double.err.log)
-- 성공
+- ?깃났
 
-결과 2 (`room-change=90`)
+寃곌낵 2 (`room-change=90`)
 
 - [server_20260404_011548_rc90.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/server_20260404_011548_rc90.log)
 - [client_20260404_011548_rc90.err.log](/d:/Project/ServerPortfolio/RefactoringServer/Out/roomflow_transition_race/client_20260404_011548_rc90.err.log)
-- 성공
+- ?깃났
 
-해석:
+?댁꽍:
 
-- 현재까지는 위 세 지점을 벌려도 3분 / 250세션 기준으로는 재현률이 충분히 올라가지 않았다.
-- 즉 문제는 단순 전이 경계 타이밍만으로 설명되지 않거나, 더 긴 누적 시간 / 더 많은 상태 조합이 필요할 수 있다.
+- ?꾩옱源뚯???????吏?먯쓣 踰뚮젮??3遺?/ 250?몄뀡 湲곗??쇰줈???ы쁽瑜좎씠 異⑸텇???щ씪媛吏 ?딆븯??
+- 利?臾몄젣???⑥닚 ?꾩씠 寃쎄퀎 ??대컢留뚯쑝濡??ㅻ챸?섏? ?딄굅?? ??湲??꾩쟻 ?쒓컙 / ??留롮? ?곹깭 議고빀???꾩슂?????덈떎.
 
-## 7. 현재까지 확정된 것
-
-- bootstrap 버그는 원인과 해결이 확정되었다.
-- room-flow 문제는 `RoomChangeRp를 너무 빨리 보내는 단일 원인`만으로는 더 이상 설명되지 않는다.
-- 클라이언트가 `RoomChangeRp` 전에 `EchoRq`를 보내는 구조는 아니다.
-- 짧은 단일 세션 trace에서는
-  - ingress
+## 7. ?꾩옱源뚯? ?뺤젙??寃?
+- bootstrap 踰꾧렇???먯씤怨??닿껐???뺤젙?섏뿀??
+- room-flow 臾몄젣??`RoomChangeRp瑜??덈Т 鍮⑤━ 蹂대궡???⑥씪 ?먯씤`留뚯쑝濡쒕뒗 ???댁긽 ?ㅻ챸?섏? ?딅뒗??
+- ?대씪?댁뼵?멸? `RoomChangeRp` ?꾩뿉 `EchoRq`瑜?蹂대궡??援ъ“???꾨땲??
+- 吏㏃? ?⑥씪 ?몄뀡 trace?먯꽌??  - ingress
   - enqueue
   - thread dequeue
   - room `OnPacket`
   - `EchoRp send`
-  까지 모두 정상이다.
+  源뚯? 紐⑤몢 ?뺤긽?대떎.
 
-## 8. 현재까지 확정되지 않은 것
+## 8. ?꾩옱源뚯? ?뺤젙?섏? ?딆? 寃?
+?꾩쭅 ?뺤젙?섏? ?딆? ?듭떖 吏덈Ц? ?ㅼ쓬怨?媛숇떎.
 
-아직 확정되지 않은 핵심 질문은 다음과 같다.
+- ?μ떆媛?/ ?ㅼ쨷 ?몄뀡?먯꽌 ?ㅽ뙣??諛붾줈 洹??몄뀡??留덉?留?`EchoRq`媛 ?쒕쾭 ingress源뚯? ?ㅼ뼱?붾뒗媛
+- ?ㅼ뼱?붾떎硫?`EnqueuePacket` ?꾪썑?먯꽌 ?щ씪議뚮뒗媛
+- target room `OnPacket`源뚯? ?붾뒗??generation / instance check?먯꽌 踰꾨젮議뚮뒗媛
+- `EchoRp`瑜?留뚮뱾?덉?留?send媛 ?ㅽ뙣?덈뒗媛
 
-- 장시간 / 다중 세션에서 실패한 바로 그 세션의 마지막 `EchoRq`가 서버 ingress까지 들어왔는가
-- 들어왔다면 `EnqueuePacket` 전후에서 사라졌는가
-- target room `OnPacket`까지 왔는데 generation / instance check에서 버려졌는가
-- `EchoRp`를 만들었지만 send가 실패했는가
+利? ?꾩옱 ?⑥? 怨쇱젣??**?ㅽ뙣 ?몄뀡 ?섎굹瑜?all-session trace?먯꽌 ?뺥솗???뱀젙?섍퀬, 洹??몄뀡??留덉?留??ㅽ뙣 援ш컙留??앷퉴吏 異붿쟻????吏??以??대뵒???딄린?붿? ?뺤젙?섎뒗 寃?*?대떎.
 
-즉, 현재 남은 과제는 **실패 세션 하나를 all-session trace에서 정확히 특정하고, 그 세션의 마지막 실패 구간만 끝까지 추적해 네 지점 중 어디서 끊기는지 확정하는 것**이다.
+## 9. ?꾩옱 寃곕줎
 
-## 9. 현재 결론
+- 臾몄젣???ъ쟾??誘명빐寃곗씠??
+- ?ㅻ쭔 吏湲덇퉴吏???ㅽ뿕?쇰줈 ?ㅼ쓬 踰붿쐞源뚯???醫곹?議뚮떎.
+  - ?⑥닚 bootstrap race???꾨떂
+  - ?대씪?댁뼵?멸? `RoomChangeRp` ?꾩뿉 `EchoRq`瑜?蹂대궡??臾몄젣???꾨떂
+  - 吏㏃? ?⑥씪 ?몄뀡 ?먮쫫 ?먯껜???뺤긽
+  - ?ш????ㅼ쨷 ?몄뀡 / ?μ떆媛?/ ?곹깭 議고빀 race 媛?μ꽦???믪쓬
 
-- 문제는 여전히 미해결이다.
-- 다만 지금까지의 실험으로 다음 범위까지는 좁혀졌다.
-  - 단순 bootstrap race는 아님
-  - 클라이언트가 `RoomChangeRp` 전에 `EchoRq`를 보내는 문제는 아님
-  - 짧은 단일 세션 흐름 자체는 정상
-  - 희귀한 다중 세션 / 장시간 / 상태 조합 race 가능성이 높음
+?ㅼ쓬 遺꾩꽍 ?④퀎??
 
-다음 분석 단계는:
+1. all-session trace瑜??좎????곹깭?먯꽌 ?ㅽ뙣 ???뺣낫
+2. `client.err.log`?먯꽌 ?ㅽ뙣 `sessionIndex` 異붿텧
+3. ???`userId`, `sessionId`瑜?李얠븘 ?쒕쾭 濡쒓렇?먯꽌 媛숈? ?몄뀡??留덉?留?`EchoRq -> EchoRp` ?먮쫫留???텛??
+???④퀎?먯꽌 ?먯씤???뺤젙?섎㈃, 洹??ㅼ쓬 ?닿껐 諛⑸쾿? ?ъ슜?먯? ?⑹쓽 ??吏꾪뻾?쒕떎.
 
-1. all-session trace를 유지한 상태에서 실패 런 확보
-2. `client.err.log`에서 실패 `sessionIndex` 추출
-3. 대응 `userId`, `sessionId`를 찾아 서버 로그에서 같은 세션의 마지막 `EchoRq -> EchoRp` 흐름만 역추적
+## 10. send-post lost-wakeup 異붽? ?뺤씤
 
-이 단계에서 원인이 확정되면, 그 다음 해결 방법은 사용자와 합의 후 진행한다.
+### 10.1 no-timeout ?ㅽ뿕?먯꽌 蹂댁씤 ?덈줈???⑦꽩
 
-## 10. send-post lost-wakeup 추가 확인
-
-### 10.1 no-timeout 실험에서 보인 새로운 패턴
-
-- `recv timeout`을 모두 끄고 1분 런을 돌렸는데도 클라이언트가 끝나지 않고 멈췄다.
-- 외부 watchdog이 `90초` 뒤 강제 종료했다.
-- 이때 서버는 오랫동안 다음 상태를 유지했다.
+- `recv timeout`??紐⑤몢 ?꾧퀬 1遺??곗쓣 ?뚮졇?붾뜲???대씪?댁뼵?멸? ?앸굹吏 ?딄퀬 硫덉톬??
+- ?몃? watchdog??`90珥? ??媛뺤젣 醫낅즺?덈떎.
+- ?대븣 ?쒕쾭???ㅻ옯?숈븞 ?ㅼ쓬 ?곹깭瑜??좎??덈떎.
   - `sessions=1`
   - `recvTPS=0`
   - `sendTPS=0`
   - `queuedSendBuffers=1`
-  - `totalWSASendCalls` 증가 없음
+  - `totalWSASendCalls` 利앷? ?놁쓬
 
-해석:
+?댁꽍:
 
-- 이 패턴은 `응답이 매우 느리다`보다는 `send queue에 버퍼가 남아 있는데 WSASend가 다시 시작되지 않는다`에 더 가깝다.
+- ???⑦꽩? `?묐떟??留ㅼ슦 ?먮━??蹂대떎??`send queue??踰꾪띁媛 ?⑥븘 ?덈뒗??WSASend媛 ?ㅼ떆 ?쒖옉?섏? ?딅뒗??????媛源앸떎.
 
-### 10.2 레거시와 비교해서 좁혀진 원인
+### 10.2 ?덇굅?쒖? 鍮꾧탳?댁꽌 醫곹?吏??먯씤
 
-- 레거시 프로젝트는 `SendPacket()` / `EnqueuePacket()` 분리보다 더 중요한 보장이 하나 있었다.
-- `m_iSendFlag + ENQUEUE_FLAG`로 `send 중 새 enqueue가 들어오면 다음 PostSend를 놓치지 않게` 만들고 있었다.
-- 현재 `RefactoringServer`는 이 부분이 `std::atomic<bool> m_sendInFlight`로 단순화돼 있었다.
+- ?덇굅???꾨줈?앺듃??`SendPacket()` / `EnqueuePacket()` 遺꾨━蹂대떎 ??以묒슂??蹂댁옣???섎굹 ?덉뿀??
+- `m_iSendFlag + ENQUEUE_FLAG`濡?`send 以???enqueue媛 ?ㅼ뼱?ㅻ㈃ ?ㅼ쓬 PostSend瑜??볦튂吏 ?딄쾶` 留뚮뱾怨??덉뿀??
+- ?꾩옱 `RefactoringServer`????遺遺꾩씠 `std::atomic<bool> m_sendInFlight`濡??⑥닚?붾뤌 ?덉뿀??
 
-즉 이번 건은:
+利??대쾲 嫄댁?:
 
-- `EnqueuePacket` 같은 특수 API를 잘못 써서 `PostSend`를 안 불렀다
+- `EnqueuePacket` 媛숈? ?뱀닔 API瑜??섎せ ?⑥꽌 `PostSend`瑜???遺덈???
+媛 ?꾨땲??
+- ?덇굅?쒖쓽 send ?ш린??蹂댁옣??鍮좎쭊 ?곹깭?먯꽌 lost-wakeup race媛 ?앷꼈??
+濡?蹂대뒗 寃?留욌떎.
 
-가 아니라
+### 10.3 ?꾩옱 肄붾뱶?먯꽌 媛?ν뻽??race
 
-- 레거시의 send 재기동 보장이 빠진 상태에서 lost-wakeup race가 생겼다
+1. send completion 履쎌씠 `PostSend()`???ㅼ뼱媛 `m_sendInFlight=true`瑜??〓뒗??
+2. queue瑜??뺤씤?덈뜑??鍮꾩뼱 ?덉뼱??醫낅즺?섎젮怨??쒕떎.
+3. 洹??ъ씠 ?ㅻⅨ ?ㅻ젅?쒓? ??send buffer瑜?enqueue?섍퀬 `PostSend()`瑜??몄텧?쒕떎.
+4. ?섏?留?`m_sendInFlight=true`?쇱꽌 ??踰덉㎏ `PostSend()`??諛붾줈 鍮좎쭊??
+5. 泥?踰덉㎏ `PostSend()`??`m_sendInFlight=false`濡??대━怨??앸궃??
+6. 寃곌낵?곸쑝濡?queue?먮뒗 踰꾪띁媛 ?⑥븯?붾뜲 send???ъ떆?묐릺吏 ?딅뒗??
 
-로 보는 게 맞다.
-
-### 10.3 현재 코드에서 가능했던 race
-
-1. send completion 쪽이 `PostSend()`에 들어가 `m_sendInFlight=true`를 잡는다.
-2. queue를 확인했더니 비어 있어서 종료하려고 한다.
-3. 그 사이 다른 스레드가 새 send buffer를 enqueue하고 `PostSend()`를 호출한다.
-4. 하지만 `m_sendInFlight=true`라서 두 번째 `PostSend()`는 바로 빠진다.
-5. 첫 번째 `PostSend()`는 `m_sendInFlight=false`로 내리고 끝난다.
-6. 결과적으로 queue에는 버퍼가 남았는데 send는 재시작되지 않는다.
-
-이 패턴은 실제 관찰된
+???⑦꽩? ?ㅼ젣 愿李곕맂
 
 - `queuedSendBuffers=1`
 - `sendTPS=0`
-- `WSASend` 호출 정지
+- `WSASend` ?몄텧 ?뺤?
 
-와 잘 맞는다.
+? ??留욌뒗??
 
-### 10.4 적용한 수정과 결과
+### 10.4 ?곸슜???섏젙怨?寃곌낵
 
-- `FSession`에 send 상태 비트를 도입했다.
+- `FSession`??send ?곹깭 鍮꾪듃瑜??꾩엯?덈떎.
   - `kSendInFlightFlag`
   - `kSendPendingFlag`
-- enqueue 시 pending 비트를 세운다.
-- `PostSend()`가 빈 queue로 끝나려 할 때 pending 비트를 보고 다시 돈다.
-- send completion 뒤에도 pending 비트 또는 잔여 queue가 있으면 다시 `PostSend()`를 건다.
+- enqueue ??pending 鍮꾪듃瑜??몄슫??
+- `PostSend()`媛 鍮?queue濡??앸굹??????pending 鍮꾪듃瑜?蹂닿퀬 ?ㅼ떆 ?덈떎.
+- send completion ?ㅼ뿉??pending 鍮꾪듃 ?먮뒗 ?붿뿬 queue媛 ?덉쑝硫??ㅼ떆 `PostSend()`瑜?嫄대떎.
 
-수정 파일:
+?섏젙 ?뚯씪:
 
-- [FSession.h](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.h)
-- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Session\FSession.cpp)
-- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Servers\Core\FIocpServer.cpp)
+- [FSession.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FSession.h)
+- [FSession.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Session\FSession.cpp)
+- [FIocpServer.cpp](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Servers\Core\FIocpServer.cpp)
 
-짧은 무timeout 재실행 결과:
+吏㏃? 臾큧imeout ?ъ떎??寃곌낵:
 
-- 클라이언트 정상 종료
-- 서버 마지막 상태 `sessions=0`, `queuedSendBuffers=0`
-- 이전처럼 `sessions=1`, `queuedSendBuffers=1`로 멈추는 패턴은 다시 나오지 않았다.
+- ?대씪?댁뼵???뺤긽 醫낅즺
+- ?쒕쾭 留덉?留??곹깭 `sessions=0`, `queuedSendBuffers=0`
+- ?댁쟾泥섎읆 `sessions=1`, `queuedSendBuffers=1`濡?硫덉텛???⑦꽩? ?ㅼ떆 ?섏삤吏 ?딆븯??
 
-### 10.5 현재 해석
+### 10.5 ?꾩옱 ?댁꽍
 
-- room-flow에서 보였던 일부 hang/timeout은 콘텐츠 전이 로직이 아니라 `NetworkLib` send 재기동 보장 누락으로 설명된다.
-- 따라서 이후 `echo-response timeout`, `room-change-list timeout`, `room-change timeout`은 이 send fix 적용 이후 기준으로 다시 분리해서 평가해야 한다.
+- room-flow?먯꽌 蹂댁????쇰? hang/timeout? 肄섑뀗痢??꾩씠 濡쒖쭅???꾨땲??`NetworkLib` send ?ш린??蹂댁옣 ?꾨씫?쇰줈 ?ㅻ챸?쒕떎.
+- ?곕씪???댄썑 `echo-response timeout`, `room-change-list timeout`, `room-change timeout`? ??send fix ?곸슜 ?댄썑 湲곗??쇰줈 ?ㅼ떆 遺꾨━?댁꽌 ?됯??댁빞 ?쒕떎.
 
-## 11. 무timeout 6시간 RTT 확인
+## 11. 臾큧imeout 6?쒓컙 RTT ?뺤씤
 
-### 11.1 목적
+### 11.1 紐⑹쟻
 
-- send fix 이후에도 실제 응답 유실이 남아 있는지, 아니면 기존 `10060 timeout`이 단순 지연인지 확인하기 위해 `recv timeout`을 모두 끄고 장시간 런을 돌렸다.
+- send fix ?댄썑?먮룄 ?ㅼ젣 ?묐떟 ?좎떎???⑥븘 ?덈뒗吏, ?꾨땲硫?湲곗〈 `10060 timeout`???⑥닚 吏?곗씤吏 ?뺤씤?섍린 ?꾪빐 `recv timeout`??紐⑤몢 ?꾧퀬 ?μ떆媛??곗쓣 ?뚮졇??
 
-### 11.2 조건
+### 11.2 議곌굔
 
-- 서버
+- ?쒕쾭
   - `--headless --room-count 80 --room-capacity 4 --contents-fail-fast`
-- 클라이언트
-  - `--sessions 250`
+- ?대씪?댁뼵??  - `--sessions 250`
   - `--count 1`
   - `--hold-seconds 21600`
   - `--interval-ms 0`
@@ -428,27 +411,27 @@
   - `--rtt-csv-path ...`
   - `--rtt-flush-interval-seconds 60`
 
-### 11.3 결과
+### 11.3 寃곌낵
 
-- 클라이언트는 `echo validation succeeded.`로 정상 종료했다.
-- `client.err.log`는 비어 있었다.
-- RTT CSV는 6시간 전체 구간을 끝까지 기록했다.
-- `timeout_count`는 모든 stage에서 `0`이었다.
+- ?대씪?댁뼵?몃뒗 `echo validation succeeded.`濡??뺤긽 醫낅즺?덈떎.
+- `client.err.log`??鍮꾩뼱 ?덉뿀??
+- RTT CSV??6?쒓컙 ?꾩껜 援ш컙???앷퉴吏 湲곕줉?덈떎.
+- `timeout_count`??紐⑤뱺 stage?먯꽌 `0`?댁뿀??
 
-### 11.4 중요한 관찰
-
-- `room-change` RTT는 실제로 `5000ms`를 넘긴 값이 기록됐다.
+### 11.4 以묒슂??愿李?
+- `room-change` RTT???ㅼ젣濡?`5000ms`瑜??섍릿 媛믪씠 湲곕줉?먮떎.
   - `5006.861ms`
-- `room-change`의 다음 상위 값도 `4991.590ms`였다.
-- `echo-response`, `room-change-list`도 `3900ms`대 outlier가 있었다.
+- `room-change`???ㅼ쓬 ?곸쐞 媛믩룄 `4991.590ms`???
+- `echo-response`, `room-change-list`??`3900ms`? outlier媛 ?덉뿀??
 
-즉:
+利?
 
-- 이전 `10060 timeout`은 반드시 `응답 유실`을 뜻하지 않는다.
-- 적어도 일부는 `응답은 결국 왔지만, 기존 5000ms timeout보다 늦게 왔던 경우`로 해석할 수 있다.
+- ?댁쟾 `10060 timeout`? 諛섎뱶??`?묐떟 ?좎떎`???삵븯吏 ?딅뒗??
+- ?곸뼱???쇰???`?묐떟? 寃곌뎅 ?붿?留? 湲곗〈 5000ms timeout蹂대떎 ??쾶 ?붾뜕 寃쎌슦`濡??댁꽍?????덈떎.
 
-### 11.5 최종 해석
+### 11.5 理쒖쥌 ?댁꽍
 
-- 이번 이슈에서 확정된 로직 버그는 `send-post lost-wakeup`이었다.
-- 그 수정 이후 무timeout 장시간 런이 정상 종료했고, 5초를 넘는 정상 RTT도 관측됐다.
-- 따라서 현재 남아 있는 `10060 timeout`은 로컬 부하 환경에서의 지연 가능성이 높다고 보는 것이 맞다.
+- ?대쾲 ?댁뒋?먯꽌 ?뺤젙??濡쒖쭅 踰꾧렇??`send-post lost-wakeup`?댁뿀??
+- 洹??섏젙 ?댄썑 臾큧imeout ?μ떆媛??곗씠 ?뺤긽 醫낅즺?덇퀬, 5珥덈? ?섎뒗 ?뺤긽 RTT??愿痢〓릱??
+- ?곕씪???꾩옱 ?⑥븘 ?덈뒗 `10060 timeout`? 濡쒖뺄 遺???섍꼍?먯꽌??吏??媛?μ꽦???믩떎怨?蹂대뒗 寃껋씠 留욌떎.
+

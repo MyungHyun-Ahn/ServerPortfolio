@@ -12,11 +12,11 @@
 
 ## 1. 범위
 - 대상 코드
-  - [`FLockFreeMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Include\NetworkLib\Memory\FLockFreeMemoryPool.h)
-  - [`FTlsMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\NetworkLib\Include\NetworkLib\Memory\FTlsMemoryPool.h)
+  - [`FLockFreeMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Include\NetworkLib\Memory\FLockFreeMemoryPool.h)
+  - [`FTlsMemoryPool.h`](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Include\NetworkLib\Memory\FTlsMemoryPool.h)
 - 대상 테스트
-  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\LockFreeTests\Main.cpp)
-  - [`TlsMemoryPoolSoakTest/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\TlsMemoryPoolSoakTest\Main.cpp)
+  - [`LockFreeTests/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)
+  - [`TlsMemoryPoolSoakTest/Main.cpp`](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\TlsMemoryPoolSoakTest\Main.cpp)
 
 ## 2. `FLockFreeMemoryPool` 판단
 ### 2-1. 역할
@@ -92,4 +92,6 @@
 - `BucketSize`, `BucketCount`에 따른 성능 비교 측정
 - hot path 타입별로 별도 pool 정책이 필요한지 검토
 - 정상 종료 시 outstanding allocation이 남아 있으면 경고를 남기는 shutdown 검증 경로 추가
+
+
 

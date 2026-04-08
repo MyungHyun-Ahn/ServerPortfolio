@@ -11,7 +11,7 @@
 프로젝트 루트에서:
 
 ```powershell
-RefactoringServer\scripts\Generate-Configs.cmd
+RefactoringServer\scripts\generate\Generate-Configs.cmd
 ```
 
 직접 실행:
@@ -106,4 +106,4 @@ EchoServer:
 2. generated C++ 코드는 커밋 대상이다.
 3. `Tools/ConfigGenerator/bin`, `Tools/ConfigGenerator/obj`는 커밋 대상이 아니다.
 4. 일반 C++ 프로젝트 빌드는 `ConfigGenerator`를 자동 실행하지 않는다.
-5. 필요하면 [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\Generate-Codegen.cmd)로 packet/config 생성기를 한 번에 실행한다.
+5. 필요하면 [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Codegen.cmd)로 packet/config 생성기를 한 번에 실행한다.
