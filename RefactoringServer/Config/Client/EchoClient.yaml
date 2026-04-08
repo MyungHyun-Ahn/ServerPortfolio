@@ -5,7 +5,7 @@ EchoClient:
   ServerIp: 127.0.0.1
   Port: 19000
   LoginUserIdBase: 1000
-  SessionCount: 250
+  SessionCount: 1
   RequestCount: 1
   PayloadSize: 16
   SendChunkSize: 0
@@ -13,26 +13,26 @@ EchoClient:
   RecvBufferSize: 32
   ResponseThreadCount: 1
   ResponsesPerThread: 1
-  HoldSeconds: 600
-  IntervalMs: 0
+  HoldSeconds: 0
+  IntervalMs: 1000
   PacketsPerSend: 1
   ReconnectProbabilityPercent: 0
   ReconnectDelayMs: 100
-  ConnectsPerSecond: 10
+  ConnectsPerSecond: 0
   WorkerThreadCount: 4
-  RoomChangeProbabilityPercent: 90
-  MaxRoomEnterRetryCount: 50
-  MaxRoomChangeRetryCount: 30
+  RoomChangeProbabilityPercent: 25
+  MaxRoomEnterRetryCount: 5
+  MaxRoomChangeRetryCount: 3
   EnablePagePool: true
   PageSize: 4096
 
 Debug:
   Quiet: false
-  BootstrapTrace: true
+  BootstrapTrace: false
   TraceSessionIndex: 0
-  RecvTimeoutMs: 30000
-  RoomListRecvTimeoutMs: 30000
-  EchoRecvTimeoutMs: 30000
+  RecvTimeoutMs: 0
+  RoomListRecvTimeoutMs: -1
+  EchoRecvTimeoutMs: -1
   RttCsvPath: ""
   RttFlushIntervalSeconds: 60
 

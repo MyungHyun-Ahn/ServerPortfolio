@@ -8,7 +8,7 @@ EchoServer:
   RioSendDispatchMode: Direct
   BindIp: 127.0.0.1
   Port: 19000
-  WorkerThreadCount: 4
+  WorkerThreadCount: 2
   MaxSessionCount: 512
   RecvBufferSize: 1024
   SocketSendBufferBytes: -1
@@ -24,15 +24,15 @@ EchoServer:
   ContentsWorkerThreadCount: 4
   SendThreadCount: 1
   ResponsesPerThread: 1
-  RoomCount: 80
-  RoomCapacity: 50
+  RoomCount: 50
+  RoomCapacity: 4
 
 Debug:
   ManualDump: false
-  Headless: true
-  BootstrapTrace: true
+  Headless: false
+  BootstrapTrace: false
   TraceUserId: 0
-  LogPackets: true
+  LogPackets: false
   TransitionRaceInjectionEnabled: false
   # Allowed: None, SwitchToThread, Sleep0, Yield
   TransitionRaceInjectionMode: None
@@ -47,8 +47,8 @@ Debug:
   # Allowed: None, SwitchToThread, Sleep0, Yield
   ContentsRaceInjectionMode: None
   ContentsFailFast: false
-  DelegateTestEnabled: true
-  DelegateTestTargetRoomId: 77
-  DelegateTestSleepMs: 15
+  DelegateTestEnabled: false
+  DelegateTestTargetRoomId: 0
+  DelegateTestSleepMs: 0
   DelegateTestSleepEveryNFrames: 1
 
