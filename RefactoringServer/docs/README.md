@@ -1,27 +1,31 @@
-# Docs 인덱스
+# Docs Guide
 
-## 1. 빠른 진입점
+## 1. 빠른 진입
+- 현재 기준 문서: [current/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\README.md)
 - 계획 문서: [plans/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\README.md)
 - 아키텍처 문서: [architecture/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\README.md)
 - 리뷰 문서: [reviews/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\README.md)
 
 ## 2. 추천 읽기 순서
-1. [001_project-overview.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\001_project\001_project-overview.md)
-2. [001_networklib-overview.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\002_networklib\001_networklib-overview.md)
-3. [001_contents-runtime-overview.md](D:\Project\ServerPortfolio\RefactoringServer\docs\architecture\003_contentsruntime\001_contents-runtime-overview.md)
-4. [plans/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\README.md)
-5. [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)
-6. [reviews/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\README.md)
+1. [001_project-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\001_project-current.md)
+2. [002_networklib-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\002_networklib-current.md)
+3. [003_contentsruntime-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\003_contentsruntime-current.md)
+4. [004_chatting-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\004_chatting-current.md)
+5. [005_benchmark-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\005_benchmark-current.md)
+6. [099_session-handoff.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\099_session-handoff.md)
+7. [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)
 
 ## 3. 디렉터리 역할
+- `docs/current`
+  - 사람과 AI가 먼저 보는 최신 기준 문서
 - `docs/plans`
-  - 구현 전에 방향, 범위, 검증 기준을 정리하는 문서
+  - 설계 방향, 범위, 구현 계획 히스토리
 - `docs/architecture`
-  - 현재 구조와 계층 경계를 설명하는 기준 문서
+  - 현재 구조와 경계 설명
 - `docs/reviews`
-  - 구현 결과, 검증 결과, 트러블슈팅, 운영 규칙을 정리하는 문서
+  - 구현 결과, 실험 결과, 문제 분석 히스토리
 
 ## 4. 관리 규칙
-- `plans` 문서를 추가하거나 상태가 바뀌면 [000_plan-status-board.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\000_plan-status-board.md)를 같이 갱신한다.
-- 새 아키텍처 문서를 추가하면 `docs/architecture/README.md`를 같이 갱신한다.
-- 새 리뷰 문서를 추가하면 `docs/reviews/README.md`를 같이 갱신한다.
+- 새로운 결론이 나오면 `plans`나 `reviews`만 갱신하지 말고 관련 `current` 문서도 함께 갱신한다.
+- `current` 문서는 긴 히스토리를 복사하지 않고 최신 기준과 핵심 링크만 담는다.
+- 상세 근거와 원문 기록은 계속 `plans`와 `reviews`에 남긴다.
