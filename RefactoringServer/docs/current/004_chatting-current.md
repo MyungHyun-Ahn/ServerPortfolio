@@ -29,12 +29,13 @@ Scope: ChattingServer, ClientNetworkLib, ChattingDummy current state
 - 재접속, room 변경, payload 크기, RTT CSV 출력은 config와 bench manifest에서 제어한다.
 
 ## 5. 현재 미포함 범위
-- `Node.js LoginServer`, `Redis` 기반 chat ticket 검증, `MySQL AccountDB`는 아직 미구현이다.
+- `Node.js LoginServer` 1차 스캐폴드와 `MySQL`, `Redis`, `Argon2id`, Swagger는 구현되었다.
 - `C# WinForms ChattingClient`는 1차 프로토타입을 추가했다.
-- 현재 `WinForms` 로그인/회원가입은 mock 성공 기준이며, 실제 계정 검증과 회원가입 저장은 아직 붙지 않았다.
+- 현재 `WinForms` 로그인/회원가입은 아직 mock 성공 기준이며, 실제 LoginServer 연동은 다음 작업이다.
 - 현재 benchmark와 성능 비교 중심 축은 여전히 `ChattingDummyClient`다.
 
 ## 6. 관련 핵심 문서
+- [006_loginserver-current.md](/e:/Procademy/myPortfolio/ServerPortfolio/RefactoringServer/docs/current/006_loginserver-current.md)
 - [002_chattingserver-packet-and-flow-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\009_chatting_server\002_chattingserver-packet-and-flow-plan.md)
 - [003_chattingdummy-load-test-client-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\009_chatting_server\003_chattingdummy-load-test-client-plan.md)
 - [001_nodejs-loginserver-and-winforms-chatting-prototype-plan.md](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\012_login-platform\001_nodejs-loginserver-and-winforms-chatting-prototype-plan.md)

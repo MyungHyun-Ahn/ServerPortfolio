@@ -1,0 +1,230 @@
+openapi: 3.0.3
+info:
+  title: RefactoringServer LoginServer API
+  version: 0.1.0
+  description: |
+    RefactoringServer WinForms ChattingClient와 ChattingServer LoginAuth 흐름을 위한
+    1차 로그인 서버 API 계약이다.
+servers:
+  - url: /
+tags:
+  - name: Auth
+    description: 회원가입 및 로그인 API
+  - name: Health
+    description: LoginServer 상태 확인 API
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: 회원가입
+      description: loginId, password, nickname으로 계정을 생성한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            examples:
+              default:
+                value:
+                  loginId: tester01
+                  password: Pw1234!
+                  nickname: tester01
+      responses:
+        "201":
+          description: 회원가입 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          description: 입력값 오류
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: 이미 존재하는 loginId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: 로그인
+      description: 계정 검증 후 Redis chat ticket을 발급한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              default:
+                value:
+                  loginId: tester01
+                  password: Pw1234!
+      responses:
+        "200":
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: 입력값 오류
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: loginId 또는 password 오류
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /healthz:
+    get:
+      tags:
+        - Health
+      summary: 프로세스 및 외부 의존성 상태 확인
+      responses:
+        "200":
+          description: MySQL, Redis 모두 정상
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: 하나 이상의 외부 의존성 장애
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - loginId
+        - password
+        - nickname
+      properties:
+        loginId:
+          type: string
+          maxLength: 64
+          example: tester01
+        password:
+          type: string
+          maxLength: 128
+          example: Pw1234!
+        nickname:
+          type: string
+          maxLength: 64
+          example: tester01
+    LoginRequest:
+      type: object
+      required:
+        - loginId
+        - password
+      properties:
+        loginId:
+          type: string
+          maxLength: 64
+          example: tester01
+        password:
+          type: string
+          maxLength: 128
+          example: Pw1234!
+    RegisterResponse:
+      type: object
+      required:
+        - success
+        - userId
+        - nickname
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        userId:
+          type: integer
+          example: 101
+        nickname:
+          type: string
+          example: tester01
+    LoginResponse:
+      type: object
+      required:
+        - success
+        - userId
+        - nickname
+        - ticket
+        - ticketExpiresInSeconds
+        - chatServer
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        userId:
+          type: integer
+          example: 101
+        nickname:
+          type: string
+          example: tester01
+        ticket:
+          type: string
+          format: uuid
+          example: 9b6d5d8b-8c87-4a4d-95b1-7e4f6e1d7f2a
+        ticketExpiresInSeconds:
+          type: integer
+          example: 60
+        chatServer:
+          $ref: "#/components/schemas/ChatServerEndpoint"
+    ChatServerEndpoint:
+      type: object
+      required:
+        - ip
+        - port
+      properties:
+        ip:
+          type: string
+          example: 127.0.0.1
+        port:
+          type: integer
+          example: 19100
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        message:
+          type: string
+          example: loginId or password is invalid.
+    HealthResponse:
+      type: object
+      required:
+        - success
+        - mysql
+        - redis
+        - errors
+      properties:
+        success:
+          type: boolean
+          example: true
+        mysql:
+          type: string
+          example: ok
+        redis:
+          type: string
+          example: ok
+        errors:
+          type: array
+          items:
+            type: string

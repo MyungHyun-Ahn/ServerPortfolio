@@ -1,4 +1,5 @@
 import express, { type Request, type Response } from "express";
+import swaggerUi from "swagger-ui-express";
 
 import { appEnv } from "./config/env";
 import { AuthController } from "./controllers/auth-controller";
@@ -7,6 +8,7 @@ import { closeRedisClient, verifyRedisConnection } from "./db/redis";
 import { createAuthRouter } from "./routes/auth";
 import { AccountService } from "./services/account-service";
 import { ChatTicketService } from "./services/chat-ticket-service";
+import { getOpenApiYamlPath, loadOpenApiDocument } from "./utils/openapi";
 
 function createApp(): express.Express {
   const app = express();
@@ -16,8 +18,18 @@ function createApp(): express.Express {
   );
 
   app.use(express.json({ limit: "16kb" }));
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(loadOpenApiDocument(), {
+    explorer: true,
+    customSiteTitle: "RefactoringServer LoginServer API",
+  }));
 
   app.use("/auth", createAuthRouter(authController));
+  app.get("/openapi.yaml", (_request: Request, response: Response) => {
+    response.sendFile(getOpenApiYamlPath());
+  });
+  app.get("/openapi.json", (_request: Request, response: Response) => {
+    response.json(loadOpenApiDocument());
+  });
   app.get("/healthz", (request: Request, response: Response) => {
     authController.healthz(request, response).catch((error: unknown) => {
       AuthController.writeError(response, error);

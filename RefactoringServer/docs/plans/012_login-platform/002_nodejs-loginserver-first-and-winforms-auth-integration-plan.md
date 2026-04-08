@@ -4,7 +4,7 @@
 정본: 예  
 최종 갱신: 2026-04-09  
 범위: `Node.js LoginServer` 1차 구현과 `C# WinForms` 외부 인증 전환  
-현황: `RefactoringServer/LoginServer` 1차 스캐폴드, `register/login/healthz`, `Argon2id + MySQL + Redis` 연동 구현 완료
+현황: `RefactoringServer/LoginServer` 1차 스캐폴드, `register/login/healthz`, `Argon2id + MySQL + Redis`, `Swagger/OpenAPI`, `Infra Docker compose` 연동 구현 완료
 
 ## 1. 목표
 - 다음 작업의 시작점을 `Node.js LoginServer`로 고정한다.
