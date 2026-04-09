@@ -2,6 +2,13 @@ using System.Text;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
+[Flags]
+internal enum PacketGeneratorTargets
+{
+    Cpp = 1 << 0,
+    CSharp = 1 << 1
+}
+
 internal static class Program
 {
     public static int Main(string[] args)
@@ -10,9 +17,11 @@ internal static class Program
         {
             string solutionRoot = FindSolutionRoot();
             string schemaRoot = Path.Combine(solutionRoot, "Packet");
-            string outputRoot = Path.Combine(solutionRoot, "Generated", "Packets");
+            string cppOutputRoot = Path.Combine(solutionRoot, "Generated", "Packets");
+            string csharpOutputRoot = Path.Combine(solutionRoot, "Generated", "CSharp", "Packets");
+            PacketGeneratorTargets targets = PacketGeneratorTargets.Cpp;
 
-            ParseArguments(args, ref schemaRoot, ref outputRoot);
+            ParseArguments(args, ref schemaRoot, ref cppOutputRoot, ref csharpOutputRoot, ref targets);
 
             if (!Directory.Exists(schemaRoot))
             {
@@ -43,24 +52,45 @@ internal static class Program
 
             PacketSchemaSetValidator.Validate(documents);
 
-            foreach (PacketSchemaDocument document in documents)
+            if ((targets & PacketGeneratorTargets.Cpp) != 0)
             {
-                string contentOutputDirectory = Path.Combine(outputRoot, document.Content);
-                Directory.CreateDirectory(contentOutputDirectory);
+                foreach (PacketSchemaDocument document in documents)
+                {
+                    string contentOutputDirectory = Path.Combine(cppOutputRoot, document.Content);
+                    Directory.CreateDirectory(contentOutputDirectory);
 
-                string packetsHeaderPath = Path.Combine(contentOutputDirectory, $"{document.Content}Packets.h");
-                string handlerHeaderPath = Path.Combine(contentOutputDirectory, $"{document.Content}PacketHandler.h");
+                    string packetsHeaderPath = Path.Combine(contentOutputDirectory, $"{document.Content}Packets.h");
+                    string handlerHeaderPath = Path.Combine(contentOutputDirectory, $"{document.Content}PacketHandler.h");
 
-                File.WriteAllText(packetsHeaderPath, CppPacketGenerator.GeneratePacketsHeader(document), new UTF8Encoding(false));
-                File.WriteAllText(handlerHeaderPath, CppPacketGenerator.GenerateHandlerHeader(document), new UTF8Encoding(false));
+                    File.WriteAllText(packetsHeaderPath, CppPacketGenerator.GeneratePacketsHeader(document), new UTF8Encoding(false));
+                    File.WriteAllText(handlerHeaderPath, CppPacketGenerator.GenerateHandlerHeader(document), new UTF8Encoding(false));
 
-                Console.WriteLine($"Generated: {packetsHeaderPath}");
-                Console.WriteLine($"Generated: {handlerHeaderPath}");
+                    Console.WriteLine($"Generated: {packetsHeaderPath}");
+                    Console.WriteLine($"Generated: {handlerHeaderPath}");
+                }
+
+                string routerHeaderPath = Path.Combine(cppOutputRoot, "PacketRouter.h");
+                File.WriteAllText(routerHeaderPath, CppPacketGenerator.GenerateRouterHeader(documents), new UTF8Encoding(false));
+                Console.WriteLine($"Generated: {routerHeaderPath}");
             }
 
-            string routerHeaderPath = Path.Combine(outputRoot, "PacketRouter.h");
-            File.WriteAllText(routerHeaderPath, CppPacketGenerator.GenerateRouterHeader(documents), new UTF8Encoding(false));
-            Console.WriteLine($"Generated: {routerHeaderPath}");
+            if ((targets & PacketGeneratorTargets.CSharp) != 0)
+            {
+                foreach (PacketSchemaDocument document in documents)
+                {
+                    string contentOutputDirectory = Path.Combine(csharpOutputRoot, document.Content);
+                    Directory.CreateDirectory(contentOutputDirectory);
+
+                    string packetsFilePath = Path.Combine(contentOutputDirectory, $"{document.Content}Packets.g.cs");
+                    File.WriteAllText(packetsFilePath, CSharpPacketGenerator.GeneratePacketsFile(document), new UTF8Encoding(false));
+                    Console.WriteLine($"Generated: {packetsFilePath}");
+                }
+
+                Directory.CreateDirectory(csharpOutputRoot);
+                string registryFilePath = Path.Combine(csharpOutputRoot, "GeneratedPacketRegistry.g.cs");
+                File.WriteAllText(registryFilePath, CSharpPacketGenerator.GenerateRegistryFile(documents), new UTF8Encoding(false));
+                Console.WriteLine($"Generated: {registryFilePath}");
+            }
 
             return 0;
         }
@@ -71,7 +101,12 @@ internal static class Program
         }
     }
 
-    private static void ParseArguments(string[] args, ref string schemaRoot, ref string outputRoot)
+    private static void ParseArguments(
+        string[] args,
+        ref string schemaRoot,
+        ref string cppOutputRoot,
+        ref string csharpOutputRoot,
+        ref PacketGeneratorTargets targets)
     {
         for (int index = 0; index < args.Length; ++index)
         {
@@ -82,13 +117,50 @@ internal static class Program
             }
             else if (argument == "--output-root" && index + 1 < args.Length)
             {
-                outputRoot = Path.GetFullPath(args[++index]);
+                cppOutputRoot = Path.GetFullPath(args[++index]);
+            }
+            else if (argument == "--csharp-output-root" && index + 1 < args.Length)
+            {
+                csharpOutputRoot = Path.GetFullPath(args[++index]);
+            }
+            else if (argument == "--targets" && index + 1 < args.Length)
+            {
+                targets = ParseTargets(args[++index]);
             }
             else
             {
                 throw new InvalidOperationException($"Unknown argument: {argument}");
             }
         }
+    }
+
+    private static PacketGeneratorTargets ParseTargets(string text)
+    {
+        PacketGeneratorTargets targets = 0;
+        string[] parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (string part in parts)
+        {
+            if (part.Equals("cpp", StringComparison.OrdinalIgnoreCase))
+            {
+                targets |= PacketGeneratorTargets.Cpp;
+            }
+            else if (part.Equals("csharp", StringComparison.OrdinalIgnoreCase) ||
+                     part.Equals("cs", StringComparison.OrdinalIgnoreCase))
+            {
+                targets |= PacketGeneratorTargets.CSharp;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unknown generator target: {part}");
+            }
+        }
+
+        if (targets == 0)
+        {
+            throw new InvalidOperationException("At least one packet generator target must be specified.");
+        }
+
+        return targets;
     }
 
     private static string FindSolutionRoot()
@@ -315,7 +387,7 @@ internal static class PacketTypeMapping
         return RenderCSharpType(typeNode);
     }
 
-    private static string RenderCppType(SchemaTypeNode typeNode)
+    internal static string RenderCppType(SchemaTypeNode typeNode)
     {
         if (CppScalarTypes.TryGetValue(typeNode.Name, out string? scalarType))
         {
@@ -332,7 +404,7 @@ internal static class PacketTypeMapping
         };
     }
 
-    private static string RenderCSharpType(SchemaTypeNode typeNode)
+    internal static string RenderCSharpType(SchemaTypeNode typeNode)
     {
         if (CSharpScalarTypes.TryGetValue(typeNode.Name, out string? scalarType))
         {

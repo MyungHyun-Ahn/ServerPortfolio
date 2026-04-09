@@ -28,7 +28,7 @@ if ($BuildOnly)
 }
 
 Write-Host "Running PacketGenerator..."
-dotnet run --project $projectPath -c $Configuration --no-build
+dotnet run --project $projectPath -c $Configuration --no-build -- --targets cpp,csharp
 if ($LASTEXITCODE -ne 0)
 {
     throw "Packet generation failed."

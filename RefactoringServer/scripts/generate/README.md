@@ -15,6 +15,7 @@
 
 - packet schema만 갱신할 때:
   - `scripts\\generate\\Generate-Packets.cmd`
+  - 기본적으로 `cpp,csharp`를 함께 생성
 - config schema만 갱신할 때:
   - `scripts\\generate\\Generate-Configs.cmd`
 - packet/config를 한 번에 갱신할 때:

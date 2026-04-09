@@ -26,11 +26,17 @@ dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csp
   - 기본값: `RefactoringServer/Packet`
 - `--output-root <path>`
   - 기본값: `RefactoringServer/Generated/Packets`
+- `--csharp-output-root <path>`
+  - 기본값: `RefactoringServer/Generated/CSharp/Packets`
+- `--targets <list>`
+  - `cpp`
+  - `csharp`
+  - `cpp,csharp`
 
 예:
 
 ```powershell
-dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\Packet --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets
+dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\Packet --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets --csharp-output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\CSharp\Packets --targets cpp,csharp
 ```
 
 ## 스키마 규칙
@@ -78,13 +84,18 @@ dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csp
 - 콘텐츠별:
   - `<Content>Packets.h`
   - `<Content>PacketHandler.h`
+- C# 콘텐츠별:
+  - `<Content>Packets.g.cs`
 - 전역:
   - `PacketRouter.h`
+  - `GeneratedPacketRegistry.g.cs`
 
 예:
 - `Generated/Packets/Echo/EchoPackets.h`
 - `Generated/Packets/Echo/EchoPacketHandler.h`
 - `Generated/Packets/PacketRouter.h`
+- `Generated/CSharp/Packets/Echo/EchoPackets.g.cs`
+- `Generated/CSharp/Packets/GeneratedPacketRegistry.g.cs`
 
 ## 생성 코드 구조
 - packet class는 `IContentPacket`을 따른다.
@@ -106,7 +117,7 @@ dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csp
 ## 권장 작업 흐름
 1. `Packet/**/*.yaml` 수정
 2. `Generate-Packets.cmd` 실행
-3. `Generated/Packets/**` 변경 확인
+3. `Generated/Packets/**`, `Generated/CSharp/Packets/**` 변경 확인
 4. C++ 솔루션 빌드
 
 ## 참고 문서
