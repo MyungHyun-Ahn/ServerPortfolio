@@ -1,0 +1,37 @@
+# Generated from ConfigSchema/Client/EchoClient.schema.yaml
+# Package template for Echo RIO cache ping-pong comparison.
+
+EchoClient:
+  ServerIp: 127.0.0.1
+  Port: 19000
+  LoginUserIdBase: 1000
+  SessionCount: 250
+  RequestCount: 1
+  PayloadSize: 16
+  SendChunkSize: 0
+  SendChunkDelayMs: 0
+  RecvBufferSize: 32
+  ResponseThreadCount: 1
+  ResponsesPerThread: 1
+  HoldSeconds: 7200
+  IntervalMs: 0
+  PacketsPerSend: 1
+  ReconnectProbabilityPercent: 0
+  ReconnectDelayMs: 100
+  ConnectsPerSecond: 10
+  WorkerThreadCount: 4
+  RoomChangeProbabilityPercent: 0
+  MaxRoomEnterRetryCount: 50
+  MaxRoomChangeRetryCount: 30
+  EnablePagePool: true
+  PageSize: 4096
+
+Debug:
+  Quiet: true
+  BootstrapTrace: false
+  TraceSessionIndex: 0
+  RecvTimeoutMs: 30000
+  RoomListRecvTimeoutMs: 30000
+  EchoRecvTimeoutMs: 30000
+  RttCsvPath: "C:/Users/psa/Desktop/Test/echo-rio-cache-pingpong-2h-2mode/Out//bench/20260408_173748_echo_rio_cache_pingpong_2h_2mode/rio_owner_thread_2h/rtt.csv"
+  RttFlushIntervalSeconds: 60

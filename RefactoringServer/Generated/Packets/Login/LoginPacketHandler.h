@@ -16,6 +16,8 @@ namespace Generated::Login
 
 		virtual bool HandleLoginRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FLoginRq& packet) = 0;
 		virtual bool HandleLoginRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FLoginRp& packet) = 0;
+		virtual bool HandleLoginAuthRq(NetworkLib::IServer& server, std::uint64_t sessionId, const FLoginAuthRq& packet) = 0;
+		virtual bool HandleLoginAuthRp(NetworkLib::IServer& server, std::uint64_t sessionId, const FLoginAuthRp& packet) = 0;
 	};
 
 	class ILoginPacketDispatcher
@@ -52,6 +54,26 @@ namespace Generated::Login
 
 					return HandleLoginRp(server, sessionId, packet);
 				}
+			case FLoginAuthRq::kOpcode:
+				{
+					FLoginAuthRq packet;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
+					{
+						return false;
+					}
+
+					return HandleLoginAuthRq(server, sessionId, packet);
+				}
+			case FLoginAuthRp::kOpcode:
+				{
+					FLoginAuthRp packet;
+					if (!NetworkLib::Packet::Serialization::DeserializeContentPacket(packetView, packet))
+					{
+						return false;
+					}
+
+					return HandleLoginAuthRp(server, sessionId, packet);
+				}
 			default:
 				return OnUnhandledPacket(server, sessionId, packetView);
 			}
@@ -63,6 +85,16 @@ namespace Generated::Login
 		}
 
 		bool HandleLoginRp(NetworkLib::IServer&, std::uint64_t, const FLoginRp&) override
+		{
+			return false;
+		}
+
+		bool HandleLoginAuthRq(NetworkLib::IServer&, std::uint64_t, const FLoginAuthRq&) override
+		{
+			return false;
+		}
+
+		bool HandleLoginAuthRp(NetworkLib::IServer&, std::uint64_t, const FLoginAuthRp&) override
 		{
 			return false;
 		}

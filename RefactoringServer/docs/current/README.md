@@ -14,7 +14,8 @@ Scope: Current entry documents
 3. [003_contentsruntime-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\003_contentsruntime-current.md)
 4. [004_chatting-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\004_chatting-current.md)
 5. [005_benchmark-current.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\005_benchmark-current.md)
-6. [099_session-handoff.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\099_session-handoff.md)
+6. [006_loginserver-current.md](/e:/Procademy/myPortfolio/ServerPortfolio/RefactoringServer/docs/current/006_loginserver-current.md)
+7. [099_session-handoff.md](D:\Project\ServerPortfolio\RefactoringServer\docs\current\099_session-handoff.md)
 
 ## 2. 같이 보면 좋은 문서
 - 포트폴리오용 큰 그림: [portfolio/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\portfolio\README.md)

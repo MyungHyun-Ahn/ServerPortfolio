@@ -1,0 +1,11 @@
+﻿start=2026-04-08 17:37:49
+expected_end=2026-04-08 19:37:49
+server_pid=10056
+server_config=C:\Users\psa\Desktop\Test\echo-rio-cache-pingpong-2h-2mode\Out\\bench\20260408_173748_echo_rio_cache_pingpong_2h_2mode\rio_direct_2h\EchoServer.RioDirect.yaml
+server_stdout_log=C:\Users\psa\Desktop\Test\echo-rio-cache-pingpong-2h-2mode\Out\\bench\20260408_173748_echo_rio_cache_pingpong_2h_2mode\rio_direct_2h\server.stdout.log
+server_stderr_log=C:\Users\psa\Desktop\Test\echo-rio-cache-pingpong-2h-2mode\Out\\bench\20260408_173748_echo_rio_cache_pingpong_2h_2mode\rio_direct_2h\server.stderr.log
+rtt_csv=C:\Users\psa\Desktop\Test\echo-rio-cache-pingpong-2h-2mode\Out\\bench\20260408_173748_echo_rio_cache_pingpong_2h_2mode\rio_direct_2h\rtt.csv
+client_pid=5076
+client_config=C:\Users\psa\Desktop\Test\echo-rio-cache-pingpong-2h-2mode\Out\\bench\20260408_173748_echo_rio_cache_pingpong_2h_2mode\rio_direct_2h\EchoClient.RioDirect.yaml
+client_stdout_log=C:\Users\psa\Desktop\Test\echo-rio-cache-pingpong-2h-2mode\Out\\bench\20260408_173748_echo_rio_cache_pingpong_2h_2mode\rio_direct_2h\client.stdout.log
+client_stderr_log=C:\Users\psa\Desktop\Test\echo-rio-cache-pingpong-2h-2mode\Out\\bench\20260408_173748_echo_rio_cache_pingpong_2h_2mode\rio_direct_2h\client.stderr.log

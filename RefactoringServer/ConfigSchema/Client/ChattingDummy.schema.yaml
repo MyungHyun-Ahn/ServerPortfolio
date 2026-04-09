@@ -9,6 +9,7 @@ ChattingDummy:
   RunSeconds: { type: int32, default: 60 }
   SendIntervalMs: { type: int32, default: 1000 }
   PayloadSizeBytes: { type: int32, default: 1024 }
+  HiMode: { type: bool, default: false }
   RoomSelectionMode:
     type: enum
     default: Random

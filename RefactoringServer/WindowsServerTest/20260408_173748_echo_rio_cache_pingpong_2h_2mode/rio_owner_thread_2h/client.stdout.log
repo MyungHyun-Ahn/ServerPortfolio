@@ -1,0 +1,1 @@
+echo validation succeeded. sessions=250 responses=413938445 payloadSize=16 sendChunkSize=0 recvBufferSize=32 workerThreadCount=4 responseThreadCount=1 responsesPerThread=1 intervalMs=0 packetsPerSend=1 reconnectProbabilityPercent=0 connectsPerSecond=10 roomChangeProbabilityPercent=0 holdSeconds=7200

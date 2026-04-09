@@ -13,6 +13,7 @@ Scope: Review history index
 - `EchoServer` Windows Server 2시간 4모드 결과: [022_echo-server-windowsserver-2h-4mode-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\022_echo-server-windowsserver-2h-4mode-review.md)
 - `ChattingServer` Windows Server 1시간 4모드 결과: [026_chattingserver-windowsserver-1h-random-4mode-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\026_chattingserver-windowsserver-1h-random-4mode-review.md)
 - `RIO Direct` send ring 병목 분석: [023_rio-direct-cross-thread-sendring-cache-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\023_rio-direct-cross-thread-sendring-cache-review.md)
+- `EchoServer` 2시간 cache ping-pong 검증: [027_echo-rio-cache-pingpong-windowsserver-2h-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\027_echo-rio-cache-pingpong-windowsserver-2h-review.md)
 - TLS collector 사용 정리: [024_tls-collector-usage-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\024_tls-collector-usage-review.md)
 
 ## 2. 리뷰 디렉터리
@@ -22,6 +23,7 @@ Scope: Review history index
 - `Containers`: [004_containers](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\004_containers)
 - `Diagnostics`: [005_diagnostics](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\005_diagnostics)
 - `Logging`: [006_logging](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\006_logging)
+- `LoginServer`: [007_loginserver](/e:/Procademy/myPortfolio/ServerPortfolio/RefactoringServer/docs/reviews/007_loginserver)
 
 ## 3. 사용 원칙
 - 포트폴리오 관점 요약은 먼저 [portfolio/README.md](D:\Project\ServerPortfolio\RefactoringServer\docs\portfolio\README.md)에서 본다.

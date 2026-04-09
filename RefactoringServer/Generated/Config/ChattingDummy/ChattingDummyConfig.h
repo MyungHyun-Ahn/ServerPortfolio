@@ -25,6 +25,7 @@ namespace Generated::Config::ChattingDummy
 		std::int32_t RunSeconds = static_cast<std::int32_t>(60);
 		std::int32_t SendIntervalMs = static_cast<std::int32_t>(1000);
 		std::int32_t PayloadSizeBytes = static_cast<std::int32_t>(1024);
+		bool HiMode = false;
 		ERoomSelectionMode RoomSelectionMode = ERoomSelectionMode::Random;
 		std::string HotspotRoomIds = "77";
 		std::int32_t HotspotBiasPercent = static_cast<std::int32_t>(80);

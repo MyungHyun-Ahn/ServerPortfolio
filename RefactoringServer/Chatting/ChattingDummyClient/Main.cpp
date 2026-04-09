@@ -58,6 +58,7 @@ namespace
 		int runSeconds = 60;
 		int sendIntervalMs = 1000;
 		int payloadSizeBytes = 1024;
+		bool hiMode = false;
 		Generated::Config::ChattingDummy::ERoomSelectionMode roomSelectionMode =
 			Generated::Config::ChattingDummy::ERoomSelectionMode::Random;
 		std::vector<std::uint32_t> hotspotRoomIds;
@@ -233,6 +234,7 @@ namespace
 		outOptions.runSeconds = std::max(1, configDocument.ChattingDummy.RunSeconds);
 		outOptions.sendIntervalMs = std::max(0, configDocument.ChattingDummy.SendIntervalMs);
 		outOptions.payloadSizeBytes = std::max(1, configDocument.ChattingDummy.PayloadSizeBytes);
+		outOptions.hiMode = configDocument.ChattingDummy.HiMode;
 		outOptions.roomSelectionMode = configDocument.ChattingDummy.RoomSelectionMode;
 		outOptions.hotspotRoomIds = ParseRoomIdCsv(configDocument.ChattingDummy.HotspotRoomIds);
 		outOptions.hotspotBiasPercent = std::clamp(configDocument.ChattingDummy.HotspotBiasPercent, 0, 100);
@@ -279,8 +281,13 @@ namespace
 		return config;
 	}
 
-	std::vector<std::uint8_t> BuildPayloadPattern(const int payloadSizeBytes)
+	std::vector<std::uint8_t> BuildPayloadPattern(const int payloadSizeBytes, const bool hiMode)
 	{
+		if (hiMode)
+		{
+			return { static_cast<std::uint8_t>('h'), static_cast<std::uint8_t>('i') };
+		}
+
 		std::vector<std::uint8_t> payload(static_cast<std::size_t>(std::max(1, payloadSizeBytes)));
 		for (std::size_t index = 0; index < payload.size(); ++index)
 		{
@@ -385,6 +392,7 @@ namespace
 		void HandleRoomChangeResponse(SSessionSlot& slot, const FClientEvent& event, FRttThreadLocalCollector& rttCollector);
 		void HandleChattingResponse(SSessionSlot& slot, const FClientEvent& event, FRttThreadLocalCollector& rttCollector);
 		void HandleBroadcast(SSessionSlot& slot, const FClientEvent& event);
+		bool IsManagedDummyUserId(std::uint32_t userId) const noexcept;
 		std::optional<std::uint32_t> SelectTargetRoom(SSessionSlot& slot);
 		void RecordPendingSample(SSessionSlot& slot, FRttThreadLocalCollector& rttCollector);
 		std::uint8_t MakeRandomKey(const SSessionSlot& slot, std::uint8_t salt) const noexcept;
@@ -419,7 +427,7 @@ namespace
 		: m_options(options)
 		, m_rttMetricsRuntime(rttMetricsRuntime)
 		, m_clientNetwork(BuildClientNetworkConfig(options))
-		, m_payloadPattern(BuildPayloadPattern(options.payloadSizeBytes))
+		, m_payloadPattern(BuildPayloadPattern(options.payloadSizeBytes, options.hiMode))
 	{
 		m_slots.reserve(static_cast<std::size_t>(std::max(1, options.sessionCount)));
 		for (int sessionIndex = 0; sessionIndex < std::max(1, options.sessionCount); ++sessionIndex)
@@ -995,7 +1003,8 @@ namespace
 			return;
 		}
 
-		if (broadcastPacket.payload != m_payloadPattern)
+		if (IsManagedDummyUserId(broadcastPacket.senderUserId) &&
+			broadcastPacket.payload != m_payloadPattern)
 		{
 			++m_stats.payloadValidationFailureCount;
 			MarkPermanentFailure(slot, "broadcast payload validation failed");
@@ -1003,6 +1012,14 @@ namespace
 		}
 
 		++m_stats.broadcastReceiveCount;
+	}
+
+	bool FChattingDummyRuntime::IsManagedDummyUserId(const std::uint32_t userId) const noexcept
+	{
+		const std::uint64_t begin = static_cast<std::uint64_t>(m_options.loginUserIdBase);
+		const std::uint64_t end = begin + static_cast<std::uint64_t>(std::max(1, m_options.sessionCount));
+		const std::uint64_t value = static_cast<std::uint64_t>(userId);
+		return value >= begin && value < end;
 	}
 
 	std::optional<std::uint32_t> FChattingDummyRuntime::SelectTargetRoom(SSessionSlot& slot)

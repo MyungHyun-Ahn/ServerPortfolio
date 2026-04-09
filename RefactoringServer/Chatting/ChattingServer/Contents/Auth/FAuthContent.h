@@ -3,6 +3,7 @@
 #include "ContentsRuntime/Core/IContent.h"
 #include "ChattingServer/Contents/ContentTypes.h"
 #include "ChattingServer/Contents/Session/FUserRegistry.h"
+#include "Connector/Interfaces/IChatTicketStore.h"
 #include "Foundation/Logging/ILogger.h"
 
 #include <memory>
@@ -18,6 +19,7 @@ namespace ChattingServer::Contents
 			std::shared_ptr<Foundation::ILogger> logger,
 			ContentsRuntime::Core::FContentInstanceId contentInstanceId,
 			std::shared_ptr<FUserRegistry> userRegistry,
+			std::shared_ptr<Connector::IChatTicketStore> chatTicketStore,
 			SRuntimeOptions runtimeOptions);
 
 		ContentsRuntime::Core::FContentId GetContentId() const noexcept override;
@@ -38,6 +40,7 @@ namespace ChattingServer::Contents
 		std::shared_ptr<Foundation::ILogger> m_logger;
 		ContentsRuntime::Core::FContentInstanceId m_contentInstanceId = ContentsRuntime::Core::kInvalidContentInstanceId;
 		std::shared_ptr<FUserRegistry> m_userRegistry;
+		std::shared_ptr<Connector::IChatTicketStore> m_chatTicketStore;
 		SRuntimeOptions m_runtimeOptions;
 		std::unordered_map<std::uint64_t, std::uint64_t> m_sessionGenerations;
 	};

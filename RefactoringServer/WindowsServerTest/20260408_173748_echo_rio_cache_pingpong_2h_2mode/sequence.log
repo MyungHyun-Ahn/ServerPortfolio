@@ -1,0 +1,9 @@
+﻿start=2026-04-08 17:37:48
+session_count=250
+hold_seconds=7200
+payload_size=16
+connects_per_second=10
+room_count=80
+room_capacity=4
+worker_thread_count=4
+mode_order=RioDirect,RioOwnerThread
