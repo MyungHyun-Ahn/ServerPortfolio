@@ -87,6 +87,7 @@ Scope: Optimization attempts overview
   - [019_rio-session-send-ring-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\019_rio-session-send-ring-review.md)
   - [022_echo-server-windowsserver-2h-4mode-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\022_echo-server-windowsserver-2h-4mode-review.md)
   - [023_rio-direct-cross-thread-sendring-cache-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\023_rio-direct-cross-thread-sendring-cache-review.md)
+  - [027_echo-rio-cache-pingpong-windowsserver-2h-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\027_echo-rio-cache-pingpong-windowsserver-2h-review.md)
   - [026_chattingserver-windowsserver-1h-random-4mode-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\026_chattingserver-windowsserver-1h-random-4mode-review.md)
 
 ## 5. Diagnostics / Monitoring 구조

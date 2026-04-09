@@ -1,0 +1,53 @@
+# Generated from ConfigSchema/Server/EchoServer.schema.yaml
+# Package template for Echo RIO cache ping-pong comparison.
+
+EchoServer:
+  # Allowed: Iocp, Rio, BoostAsio
+  Backend: Rio
+  # Allowed: Direct, OwnerThread
+  RioSendDispatchMode: OwnerThread
+  BindIp: 127.0.0.1
+  Port: 19000
+  WorkerThreadCount: 4
+  MaxSessionCount: 512
+  RecvBufferSize: 1024
+  SocketSendBufferBytes: 0
+  # Allowed: Debug, Info, Warn, Error
+  LogMinimumLevel: Info
+  LogOutputDirectory: "C:/Users/psa/Desktop/Test/echo-rio-cache-pingpong-2h-2mode/Out//bench/20260408_173748_echo_rio_cache_pingpong_2h_2mode/rio_owner_thread_2h/server_logs"
+  LogConsoleEnabled: true
+  LogFileEnabled: true
+  LogIncludeThreadId: true
+  PacketKey: 55
+  EnablePagePool: true
+  PageSize: 4096
+  ContentsWorkerThreadCount: 4
+  SendThreadCount: 1
+  ResponsesPerThread: 1
+  RoomCount: 80
+  RoomCapacity: 4
+
+Debug:
+  ManualDump: false
+  Headless: true
+  BootstrapTrace: false
+  TraceUserId: 0
+  LogPackets: false
+  TransitionRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  TransitionRaceInjectionMode: None
+  PostRoomChangeRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  PostRoomChangeRaceInjectionMode: None
+  FirstEchoRaceInjectionEnabled: false
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  FirstEchoRaceInjectionMode: None
+  ContentsRaceInjectionEnabled: false
+  ContentsRaceInjectionPeriod: 100
+  # Allowed: None, SwitchToThread, Sleep0, Yield
+  ContentsRaceInjectionMode: None
+  ContentsFailFast: false
+  DelegateTestEnabled: false
+  DelegateTestTargetRoomId: 77
+  DelegateTestSleepMs: 15
+  DelegateTestSleepEveryNFrames: 1
