@@ -11,6 +11,8 @@ namespace Generated.Packets.Login
 	{
 		public const ushort LoginRq = 2000;
 		public const ushort LoginRp = 2001;
+		public const ushort LoginAuthRq = 2002;
+		public const ushort LoginAuthRp = 2003;
 	}
 
 	public sealed partial class LoginRqPacket : IContentPacket
@@ -38,6 +40,57 @@ namespace Generated.Packets.Login
 	public sealed partial class LoginRpPacket : IContentPacket
 	{
 		public ushort Opcode => LoginPacketOpcodes.LoginRp;
+
+		public uint UserId { get; set; }
+		public bool Success { get; set; }
+
+		public void Serialize(PacketWriter writer)
+		{
+			writer.WriteUInt32(UserId);
+			writer.WriteBoolean(Success);
+		}
+
+		public bool Deserialize(PacketReader reader)
+		{
+			if (!reader.TryReadUInt32(out uint userIdValue))
+			{
+				return false;
+			}
+			UserId = userIdValue;
+			if (!reader.TryReadBoolean(out bool successValue))
+			{
+				return false;
+			}
+			Success = successValue;
+			return reader.IsAtEnd;
+		}
+	}
+
+	public sealed partial class LoginAuthRqPacket : IContentPacket
+	{
+		public ushort Opcode => LoginPacketOpcodes.LoginAuthRq;
+
+		public string Ticket { get; set; } = string.Empty;
+
+		public void Serialize(PacketWriter writer)
+		{
+			writer.WriteString(Ticket);
+		}
+
+		public bool Deserialize(PacketReader reader)
+		{
+			if (!reader.TryReadString(out string ticketValue))
+			{
+				return false;
+			}
+			Ticket = ticketValue;
+			return reader.IsAtEnd;
+		}
+	}
+
+	public sealed partial class LoginAuthRpPacket : IContentPacket
+	{
+		public ushort Opcode => LoginPacketOpcodes.LoginAuthRp;
 
 		public uint UserId { get; set; }
 		public bool Success { get; set; }

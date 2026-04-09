@@ -1,4 +1,4 @@
-﻿# bytes_view zero-copy 由щ럭
+# bytes_view zero-copy 由щ럭
 
 ## 1. 紐⑹쟻
 - recv ??쭅?ы솕 寃쎈줈?먯꽌 諛붿씠?덈━ payload瑜?蹂듭궗 ?놁씠 ?쎌쓣 ???덈룄濡?`bytes_view` 吏?먯쓣 異붽????댁쑀? ?꾩옱 ?쒖빟???뺣━?쒕떎.
@@ -18,7 +18,7 @@
 ### 2-3. ?섑뵆 ?곸슜
 - [Chat.yaml](D:/Project/ServerPortfolio/RefactoringServer/Packet/Chat/Chat.yaml)
   - `RoomBinarySnapshotNoti.payload`瑜?`bytes_view`濡??뺤쓽?덈떎.
-- [ChatPackets.h](D:/Project/ServerPortfolio/RefactoringServer/Generated/Packets/Chat/ChatPackets.h)
+- [ChatPackets.h](D:/Project/ServerPortfolio/RefactoringServer/Generated/Cpp/Packets/Chat/ChatPackets.h)
   - generated packet??`std::span<const std::uint8_t>`瑜??ъ슜?섎룄濡??앹꽦?먮떎.
 
 ## 3. 援ъ“???μ젏

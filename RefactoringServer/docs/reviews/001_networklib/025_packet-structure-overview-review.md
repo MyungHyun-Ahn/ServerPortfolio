@@ -1,4 +1,4 @@
-﻿# Packet Structure Overview Review
+# Packet Structure Overview Review
 
 ## 1. 臾몄꽌 紐⑹쟻
 - `RefactoringServer`???꾩옱 ?⑦궥 援ъ“瑜?肄붾뱶 湲곗??쇰줈 ??踰덉뿉 ?ㅻ챸?섎뒗 臾몄꽌??
@@ -102,19 +102,19 @@ struct SContentHeader
   - [Program.cs](D:\Project\ServerPortfolio\RefactoringServer\Tools\PacketGenerator\Program.cs)
 - ?앹꽦 寃곌낵:
   - packet class:
-    - [ChattingPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Chatting\ChattingPackets.h)
+    - [ChattingPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Chatting\ChattingPackets.h)
   - content handler:
-    - [ChattingPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Chatting\ChattingPacketHandler.h)
+    - [ChattingPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Chatting\ChattingPacketHandler.h)
   - top-level router:
-    - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\PacketRouter.h)
+    - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\PacketRouter.h)
 
 ### 4-4. Router ??븷
 - ?곸쐞 router??`opcode -> content dispatcher` ?좏깮留??대떦?쒕떎.
 - ??
-  - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\PacketRouter.h)
+  - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\PacketRouter.h)
 - 媛?content handler base??洹?content ?대? opcode瑜??ㅼ떆 硫붿떆吏蹂꾨줈 遺꾧린?쒕떎.
 - ??
-  - [ChattingPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Chatting\ChattingPacketHandler.h)
+  - [ChattingPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Chatting\ChattingPacketHandler.h)
 
 ## 5. 吏곷젹??洹쒖튃
 
@@ -152,7 +152,7 @@ struct SContentHeader
 
 ### 5-4. Borrowed View
 - 紐⑤뱺 ??쭅?ы솕媛 ?뚯쑀??蹂듭궗留??곕뒗 嫄??꾨땲??
-- ?덈? ?ㅼ뼱 [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Echo\EchoPackets.h) ??`string_view` ?꾨뱶??recv buffer 硫붾え由щ? 吏곸젒 媛由ы궗 ???덈떎.
+- ?덈? ?ㅼ뼱 [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Echo\EchoPackets.h) ??`string_view` ?꾨뱶??recv buffer 硫붾え由щ? 吏곸젒 媛由ы궗 ???덈떎.
 - ??寃쎌슦:
   - `ContainsBorrowedViews() == true`
   - `BindBorrowedViewScope(...)` 濡??섎챸 scope瑜?臾띕뒗??
@@ -238,13 +238,13 @@ struct SContentHeader
 ## 8. Dispatch 寃쎈줈
 
 ### 8-1. Top-level Router
-- [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\PacketRouter.h)
+- [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\PacketRouter.h)
 - ??븷:
   - `opcode`瑜?蹂닿퀬 ?대뼡 content dispatcher?먭쾶 ?섍만吏 寃곗젙
 
 ### 8-2. Content Handler Base
 - ??
-  - [ChattingPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Chatting\ChattingPacketHandler.h)
+  - [ChattingPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Chatting\ChattingPacketHandler.h)
 - ??븷:
   1. `opcode` switch
   2. ?대떦 packet type ?앹꽦

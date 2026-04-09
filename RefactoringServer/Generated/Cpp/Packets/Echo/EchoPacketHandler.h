@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Generated/Packets/Echo/EchoPackets.h"
+#include "Generated/Cpp/Packets/Echo/EchoPackets.h"
 #include "Packet/Serialization/FPacketSerialization.h"
 #include "Packet/View/FPacketView.h"
 #include "Servers/IServer.h"

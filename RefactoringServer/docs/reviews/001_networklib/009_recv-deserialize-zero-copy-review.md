@@ -1,4 +1,4 @@
-﻿# ?섏떊 ??쭅?ы솕 zero-copy 由щ럭
+# ?섏떊 ??쭅?ы솕 zero-copy 由щ럭
 
 ## 1. 紐⑹쟻
 - recv 寃쎈줈?먯꽌 蹂듭궗 ?놁씠 ?쎌쓣 ???덈뒗 ?곗씠?곕뒗 view ?뺥깭濡??ㅻ（??諛⑺뼢???ㅼ젣 援ъ“??留욌뒗吏 ?뺣━?쒕떎.
@@ -18,7 +18,7 @@
 ### 2-3. ?섑뵆 ?곸슜
 - [Echo.yaml](D:\Project\ServerPortfolio\RefactoringServer\Packet\Echo\Echo.yaml)
   - `message` ?꾨뱶瑜?`string_view`濡??꾪솚?덈떎.
-- [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Echo\EchoPackets.h)
+- [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Echo\EchoPackets.h)
   - generated Echo packet??`std::string_view`瑜??ъ슜?섎룄濡??ъ깮?깅릱??
 - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoServer\Main.cpp)
 - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\Echo\EchoClient\Main.cpp)

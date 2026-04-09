@@ -3,7 +3,7 @@
 #include "ChattingServer/Contents/Auth/FAuthContent.h"
 
 #include "ContentsRuntime/Bridge/IContentBridge.h"
-#include "Generated/Packets/Login/LoginPackets.h"
+#include "Generated/Cpp/Packets/Login/LoginPackets.h"
 
 namespace ChattingServer::Contents
 {

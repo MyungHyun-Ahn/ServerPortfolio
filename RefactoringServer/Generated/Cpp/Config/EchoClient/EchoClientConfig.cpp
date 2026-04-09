@@ -1,6 +1,6 @@
 #include "Pch.h"
 
-#include "Generated/Config/EchoClient/EchoClientConfig.h"
+#include "Generated/Cpp/Config/EchoClient/EchoClientConfig.h"
 #include "Foundation/Config/FConfigFileLoader.h"
 #include "Foundation/Config/FConfigValueReader.h"
 

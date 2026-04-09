@@ -11,4 +11,9 @@
     <BaseOutputPath>..\..\Out\ChattingClientWinForms\</BaseOutputPath>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Libraries\ClientNetworkLib.CSharp\ClientNetworkLib.CSharp.csproj" />
+    <ProjectReference Include="..\..\Libraries\GeneratedPackets.CSharp\GeneratedPackets.CSharp.csproj" />
+  </ItemGroup>
+
 </Project>

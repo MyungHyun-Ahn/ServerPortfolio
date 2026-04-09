@@ -1,46 +1,46 @@
 # ConfigGenerator
 
-간단한 YAML config schema를 읽어서 C++ 설정 문서/로더 코드를 생성하는 오프라인 도구다.
+媛꾨떒??YAML config schema瑜??쎌뼱??C++ ?ㅼ젙 臾몄꽌/濡쒕뜑 肄붾뱶瑜??앹꽦?섎뒗 ?ㅽ봽?쇱씤 ?꾧뎄??
 
-## 역할
-- `RefactoringServer/ConfigSchema/**/*.schema.yaml` 스키마를 읽는다.
-- `RefactoringServer/Generated/Config/**` 아래 generated C++ 코드를 만든다.
-- 런타임 YAML과 대응되는 설정 문서 구조를 수동 struct 작성 없이 유지한다.
+## ??븷
+- `RefactoringServer/ConfigSchema/**/*.schema.yaml` ?ㅽ궎留덈? ?쎈뒗??
+- `RefactoringServer/Generated/Cpp/Config/**` ?꾨옒 generated C++ 肄붾뱶瑜?留뚮뱺??
+- ?고???YAML怨???묐릺???ㅼ젙 臾몄꽌 援ъ“瑜??섎룞 struct ?묒꽦 ?놁씠 ?좎??쒕떎.
 
-## 기본 실행
-프로젝트 루트에서:
+## 湲곕낯 ?ㅽ뻾
+?꾨줈?앺듃 猷⑦듃?먯꽌:
 
 ```powershell
 RefactoringServer\scripts\generate\Generate-Configs.cmd
 ```
 
-직접 실행:
+吏곸젒 ?ㅽ뻾:
 
 ```powershell
 dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csproj
 ```
 
-## 인자
+## ?몄옄
 - `--schema-root <path>`
-  - 기본값: `RefactoringServer/ConfigSchema`
+  - 湲곕낯媛? `RefactoringServer/ConfigSchema`
 - `--output-root <path>`
-  - 기본값: `RefactoringServer/Generated/Config`
+  - 湲곕낯媛? `RefactoringServer/Generated/Cpp/Config`
 - `--config-root <path>`
-  - 기본값: `RefactoringServer/Config`
+  - 湲곕낯媛? `RefactoringServer/Config`
 
-예:
+??
 
 ```powershell
-dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\ConfigSchema --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Config --config-root D:\Project\ServerPortfolio\RefactoringServer\Config
+dotnet run --project RefactoringServer\Tools\ConfigGenerator\ConfigGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\ConfigSchema --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Config --config-root D:\Project\ServerPortfolio\RefactoringServer\Config
 ```
 
-## 스키마 형식
-파일명에서 target을 추론한다.
+## ?ㅽ궎留??뺤떇
+?뚯씪紐낆뿉??target??異붾줎?쒕떎.
 
 - `ConfigSchema/Server/EchoServer.schema.yaml` -> `EchoServer`
 - `ConfigSchema/Client/EchoClient.schema.yaml` -> `EchoClient`
 
-스키마는 최상단 섹션 맵 형식으로 쓴다.
+?ㅽ궎留덈뒗 理쒖긽???뱀뀡 留??뺤떇?쇰줈 ?대떎.
 
 ```yaml
 EchoServer:
@@ -55,45 +55,44 @@ Debug:
   BootstrapTrace: { type: bool, default: false }
 ```
 
-## 지원 필드 속성
+## 吏???꾨뱶 ?띿꽦
 - `type`
 - `default`
 - `required`
 - `description`
 - `values`
 
-### `required` 사용 규칙
-- `required: true`면 generated loader가 `ReadRequired*` 경로를 사용한다.
-- `required + default`는 sample YAML에 기본값이 채워지므로 기본 실행을 유지하면서 필수 키 정책을 표현할 때 쓴다.
-- `required + default 없음`은 사람이 직접 값을 채워야 하는 운영 전용 항목에 쓴다.
+### `required` ?ъ슜 洹쒖튃
+- `required: true`硫?generated loader媛 `ReadRequired*` 寃쎈줈瑜??ъ슜?쒕떎.
+- `required + default`??sample YAML??湲곕낯媛믪씠 梨꾩썙吏誘濡?湲곕낯 ?ㅽ뻾???좎??섎㈃???꾩닔 ???뺤콉???쒗쁽?????대떎.
+- `required + default ?놁쓬`? ?щ엺??吏곸젒 媛믪쓣 梨꾩썙???섎뒗 ?댁쁺 ?꾩슜 ??ぉ???대떎.
 
-## 지원 타입
-- `bool`
+## 吏?????- `bool`
 - `int32`, `uint16`, `uint32`, `int64`, `uint64`
 - `float`, `double`
 - `string`
 - `enum`
 
-## 생성 결과
-- `Generated/Config/<Target>/<Target>Config.h`
-- `Generated/Config/<Target>/<Target>Config.cpp`
+## ?앹꽦 寃곌낵
+- `Generated/Cpp/Config/<Target>/<Target>Config.h`
+- `Generated/Cpp/Config/<Target>/<Target>Config.cpp`
 - `Config/<relative-directory>/<Target>.yaml`
 
-예:
-- `Generated/Config/EchoServer/EchoServerConfig.h`
-- `Generated/Config/EchoClient/EchoClientConfig.h`
+??
+- `Generated/Cpp/Config/EchoServer/EchoServerConfig.h`
+- `Generated/Cpp/Config/EchoClient/EchoClientConfig.h`
 
-## 생성 규칙
-- 루트 클래스 이름은 자동 생성한다.
+## ?앹꽦 洹쒖튃
+- 猷⑦듃 ?대옒???대쫫? ?먮룞 ?앹꽦?쒕떎.
   - `EchoServer` -> `FEchoServerConfigDocument`
-- 섹션 클래스 이름도 자동 생성한다.
+- ?뱀뀡 ?대옒???대쫫???먮룞 ?앹꽦?쒕떎.
   - `EchoServer` -> `SEchoServerConfig`
   - `Debug` -> `SEchoServerDebugConfig`
-- enum field는 generated enum으로 승격된다.
-- sample YAML은 schema 기본값과 enum 허용값 주석을 함께 생성한다.
-- `required: true`인 field는 generated loader에서 `ReadRequired*` 경로를 사용한다.
+- enum field??generated enum?쇰줈 ?밴꺽?쒕떎.
+- sample YAML? schema 湲곕낯媛믨낵 enum ?덉슜媛?二쇱꽍???④퍡 ?앹꽦?쒕떎.
+- `required: true`??field??generated loader?먯꽌 `ReadRequired*` 寃쎈줈瑜??ъ슜?쒕떎.
 
-예:
+??
 
 ```yaml
 EchoServer:
@@ -101,9 +100,9 @@ EchoServer:
   Port: { type: uint16, default: 19000, required: true }
 ```
 
-## 운영 규칙
-1. 스키마를 수정하면 `Generate-Configs.cmd`를 다시 실행한다.
-2. generated C++ 코드는 커밋 대상이다.
-3. `Tools/ConfigGenerator/bin`, `Tools/ConfigGenerator/obj`는 커밋 대상이 아니다.
-4. 일반 C++ 프로젝트 빌드는 `ConfigGenerator`를 자동 실행하지 않는다.
-5. 필요하면 [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Codegen.cmd)로 packet/config 생성기를 한 번에 실행한다.
+## ?댁쁺 洹쒖튃
+1. ?ㅽ궎留덈? ?섏젙?섎㈃ `Generate-Configs.cmd`瑜??ㅼ떆 ?ㅽ뻾?쒕떎.
+2. generated C++ 肄붾뱶??而ㅻ컠 ??곸씠??
+3. `Tools/ConfigGenerator/bin`, `Tools/ConfigGenerator/obj`??而ㅻ컠 ??곸씠 ?꾨땲??
+4. ?쇰컲 C++ ?꾨줈?앺듃 鍮뚮뱶??`ConfigGenerator`瑜??먮룞 ?ㅽ뻾?섏? ?딅뒗??
+5. ?꾩슂?섎㈃ [Generate-Codegen.cmd](D:\Project\ServerPortfolio\RefactoringServer\scripts\generate\Generate-Codegen.cmd)濡?packet/config ?앹꽦湲곕? ??踰덉뿉 ?ㅽ뻾?쒕떎.

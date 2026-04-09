@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Generated/Packets/Chat/ChatPackets.h"
+#include "Generated/Cpp/Packets/Chat/ChatPackets.h"
 #include "Packet/Serialization/FPacketSerialization.h"
 #include "Packet/View/FPacketView.h"
 #include "Servers/IServer.h"

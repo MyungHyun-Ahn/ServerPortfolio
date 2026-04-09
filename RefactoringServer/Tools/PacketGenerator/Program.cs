@@ -17,7 +17,7 @@ internal static class Program
         {
             string solutionRoot = FindSolutionRoot();
             string schemaRoot = Path.Combine(solutionRoot, "Packet");
-            string cppOutputRoot = Path.Combine(solutionRoot, "Generated", "Packets");
+            string cppOutputRoot = Path.Combine(solutionRoot, "Generated", "Cpp", "Packets");
             string csharpOutputRoot = Path.Combine(solutionRoot, "Generated", "CSharp", "Packets");
             PacketGeneratorTargets targets = PacketGeneratorTargets.Cpp;
 
@@ -576,7 +576,7 @@ internal static class CppPacketGenerator
         var builder = new StringBuilder();
         builder.AppendLine("#pragma once");
         builder.AppendLine();
-        builder.AppendLine($"#include \"Generated/Packets/{document.Content}/{document.Content}Packets.h\"");
+        builder.AppendLine($"#include \"Generated/Cpp/Packets/{document.Content}/{document.Content}Packets.h\"");
         builder.AppendLine("#include \"Packet/Serialization/FPacketSerialization.h\"");
         builder.AppendLine("#include \"Packet/View/FPacketView.h\"");
         builder.AppendLine("#include \"Servers/IServer.h\"");
@@ -662,7 +662,7 @@ internal static class CppPacketGenerator
 
         foreach (PacketSchemaDocument document in documents)
         {
-            builder.AppendLine($"#include \"Generated/Packets/{document.Content}/{document.Content}PacketHandler.h\"");
+            builder.AppendLine($"#include \"Generated/Cpp/Packets/{document.Content}/{document.Content}PacketHandler.h\"");
         }
 
         builder.AppendLine("#include \"Packet/View/FPacketView.h\"");

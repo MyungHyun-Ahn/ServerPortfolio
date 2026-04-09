@@ -1,57 +1,57 @@
 # PacketGenerator
 
-간단한 YAML 패킷 스키마를 읽어서 C++ 패킷/핸들러/라우터 헤더를 생성하는 오프라인 도구입니다.
+媛꾨떒??YAML ?⑦궥 ?ㅽ궎留덈? ?쎌뼱??C++ ?⑦궥/?몃뱾???쇱슦???ㅻ뜑瑜??앹꽦?섎뒗 ?ㅽ봽?쇱씤 ?꾧뎄?낅땲??
 
-## 역할
-- `RefactoringServer/Packet/**/*.yaml` 스키마를 읽는다.
-- `RefactoringServer/Generated/Packets/**` 아래에 generated C++ 헤더를 만든다.
-- 콘텐츠별 packet/handler와 전역 `PacketRouter.h`를 생성한다.
+## ??븷
+- `RefactoringServer/Packet/**/*.yaml` ?ㅽ궎留덈? ?쎈뒗??
+- `RefactoringServer/Generated/Cpp/Packets/**` ?꾨옒??generated C++ ?ㅻ뜑瑜?留뚮뱺??
+- 肄섑뀗痢좊퀎 packet/handler? ?꾩뿭 `PacketRouter.h`瑜??앹꽦?쒕떎.
 
-## 기본 실행
+## 湲곕낯 ?ㅽ뻾
 
-프로젝트 루트에서:
+?꾨줈?앺듃 猷⑦듃?먯꽌:
 
 ```powershell
 RefactoringServer\scripts\generate\Generate-Packets.cmd
 ```
 
-직접 실행할 때:
+吏곸젒 ?ㅽ뻾????
 
 ```powershell
 dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csproj
 ```
 
-## 인자
+## ?몄옄
 - `--schema-root <path>`
-  - 기본값: `RefactoringServer/Packet`
+  - 湲곕낯媛? `RefactoringServer/Packet`
 - `--output-root <path>`
-  - 기본값: `RefactoringServer/Generated/Packets`
+  - 湲곕낯媛? `RefactoringServer/Generated/Cpp/Packets`
 - `--csharp-output-root <path>`
-  - 기본값: `RefactoringServer/Generated/CSharp/Packets`
+  - 湲곕낯媛? `RefactoringServer/Generated/CSharp/Packets`
 - `--targets <list>`
   - `cpp`
   - `csharp`
   - `cpp,csharp`
 
-예:
+??
 
 ```powershell
-dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\Packet --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets --csharp-output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\CSharp\Packets --targets cpp,csharp
+dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csproj -- --schema-root D:\Project\ServerPortfolio\RefactoringServer\Packet --output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets --csharp-output-root D:\Project\ServerPortfolio\RefactoringServer\Generated\CSharp\Packets --targets cpp,csharp
 ```
 
-## 스키마 규칙
-- 파일 1개가 콘텐츠 1개다.
-- 예:
+## ?ㅽ궎留?洹쒖튃
+- ?뚯씪 1媛쒓? 肄섑뀗痢?1媛쒕떎.
+- ??
   - `Packet/Echo/Echo.yaml`
   - `Packet/Login/Login.yaml`
   - `Packet/Chat/Chat.yaml`
-- 한 파일 안에 여러 `messages`를 둘 수 있다.
-- `rq`와 `rp`는 반드시 쌍으로 존재해야 한다.
-- `noti`는 선택 사항이다.
-- `rq`, `rp`, `noti`는 각각 다른 `opcode`를 가져야 한다.
-- 전체 스키마 집합에서 `content` 이름과 `opcode`는 중복되면 안 된다.
+- ???뚯씪 ?덉뿉 ?щ윭 `messages`瑜??????덈떎.
+- `rq`? `rp`??諛섎뱶???띿쑝濡?議댁옱?댁빞 ?쒕떎.
+- `noti`???좏깮 ?ы빆?대떎.
+- `rq`, `rp`, `noti`??媛곴컖 ?ㅻⅨ `opcode`瑜?媛?몄빞 ?쒕떎.
+- ?꾩껜 ?ㅽ궎留?吏묓빀?먯꽌 `content` ?대쫫怨?`opcode`??以묐났?섎㈃ ???쒕떎.
 
-## 지원 타입
+## 吏?????
 - scalar
   - `bool`
   - `int8`, `int16`, `int32`, `int64`
@@ -67,59 +67,59 @@ dotnet run --project RefactoringServer\Tools\PacketGenerator\PacketGenerator.csp
   - `map<K, V>`
   - `unordered_map<K, V>`
 
-## 컨테이너 정책
-- 공식 지원은 `컨테이너 1단계`까지만이다.
-- 허용 예:
+## 而⑦뀒?대꼫 ?뺤콉
+- 怨듭떇 吏?먯? `而⑦뀒?대꼫 1?④퀎`源뚯?留뚯씠??
+- ?덉슜 ??
   - `vector<string>`
   - `map<string, uint32>`
   - `unordered_map<string, string>`
-- 금지 예:
+- 湲덉? ??
   - `vector<vector<int32>>`
   - `map<string, vector<uint32>>`
   - `unordered_map<string, map<string, int32>>`
 
-복잡한 nested container가 필요하면 생성기 기본 규칙을 확장하기보다, 생성된 패킷에서 `Serialize` / `Deserialize`를 수동 override하는 쪽을 우선 권장합니다.
+蹂듭옟??nested container媛 ?꾩슂?섎㈃ ?앹꽦湲?湲곕낯 洹쒖튃???뺤옣?섍린蹂대떎, ?앹꽦???⑦궥?먯꽌 `Serialize` / `Deserialize`瑜??섎룞 override?섎뒗 履쎌쓣 ?곗꽑 沅뚯옣?⑸땲??
 
-## 생성 결과
-- 콘텐츠별:
+## ?앹꽦 寃곌낵
+- 肄섑뀗痢좊퀎:
   - `<Content>Packets.h`
   - `<Content>PacketHandler.h`
-- C# 콘텐츠별:
+- C# 肄섑뀗痢좊퀎:
   - `<Content>Packets.g.cs`
-- 전역:
+- ?꾩뿭:
   - `PacketRouter.h`
   - `GeneratedPacketRegistry.g.cs`
 
-예:
-- `Generated/Packets/Echo/EchoPackets.h`
-- `Generated/Packets/Echo/EchoPacketHandler.h`
-- `Generated/Packets/PacketRouter.h`
+??
+- `Generated/Cpp/Packets/Echo/EchoPackets.h`
+- `Generated/Cpp/Packets/Echo/EchoPacketHandler.h`
+- `Generated/Cpp/Packets/PacketRouter.h`
 - `Generated/CSharp/Packets/Echo/EchoPackets.g.cs`
 - `Generated/CSharp/Packets/GeneratedPacketRegistry.g.cs`
 
-## 생성 코드 구조
-- packet class는 `IContentPacket`을 따른다.
-- 기본적으로 아래를 생성한다.
+## ?앹꽦 肄붾뱶 援ъ“
+- packet class??`IContentPacket`???곕Ⅸ??
+- 湲곕낯?곸쑝濡??꾨옒瑜??앹꽦?쒕떎.
   - `GetOpcode()`
   - `virtual Serialize(FPacketWriter&) const`
   - `virtual Deserialize(FPacketReader&)`
-- 콘텐츠별 handler base / dispatcher도 같이 생성한다.
-- 전역 router가 `opcode`로 어떤 콘텐츠 처리기에 넘길지 선택한다.
+- 肄섑뀗痢좊퀎 handler base / dispatcher??媛숈씠 ?앹꽦?쒕떎.
+- ?꾩뿭 router媛 `opcode`濡??대뼡 肄섑뀗痢?泥섎━湲곗뿉 ?섍만吏 ?좏깮?쒕떎.
 
-## 실패 조건
-- `rq`만 있고 `rp`가 없을 때
-- `rp`만 있고 `rq`가 없을 때
-- 지원하지 않는 타입이 들어왔을 때
-- 중복 `opcode`가 있을 때
-- 중복 `content` 이름이 있을 때
-- YAML 파싱이 실패할 때
+## ?ㅽ뙣 議곌굔
+- `rq`留??덇퀬 `rp`媛 ?놁쓣 ??
+- `rp`留??덇퀬 `rq`媛 ?놁쓣 ??
+- 吏?먰븯吏 ?딅뒗 ??낆씠 ?ㅼ뼱?붿쓣 ??
+- 以묐났 `opcode`媛 ?덉쓣 ??
+- 以묐났 `content` ?대쫫???덉쓣 ??
+- YAML ?뚯떛???ㅽ뙣????
 
-## 권장 작업 흐름
-1. `Packet/**/*.yaml` 수정
-2. `Generate-Packets.cmd` 실행
-3. `Generated/Packets/**`, `Generated/CSharp/Packets/**` 변경 확인
-4. C++ 솔루션 빌드
+## 沅뚯옣 ?묒뾽 ?먮쫫
+1. `Packet/**/*.yaml` ?섏젙
+2. `Generate-Packets.cmd` ?ㅽ뻾
+3. `Generated/Cpp/Packets/**`, `Generated/CSharp/Packets/**` 蹂寃??뺤씤
+4. C++ ?붾（??鍮뚮뱶
 
-## 참고 문서
+## 李멸퀬 臾몄꽌
 - [Content Header And Packet CodeGen Plan](D:\Project\ServerPortfolio\RefactoringServer\docs\plans\006_packet-schema-tooling\001_content-header-and-packet-codegen.md)
 - [Packet Container Support Policy](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\networklib\packet-container-support-policy.md)

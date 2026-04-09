@@ -5,8 +5,8 @@
 #include "ContentsRuntime/Bridge/IContentBridge.h"
 #include "EchoServer/Contents/ContentTypes.h"
 #include "EchoServer/Contents/Room/RoomFlowTypes.h"
-#include "Generated/Packets/Chat/ChatPackets.h"
-#include "Generated/Packets/Echo/EchoPackets.h"
+#include "Generated/Cpp/Packets/Chat/ChatPackets.h"
+#include "Generated/Cpp/Packets/Echo/EchoPackets.h"
 
 namespace EchoServer::Contents
 {

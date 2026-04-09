@@ -10,7 +10,7 @@ internal static class Program
         {
             string solutionRoot = FindSolutionRoot();
             string schemaRoot = Path.Combine(solutionRoot, "ConfigSchema");
-            string outputRoot = Path.Combine(solutionRoot, "Generated", "Config");
+            string outputRoot = Path.Combine(solutionRoot, "Generated", "Cpp", "Config");
             string configRoot = Path.Combine(solutionRoot, "Config");
 
             ParseArguments(args, ref schemaRoot, ref outputRoot, ref configRoot);
@@ -699,7 +699,7 @@ internal static class CppConfigGenerator
         var builder = new StringBuilder();
         builder.AppendLine("#include \"Pch.h\"");
         builder.AppendLine();
-        builder.AppendLine($"#include \"Generated/Config/{document.Target}/{document.Target}Config.h\"");
+        builder.AppendLine($"#include \"Generated/Cpp/Config/{document.Target}/{document.Target}Config.h\"");
         builder.AppendLine("#include \"Foundation/Config/FConfigFileLoader.h\"");
         builder.AppendLine("#include \"Foundation/Config/FConfigValueReader.h\"");
         builder.AppendLine();

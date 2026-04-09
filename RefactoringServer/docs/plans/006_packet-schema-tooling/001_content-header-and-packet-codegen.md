@@ -142,7 +142,7 @@
 ### 7.3 Standard Workflow
 1. Edit `Packet/**/*.yaml`
 2. Run packet generation manually
-3. Check `Generated/Packets/...`
+3. Check `Generated/Cpp/Packets/...`
 4. Build C++ solution
 
 ### 7.4 Tool Entry Point

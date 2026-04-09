@@ -1,6 +1,6 @@
 #include "Pch.h"
 
-#include "Generated/Config/ChattingDummy/ChattingDummyConfig.h"
+#include "Generated/Cpp/Config/ChattingDummy/ChattingDummyConfig.h"
 #include "Foundation/Config/FConfigFileLoader.h"
 #include "Foundation/Config/FConfigValueReader.h"
 

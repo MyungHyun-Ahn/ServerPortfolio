@@ -1,23 +1,23 @@
 # ConfigGenerator Enum, Required, Template Plan
 
-## 1. 목적
-- `ConfigGenerator`가 문자열 기반 설정만 생성하는 상태에서 한 단계 더 나아가 `enum`, `required`, 실행용 sample YAML 자동 생성을 지원하도록 확장한다.
-- `EchoServer`, `EchoClient`가 더 이상 수동 문자열 파싱과 수동 YAML 유지보수에 의존하지 않도록 한다.
+## 1. 紐⑹쟻
+- `ConfigGenerator`媛 臾몄옄??湲곕컲 ?ㅼ젙留??앹꽦?섎뒗 ?곹깭?먯꽌 ???④퀎 ???섏븘媛 `enum`, `required`, ?ㅽ뻾??sample YAML ?먮룞 ?앹꽦??吏?먰븯?꾨줉 ?뺤옣?쒕떎.
+- `EchoServer`, `EchoClient`媛 ???댁긽 ?섎룞 臾몄옄???뚯떛怨??섎룞 YAML ?좎?蹂댁닔???섏〈?섏? ?딅룄濡??쒕떎.
 
-## 2. 목표
-- schema에서 `enum`을 선언하면 generated C++ enum과 enum reader 코드를 함께 생성한다.
-- schema에서 `required: true`를 선언하면 generated loader가 `ReadRequired*` 경로를 사용한다.
-- schema를 기준으로 실행용 sample YAML도 자동 생성한다.
-- 기본 sample YAML을 그대로 실행해도 기존 `--config` 없는 기본 실행 흐름이 유지되어야 한다.
+## 2. 紐⑺몴
+- schema?먯꽌 `enum`???좎뼵?섎㈃ generated C++ enum怨?enum reader 肄붾뱶瑜??④퍡 ?앹꽦?쒕떎.
+- schema?먯꽌 `required: true`瑜??좎뼵?섎㈃ generated loader媛 `ReadRequired*` 寃쎈줈瑜??ъ슜?쒕떎.
+- schema瑜?湲곗??쇰줈 ?ㅽ뻾??sample YAML???먮룞 ?앹꽦?쒕떎.
+- 湲곕낯 sample YAML??洹몃?濡??ㅽ뻾?대룄 湲곗〈 `--config` ?녿뒗 湲곕낯 ?ㅽ뻾 ?먮쫫???좎??섏뼱???쒕떎.
 
-## 3. 범위
+## 3. 踰붿쐞
 - `Tools/ConfigGenerator`
 - `Foundation/Config`
-- `Generated/Config/**`
+- `Generated/Cpp/Config/**`
 - `Config/**`
-- `EchoServer`의 수동 문자열 파싱 제거 범위
+- `EchoServer`???섎룞 臾몄옄???뚯떛 ?쒓굅 踰붿쐞
 
-## 4. 스키마 확장 규칙
+## 4. ?ㅽ궎留??뺤옣 洹쒖튃
 ```yaml
 EchoServer:
   Backend:
@@ -35,47 +35,46 @@ Debug:
     default: false
 ```
 
-### 규칙
-- `enum` 필드는 `type: enum`과 `values`를 함께 가진다.
-- `default`는 `values` 안의 값과 일치해야 한다.
-- `required: true`는 generated loader에서 필수 키로 처리한다.
-- `required + default` 조합은 기본 sample YAML 실행 흐름을 유지하면서도 “키가 반드시 존재해야 한다”는 정책을 함께 표현한다.
-- `required + default 없음`은 사람이 값을 채워야 하는 배포/운영 전용 항목에 사용한다.
+### 洹쒖튃
+- `enum` ?꾨뱶??`type: enum`怨?`values`瑜??④퍡 媛吏꾨떎.
+- `default`??`values` ?덉쓽 媛믨낵 ?쇱튂?댁빞 ?쒕떎.
+- `required: true`??generated loader?먯꽌 ?꾩닔 ?ㅻ줈 泥섎━?쒕떎.
+- `required + default` 議고빀? 湲곕낯 sample YAML ?ㅽ뻾 ?먮쫫???좎??섎㈃?쒕룄 ?쒗궎媛 諛섎뱶??議댁옱?댁빞 ?쒕떎?앸뒗 ?뺤콉???④퍡 ?쒗쁽?쒕떎.
+- `required + default ?놁쓬`? ?щ엺??媛믪쓣 梨꾩썙???섎뒗 諛고룷/?댁쁺 ?꾩슜 ??ぉ???ъ슜?쒕떎.
 
-## 5. 생성 규칙
-- 파일명에서 target을 추론한다.
+## 5. ?앹꽦 洹쒖튃
+- ?뚯씪紐낆뿉??target??異붾줎?쒕떎.
   - `EchoServer.schema.yaml` -> `EchoServer`
-- generated header는 다음을 포함한다.
+- generated header???ㅼ쓬???ы븿?쒕떎.
   - section struct
   - root document
-  - enum field에 대응되는 generated enum
-- generated cpp는 다음을 포함한다.
-  - enum string-to-value 테이블
-  - `ReadOptional*`, `ReadRequired*` 호출 코드
-- 실행용 sample YAML은 schema 기본값을 그대로 반영한다.
+  - enum field????묐릺??generated enum
+- generated cpp???ㅼ쓬???ы븿?쒕떎.
+  - enum string-to-value ?뚯씠釉?  - `ReadOptional*`, `ReadRequired*` ?몄텧 肄붾뱶
+- ?ㅽ뻾??sample YAML? schema 湲곕낯媛믪쓣 洹몃?濡?諛섏쁺?쒕떎.
 
-## 6. 런타임 규칙
-- `Foundation/Config::FConfigValueReader`는 enum 읽기 API를 제공한다.
-- generated loader는 schema 메타데이터에 따라 자동으로 적절한 reader를 호출한다.
-- 상위 프로젝트는 generated enum을 런타임 enum으로 변환만 담당한다.
+## 6. ?고???洹쒖튃
+- `Foundation/Config::FConfigValueReader`??enum ?쎄린 API瑜??쒓났?쒕떎.
+- generated loader??schema 硫뷀??곗씠?곗뿉 ?곕씪 ?먮룞?쇰줈 ?곸젅??reader瑜??몄텧?쒕떎.
+- ?곸쐞 ?꾨줈?앺듃??generated enum???고???enum?쇰줈 蹂?섎쭔 ?대떦?쒕떎.
 
-## 7. 적용 방향
+## 7. ?곸슜 諛⑺뼢
 - `EchoServer`
-  - `Backend`, `LogMinimumLevel`, race injection mode를 schema enum으로 승격한다.
-  - `Main.cpp`의 수동 string parser를 generated enum 변환으로 대체한다.
-  - `BindIp`, `Port`는 `required + default`로 관리한다.
+  - `Backend`, `LogMinimumLevel`, race injection mode瑜?schema enum?쇰줈 ?밴꺽?쒕떎.
+  - `Main.cpp`???섎룞 string parser瑜?generated enum 蹂?섏쑝濡??泥댄븳??
+  - `BindIp`, `Port`??`required + default`濡?愿由ы븳??
 - `EchoClient`
-  - 현재 enum 후보는 적지만 sample YAML 자동 생성과 required 지원 체계는 동일하게 적용한다.
-  - `ServerIp`, `Port`는 `required + default`로 관리한다.
+  - ?꾩옱 enum ?꾨낫???곸?留?sample YAML ?먮룞 ?앹꽦怨?required 吏??泥닿퀎???숈씪?섍쾶 ?곸슜?쒕떎.
+  - `ServerIp`, `Port`??`required + default`濡?愿由ы븳??
 
-## 8. 검증 기준
-- `Generate-Configs.ps1`가 enum/required/sample YAML을 모두 정상 생성해야 한다.
-- generated config 코드가 빌드돼야 한다.
-- `EchoServer`, `EchoClient` 기본 YAML 자동 로딩 스모크가 성공해야 한다.
-- schema의 enum default가 잘못되면 generator가 명확히 실패해야 한다.
-- required 필드가 빠진 YAML은 generated loader에서 명확히 실패해야 한다.
+## 8. 寃利?湲곗?
+- `Generate-Configs.ps1`媛 enum/required/sample YAML??紐⑤몢 ?뺤긽 ?앹꽦?댁빞 ?쒕떎.
+- generated config 肄붾뱶媛 鍮뚮뱶?쇱빞 ?쒕떎.
+- `EchoServer`, `EchoClient` 湲곕낯 YAML ?먮룞 濡쒕뵫 ?ㅻえ?ш? ?깃났?댁빞 ?쒕떎.
+- schema??enum default媛 ?섎せ?섎㈃ generator媛 紐낇솗???ㅽ뙣?댁빞 ?쒕떎.
+- required ?꾨뱶媛 鍮좎쭊 YAML? generated loader?먯꽌 紐낇솗???ㅽ뙣?댁빞 ?쒕떎.
 
-## 9. 현재 결론
-- `enum`, `required`, sample YAML 자동 생성은 Config 체계를 “실행 가능한 설정 시스템”으로 올리는 데 필요한 후속 작업이다.
-- 이 범위가 끝나면 config 스키마는 구조 정의와 실행 템플릿의 단일 기준점이 된다.
-- 현재 기본 endpoint 값은 `required + default`로 채택되어 더블클릭 실행과 필수 키 정책을 동시에 만족한다.
+## 9. ?꾩옱 寃곕줎
+- `enum`, `required`, sample YAML ?먮룞 ?앹꽦? Config 泥닿퀎瑜??쒖떎??媛?ν븳 ?ㅼ젙 ?쒖뒪?쒋앹쑝濡??щ━?????꾩슂???꾩냽 ?묒뾽?대떎.
+- ??踰붿쐞媛 ?앸굹硫?config ?ㅽ궎留덈뒗 援ъ“ ?뺤쓽? ?ㅽ뻾 ?쒗뵆由우쓽 ?⑥씪 湲곗??먯씠 ?쒕떎.
+- ?꾩옱 湲곕낯 endpoint 媛믪? `required + default`濡?梨꾪깮?섏뼱 ?붾툝?대┃ ?ㅽ뻾怨??꾩닔 ???뺤콉???숈떆??留뚯”?쒕떎.

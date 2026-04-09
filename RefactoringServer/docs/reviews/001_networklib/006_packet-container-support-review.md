@@ -1,4 +1,4 @@
-﻿# Packet Container Support Review
+# Packet Container Support Review
 
 ## 1. 紐⑹쟻
 - `PacketGenerator`媛 C++ 而⑦뀒?대꼫 ??낆쓣 ?ㅼ젣 ?ㅽ궎留덉뿉???앹꽦?섍퀬, ?고???`Serialize/Deserialize`源뚯? ?뺤긽 ?숈옉?섎뒗吏 ?뺤씤?쒕떎.
@@ -6,11 +6,11 @@
 ## 2. 寃利????- ?ㅽ궎留?
   - [Chat.yaml](D:\Project\ServerPortfolio\RefactoringServer\Packet\Chat\Chat.yaml)
 - generated packet:
-  - [ChatPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Chat\ChatPackets.h)
+  - [ChatPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Chat\ChatPackets.h)
 - generated handler:
-  - [ChatPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Chat\ChatPacketHandler.h)
+  - [ChatPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Chat\ChatPacketHandler.h)
 - 怨듯넻 ?쇱슦??
-  - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\PacketRouter.h)
+  - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\PacketRouter.h)
 - ?고????뚯뒪??
   - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)
 

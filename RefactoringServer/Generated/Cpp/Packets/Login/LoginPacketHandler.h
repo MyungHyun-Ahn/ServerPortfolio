@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Generated/Packets/Login/LoginPackets.h"
+#include "Generated/Cpp/Packets/Login/LoginPackets.h"
 #include "Packet/Serialization/FPacketSerialization.h"
 #include "Packet/View/FPacketView.h"
 #include "Servers/IServer.h"

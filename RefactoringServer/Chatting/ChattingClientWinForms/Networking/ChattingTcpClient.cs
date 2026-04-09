@@ -1,105 +1,83 @@
-using System.Net.Sockets;
 using System.Text;
 using ChattingClientWinForms.Models;
+using ClientNetworkLib.CSharp;
+using Generated.Packets;
+using Generated.Packets.Chatting;
+using Generated.Packets.Login;
 
 namespace ChattingClientWinForms.Networking;
 
 internal sealed class ChattingTcpClient : IAsyncDisposable
 {
-    private readonly SemaphoreSlim m_lifecycleLock = new(1, 1);
-    private readonly SemaphoreSlim m_sendLock = new(1, 1);
-    private readonly List<byte> m_receiveBuffer = [];
+    private readonly ContentTcpClient m_client = new(new GeneratedPacketRegistry());
 
-    private TcpClient? m_tcpClient;
-    private NetworkStream? m_stream;
-    private CancellationTokenSource? m_receiveCancellation;
-    private Task? m_receiveTask;
-    private byte m_packetKey;
-    private int m_disconnectNotified;
-    private bool m_disposed;
-
-    public event Action<string>? SystemMessageReceived;
-    public event Action<bool>? ConnectionStateChanged;
-    public event Action<LoginResult>? LoginResultReceived;
-    public event Action<IReadOnlyList<ChatRoomInfo>>? RoomListReceived;
-    public event Action<RoomChangeResult>? RoomChangeResultReceived;
-    public event Action<ChattingResult>? ChattingResultReceived;
-    public event Action<BroadcastMessage>? BroadcastReceived;
-
-    public bool IsConnected => m_stream is not null && m_tcpClient is not null;
-
-    public async Task ConnectAsync(ClientConnectionSettings settings, CancellationToken cancellationToken = default)
+    public ChattingTcpClient()
     {
-        ThrowIfDisposed();
-
-        await m_lifecycleLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            await DisconnectCoreAsync("Disconnected.", notifyDisconnection: false, awaitReceiveTask: false).ConfigureAwait(false);
-
-            TcpClient tcpClient = new();
-            tcpClient.NoDelay = true;
-            try
-            {
-                await tcpClient.ConnectAsync(settings.Host, settings.Port, cancellationToken).ConfigureAwait(false);
-            }
-            catch
-            {
-                tcpClient.Dispose();
-                throw;
-            }
-
-            m_packetKey = settings.PacketKey;
-            m_tcpClient = tcpClient;
-            m_stream = tcpClient.GetStream();
-            m_receiveBuffer.Clear();
-            Interlocked.Exchange(ref m_disconnectNotified, 0);
-
-            m_receiveCancellation = new CancellationTokenSource();
-            m_receiveTask = Task.Run(() => ReceiveLoopAsync(m_stream, m_receiveCancellation.Token), CancellationToken.None);
-        }
-        finally
-        {
-            m_lifecycleLock.Release();
-        }
-
-        EmitSystemMessage($"Connected to {settings.Host}:{settings.Port}.");
-        ConnectionStateChanged?.Invoke(true);
+        m_client.SystemMessageReceived += message => SystemMessageReceived?.Invoke(message);
+        m_client.ConnectionStateChanged += connected => ConnectionStateChanged?.Invoke(connected);
+        m_client.PacketReceived += HandlePacketReceived;
     }
 
-    public async Task DisconnectAsync(string reason = "Disconnected.")
-    {
-        ThrowIfDisposed();
+    public event Action<string>? SystemMessageReceived;
 
-        await m_lifecycleLock.WaitAsync().ConfigureAwait(false);
-        try
+    public event Action<bool>? ConnectionStateChanged;
+
+    public event Action<LoginResult>? LoginResultReceived;
+
+    public event Action<IReadOnlyList<ChatRoomInfo>>? RoomListReceived;
+
+    public event Action<RoomChangeResult>? RoomChangeResultReceived;
+
+    public event Action<ChattingResult>? ChattingResultReceived;
+
+    public event Action<BroadcastMessage>? BroadcastReceived;
+
+    public bool IsConnected => m_client.IsConnected;
+
+    public Task ConnectAsync(ClientConnectionSettings settings, CancellationToken cancellationToken = default)
+    {
+        if (settings == null)
         {
-            await DisconnectCoreAsync(reason, notifyDisconnection: true, awaitReceiveTask: false).ConfigureAwait(false);
+            throw new ArgumentNullException(nameof(settings));
         }
-        finally
-        {
-            m_lifecycleLock.Release();
-        }
+
+        return m_client.ConnectAsync(
+            new ClientConnectionOptions(settings.Host, settings.Port, settings.PacketKey),
+            cancellationToken);
+    }
+
+    public Task DisconnectAsync(string reason = "Disconnected.")
+    {
+        return m_client.DisconnectAsync(reason);
     }
 
     public Task SendLoginAsync(uint userId, CancellationToken cancellationToken = default)
     {
-        return SendPacketAsync(ChattingPacketCodec.CreateLoginRequestPacket(userId, m_packetKey), cancellationToken);
+        return m_client.SendPacketAsync(new LoginRqPacket
+        {
+            UserId = userId
+        }, cancellationToken);
     }
 
     public Task SendLoginAuthAsync(string ticket, CancellationToken cancellationToken = default)
     {
-        return SendPacketAsync(ChattingPacketCodec.CreateLoginAuthRequestPacket(ticket, m_packetKey), cancellationToken);
+        return m_client.SendPacketAsync(new LoginAuthRqPacket
+        {
+            Ticket = ticket ?? string.Empty
+        }, cancellationToken);
     }
 
     public Task SendRoomListAsync(CancellationToken cancellationToken = default)
     {
-        return SendPacketAsync(ChattingPacketCodec.CreateRoomListRequestPacket(m_packetKey), cancellationToken);
+        return m_client.SendPacketAsync(new RoomListRqPacket(), cancellationToken);
     }
 
     public Task SendRoomChangeAsync(uint targetRoomId, CancellationToken cancellationToken = default)
     {
-        return SendPacketAsync(ChattingPacketCodec.CreateRoomChangeRequestPacket(targetRoomId, m_packetKey), cancellationToken);
+        return m_client.SendPacketAsync(new RoomChangeRqPacket
+        {
+            TargetRoomId = targetRoomId
+        }, cancellationToken);
     }
 
     public Task SendChattingAsync(
@@ -109,331 +87,102 @@ internal sealed class ChattingTcpClient : IAsyncDisposable
         string text,
         CancellationToken cancellationToken = default)
     {
-        byte[] payload = Encoding.UTF8.GetBytes(text);
-        return SendPacketAsync(
-            ChattingPacketCodec.CreateChattingRequestPacket(
-                roomId,
-                clientMessageId,
-                sentTick,
-                payload,
-                m_packetKey),
-            cancellationToken);
+        return m_client.SendPacketAsync(new ChattingRqPacket
+        {
+            RoomId = roomId,
+            ClientMessageId = clientMessageId,
+            SentTick = sentTick,
+            Payload = Encoding.UTF8.GetBytes(text ?? string.Empty)
+        }, cancellationToken);
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (m_disposed)
+        await m_client.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private void HandlePacketReceived(PacketReceivedEventArgs eventArgs)
+    {
+        switch (eventArgs.Packet)
         {
+        case LoginRpPacket loginPacket:
+            LoginResultReceived?.Invoke(new LoginResult(loginPacket.UserId, loginPacket.Success));
             return;
-        }
-
-        m_disposed = true;
-        try
-        {
-            await DisconnectAsync("Client closed.").ConfigureAwait(false);
-        }
-        catch
-        {
-        }
-
-        m_sendLock.Dispose();
-        m_lifecycleLock.Dispose();
-    }
-
-    private async Task SendPacketAsync(byte[] packet, CancellationToken cancellationToken)
-    {
-        ThrowIfDisposed();
-
-        await m_sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            NetworkStream? stream = m_stream;
-            if (stream is null)
-            {
-                throw new InvalidOperationException("Not connected.");
-            }
-
-            await stream.WriteAsync(packet, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException or SocketException)
-        {
-            EmitSystemMessage($"Send failed: {exception.Message}");
-            throw;
-        }
-        finally
-        {
-            m_sendLock.Release();
-        }
-    }
-
-    private async Task ReceiveLoopAsync(NetworkStream stream, CancellationToken cancellationToken)
-    {
-        string disconnectReason = "Connection closed by server.";
-
-        try
-        {
-            byte[] readBuffer = new byte[4096];
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                int receivedBytes = await stream.ReadAsync(readBuffer, cancellationToken).ConfigureAwait(false);
-                if (receivedBytes == 0)
-                {
-                    break;
-                }
-
-                AppendReceivedBytes(readBuffer.AsSpan(0, receivedBytes));
-                while (true)
-                {
-                    if (!ChattingPacketCodec.TryExtractPacket(
-                            m_receiveBuffer,
-                            m_packetKey,
-                            out DecodedPacket? decodedPacket,
-                            out string? errorMessage))
-                    {
-                        if (!string.IsNullOrEmpty(errorMessage))
-                        {
-                            throw new InvalidOperationException(errorMessage);
-                        }
-
-                        break;
-                    }
-
-                    if (decodedPacket is not null)
-                    {
-                        DispatchPacket(decodedPacket);
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            disconnectReason = "Disconnected.";
-        }
-        catch (Exception exception)
-        {
-            disconnectReason = $"Connection lost: {exception.Message}";
-            EmitSystemMessage(disconnectReason);
-        }
-        finally
-        {
-            await CompleteReceiveLoopAsync(stream, disconnectReason).ConfigureAwait(false);
-        }
-    }
-
-    private void DispatchPacket(DecodedPacket decodedPacket)
-    {
-        switch (decodedPacket.Opcode)
-        {
-        case ChattingPacketCodec.LoginRpOpcode:
-        case ChattingPacketCodec.LoginAuthRpOpcode:
-            if (ChattingPacketCodec.TryReadLoginResult(decodedPacket, out LoginResult loginResult))
-            {
-                LoginResultReceived?.Invoke(loginResult);
-            }
-            else
-            {
-                EmitSystemMessage("Failed to parse LoginRp.");
-            }
-
+        case LoginAuthRpPacket loginAuthPacket:
+            LoginResultReceived?.Invoke(new LoginResult(loginAuthPacket.UserId, loginAuthPacket.Success));
             return;
-        case ChattingPacketCodec.RoomListRpOpcode:
-            if (ChattingPacketCodec.TryReadRoomListResult(decodedPacket, out IReadOnlyList<ChatRoomInfo> rooms))
+        case RoomListRpPacket roomListPacket:
+            if (TryCreateRoomList(roomListPacket, out IReadOnlyList<ChatRoomInfo>? rooms))
             {
                 RoomListReceived?.Invoke(rooms);
             }
             else
             {
-                EmitSystemMessage("Failed to parse RoomListRp.");
+                EmitSystemMessage("Failed to map RoomListRp packet to UI model.");
             }
 
             return;
-        case ChattingPacketCodec.RoomChangeRpOpcode:
-            if (ChattingPacketCodec.TryReadRoomChangeResult(decodedPacket, out RoomChangeResult roomChangeResult))
-            {
-                RoomChangeResultReceived?.Invoke(roomChangeResult);
-            }
-            else
-            {
-                EmitSystemMessage("Failed to parse RoomChangeRp.");
-            }
-
+        case RoomChangeRpPacket roomChangePacket:
+            RoomChangeResultReceived?.Invoke(new RoomChangeResult(
+                roomChangePacket.PreviousRoomId,
+                roomChangePacket.CurrentRoomId,
+                roomChangePacket.Success,
+                MapRoomFlowResultCode(roomChangePacket.ResultCode)));
             return;
-        case ChattingPacketCodec.ChattingRpOpcode:
-            if (ChattingPacketCodec.TryReadChattingResult(decodedPacket, out ChattingResult chattingResult))
-            {
-                ChattingResultReceived?.Invoke(chattingResult);
-            }
-            else
-            {
-                EmitSystemMessage("Failed to parse ChattingRp.");
-            }
-
+        case ChattingRpPacket chattingPacket:
+            ChattingResultReceived?.Invoke(new ChattingResult(chattingPacket.Success));
             return;
-        case ChattingPacketCodec.BroadcastOpcode:
-            if (ChattingPacketCodec.TryReadBroadcast(decodedPacket, out BroadcastMessage broadcastMessage))
-            {
-                BroadcastReceived?.Invoke(broadcastMessage);
-            }
-            else
-            {
-                EmitSystemMessage("Failed to parse Broadcast.");
-            }
-
+        case BroadcastBroadcastPacket broadcastPacket:
+            BroadcastReceived?.Invoke(new BroadcastMessage(
+                broadcastPacket.RoomId,
+                broadcastPacket.SenderUserId,
+                broadcastPacket.MessageId,
+                broadcastPacket.SentTick,
+                broadcastPacket.Payload));
             return;
         default:
-            EmitSystemMessage($"Unhandled opcode received: {decodedPacket.Opcode}");
+            EmitSystemMessage($"Unhandled opcode received: {eventArgs.Opcode}");
             return;
         }
     }
 
-    private async Task CompleteReceiveLoopAsync(NetworkStream stream, string disconnectReason)
+    private bool TryCreateRoomList(RoomListRpPacket packet, out IReadOnlyList<ChatRoomInfo> rooms)
     {
-        await m_lifecycleLock.WaitAsync().ConfigureAwait(false);
-        try
+        rooms = Array.Empty<ChatRoomInfo>();
+
+        int roomCount = packet.RoomIds.Count;
+        if (roomCount != packet.RoomNames.Count ||
+            roomCount != packet.ParticipantCounts.Count ||
+            roomCount != packet.Capacities.Count ||
+            roomCount != packet.JoinableFlags.Count)
         {
-            if (!ReferenceEquals(m_stream, stream))
-            {
-                return;
-            }
-
-            CancellationTokenSource? receiveCancellation = m_receiveCancellation;
-            TcpClient? tcpClient = m_tcpClient;
-
-            m_receiveCancellation = null;
-            m_receiveTask = null;
-            m_stream = null;
-            m_tcpClient = null;
-            m_receiveBuffer.Clear();
-
-            try
-            {
-                receiveCancellation?.Dispose();
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                stream.Dispose();
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                tcpClient?.Dispose();
-            }
-            catch
-            {
-            }
-        }
-        finally
-        {
-            m_lifecycleLock.Release();
+            return false;
         }
 
-        NotifyDisconnected(disconnectReason);
+        List<ChatRoomInfo> parsedRooms = new List<ChatRoomInfo>(roomCount);
+        for (int index = 0; index < roomCount; ++index)
+        {
+            parsedRooms.Add(new ChatRoomInfo(
+                packet.RoomIds[index],
+                packet.RoomNames[index],
+                packet.ParticipantCounts[index],
+                packet.Capacities[index],
+                packet.JoinableFlags[index] != 0));
+        }
+
+        rooms = parsedRooms;
+        return true;
     }
 
-    private async Task DisconnectCoreAsync(
-        string reason,
-        bool notifyDisconnection,
-        bool awaitReceiveTask)
+    private static RoomFlowResultCode MapRoomFlowResultCode(ushort resultCode)
     {
-        CancellationTokenSource? receiveCancellation = m_receiveCancellation;
-        Task? receiveTask = m_receiveTask;
-        NetworkStream? stream = m_stream;
-        TcpClient? tcpClient = m_tcpClient;
-
-        m_receiveCancellation = null;
-        m_receiveTask = null;
-        m_stream = null;
-        m_tcpClient = null;
-        m_receiveBuffer.Clear();
-
-        try
-        {
-            receiveCancellation?.Cancel();
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            stream?.Dispose();
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            tcpClient?.Dispose();
-        }
-        catch
-        {
-        }
-
-        if (awaitReceiveTask && receiveTask is not null)
-        {
-            try
-            {
-                await receiveTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-            catch (IOException)
-            {
-            }
-        }
-
-        try
-        {
-            receiveCancellation?.Dispose();
-        }
-        catch
-        {
-        }
-
-        if (notifyDisconnection)
-        {
-            NotifyDisconnected(reason);
-        }
-    }
-
-    private void AppendReceivedBytes(ReadOnlySpan<byte> bytes)
-    {
-        for (int index = 0; index < bytes.Length; ++index)
-        {
-            m_receiveBuffer.Add(bytes[index]);
-        }
-    }
-
-    private void NotifyDisconnected(string reason)
-    {
-        if (Interlocked.Exchange(ref m_disconnectNotified, 1) != 0)
-        {
-            return;
-        }
-
-        EmitSystemMessage(reason);
-        ConnectionStateChanged?.Invoke(false);
+        return Enum.IsDefined(typeof(RoomFlowResultCode), resultCode)
+            ? (RoomFlowResultCode)resultCode
+            : RoomFlowResultCode.InternalError;
     }
 
     private void EmitSystemMessage(string message)
     {
         SystemMessageReceived?.Invoke(message);
-    }
-
-    private void ThrowIfDisposed()
-    {
-        ObjectDisposedException.ThrowIf(m_disposed, this);
     }
 }

@@ -1,4 +1,4 @@
-﻿# Packet CodeGen And Routing Review
+# Packet CodeGen And Routing Review
 
 ## 1. 臾몄꽌 紐⑹쟻
 - ?꾩옱 `PacketGenerator`, `ContentHeader`, generated packet/handler, ?곸쐞 packet router 援ъ“瑜???臾몄꽌?먯꽌 ?뚯븙?????덇쾶 ?뺣━?쒕떎.
@@ -21,11 +21,11 @@
 
 ### 2-3. ?앹꽦 寃곌낵
 - generated packet:
-  - [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Echo\EchoPackets.h)
+  - [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Echo\EchoPackets.h)
 - 肄섑뀗痢좊퀎 generated handler:
-  - [EchoPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Echo\EchoPacketHandler.h)
+  - [EchoPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Echo\EchoPacketHandler.h)
 - ?곸쐞 generated router:
-  - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\PacketRouter.h)
+  - [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\PacketRouter.h)
 
 ### 2-4. ?고???怨듯넻 湲곕컲
 - 怨듯넻 ?⑦궥 ?명꽣?섏씠??
@@ -51,7 +51,7 @@
   - `Serialize(FPacketWriter&)`
   - `Deserialize(FPacketReader&)`
 - payload 硫ㅻ쾭??媛??⑦궥 ?대옒?ㅼ뿉留??붾떎.
-  - ?? [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Echo\EchoPackets.h)??`message`
+  - ?? [EchoPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Echo\EchoPackets.h)??`message`
 
 ### 3-3. `WriteValue` / `ReadValue` free function ???writer/reader 硫ㅻ쾭瑜??대떎
 - ?앹꽦 肄붾뱶媛 `writer.Write(...)`, `reader.Read(...)`瑜?吏곸젒 ?몄텧?쒕떎.
@@ -68,7 +68,7 @@
 
 ### 3-5. 媛숈? 移댄뀒怨좊━??泥섎━湲?1媛? ?곸쐞 ?좏깮? router媛 留〓뒗??- `Chat` 媛숈? 肄섑뀗痢?移댄뀒怨좊━ ?꾨옒 硫붿떆吏媛 ?щ윭 媛??덉뼱??泥섎━湲?base??1媛쒕떎.
   - ?? `FChatPacketHandlerBase`
-- ????곸쐞 [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\PacketRouter.h)媛 `opcode -> content handler` ?좏깮??留〓뒗??
+- ????곸쐞 [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\PacketRouter.h)媛 `opcode -> content handler` ?좏깮??留〓뒗??
 - ??援ъ“媛 ?쒕え???⑦궥???꾩뿭 泥섎━湲?1媛쒖뿉 紐곗븘?ｋ뒗 諛⑹떇?앸낫???뺤옣?깆씠 醫뗫떎.
 
 ## 4. ?꾩옱 Echo ?곸슜 諛⑹떇
@@ -78,8 +78,8 @@
   1. `FIocpServer`媛 transport payload瑜?蹂듯샇??寃利앺븳??
   2. [FPacketSerialization.h](D:\Project\ServerPortfolio\RefactoringServer\Libraries\NetworkLib\Packet\FPacketSerialization.h)?먯꽌 `ContentHeader`瑜??뚯떛?쒕떎.
   3. `packetView.opcode`瑜??삳뒗??
-  4. [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\PacketRouter.h)媛 `Echo` handler濡??섍릿??
-  5. [EchoPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Echo\EchoPacketHandler.h)媛 援ъ껜 ?⑦궥 媛앹껜瑜?留뚮뱾怨?`Deserialize` ??`HandleEchoRq` ?깆쓣 ?몄텧?쒕떎.
+  4. [PacketRouter.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\PacketRouter.h)媛 `Echo` handler濡??섍릿??
+  5. [EchoPacketHandler.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Echo\EchoPacketHandler.h)媛 援ъ껜 ?⑦궥 媛앹껜瑜?留뚮뱾怨?`Deserialize` ??`HandleEchoRq` ?깆쓣 ?몄텧?쒕떎.
 
 ## 5. ?섎룞 ?앹꽦 ?뺤콉
 - ?꾩옱 ?뺤콉? ?쒖뒪?ㅻ쭏媛 諛붾??뚮쭔 ?섎룞 ?앹꽦?앹씠??

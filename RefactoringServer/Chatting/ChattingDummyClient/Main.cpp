@@ -4,9 +4,9 @@
 #include "Foundation/Diagnostics/Rtt/FRttCsvLogger.h"
 #include "Foundation/Diagnostics/Rtt/FRttMetricsRuntime.h"
 #include "Foundation/Diagnostics/Rtt/FRttThreadLocalCollector.h"
-#include "Generated/Config/ChattingDummy/ChattingDummyConfig.h"
-#include "Generated/Packets/Chatting/ChattingPackets.h"
-#include "Generated/Packets/Login/LoginPackets.h"
+#include "Generated/Cpp/Config/ChattingDummy/ChattingDummyConfig.h"
+#include "Generated/Cpp/Packets/Chatting/ChattingPackets.h"
+#include "Generated/Cpp/Packets/Login/LoginPackets.h"
 #include "NetworkLib/Packet/Buffer/FPacketBuffer.h"
 
 #include <limits>

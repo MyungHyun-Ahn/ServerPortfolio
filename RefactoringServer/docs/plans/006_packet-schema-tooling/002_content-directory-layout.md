@@ -18,7 +18,7 @@
 
 ### 2.3 Generated Packet Root
 - Generated packet output will live under:
-  - `RefactoringServer/Generated/Packets`
+  - `RefactoringServer/Generated/Cpp/Packets`
 - Output is grouped by content name.
 
 ## 3. Example Layout

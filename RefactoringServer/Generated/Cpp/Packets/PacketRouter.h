@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Generated/Packets/Chat/ChatPacketHandler.h"
-#include "Generated/Packets/Chatting/ChattingPacketHandler.h"
-#include "Generated/Packets/Echo/EchoPacketHandler.h"
-#include "Generated/Packets/Login/LoginPacketHandler.h"
+#include "Generated/Cpp/Packets/Chat/ChatPacketHandler.h"
+#include "Generated/Cpp/Packets/Chatting/ChattingPacketHandler.h"
+#include "Generated/Cpp/Packets/Echo/EchoPacketHandler.h"
+#include "Generated/Cpp/Packets/Login/LoginPacketHandler.h"
 #include "Packet/View/FPacketView.h"
 #include "Servers/IServer.h"
 

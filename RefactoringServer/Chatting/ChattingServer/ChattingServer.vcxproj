@@ -94,7 +94,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="..\..\Generated\Config\ChattingServer\ChattingServerConfig.cpp" />
+    <ClCompile Include="..\..\Generated\Cpp\Config\ChattingServer\ChattingServerConfig.cpp" />
     <ClCompile Include="Contents\Auth\FAuthContent.cpp" />
     <ClCompile Include="Contents\Room\FChatRoomContent.cpp" />
     <ClCompile Include="Contents\Lobby\FLobbyContent.cpp" />
@@ -103,7 +103,7 @@
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Generated\Config\ChattingServer\ChattingServerConfig.h" />
+    <ClInclude Include="..\..\Generated\Cpp\Config\ChattingServer\ChattingServerConfig.h" />
     <ClInclude Include="Contents\Auth\FAuthContent.h" />
     <ClInclude Include="Contents\ContentTypes.h" />
     <ClInclude Include="Contents\Room\FChatRoomContent.h" />

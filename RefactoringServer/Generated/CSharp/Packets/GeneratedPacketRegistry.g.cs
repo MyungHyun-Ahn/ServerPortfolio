@@ -47,6 +47,10 @@ namespace Generated.Packets
 				return new Login.LoginRqPacket();
 			case Login.LoginPacketOpcodes.LoginRp:
 				return new Login.LoginRpPacket();
+			case Login.LoginPacketOpcodes.LoginAuthRq:
+				return new Login.LoginAuthRqPacket();
+			case Login.LoginPacketOpcodes.LoginAuthRp:
+				return new Login.LoginAuthRpPacket();
 			default:
 				return null;
 			}

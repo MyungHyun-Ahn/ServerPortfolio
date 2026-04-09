@@ -1,4 +1,4 @@
-﻿# Packet Container Support Policy
+# Packet Container Support Policy
 
 ## 1. ?꾩옱 ?뺤콉
 - `PacketGenerator`??怨듭떇 吏??踰붿쐞??而⑦뀒?대꼫 1?④퀎源뚯???
@@ -34,7 +34,7 @@
 
 ## 6. ?꾩옱 寃利?洹쇨굅
 - [Chat.yaml](D:\Project\ServerPortfolio\RefactoringServer\Packet\Chat\Chat.yaml)
-- [ChatPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Packets\Chat\ChatPackets.h)
+- [ChatPackets.h](D:\Project\ServerPortfolio\RefactoringServer\Generated\Cpp\Packets\Chat\ChatPackets.h)
 - [Main.cpp](D:\Project\ServerPortfolio\RefactoringServer\SmokeTests\LockFreeTests\Main.cpp)
 - [packet-container-support-review.md](D:\Project\ServerPortfolio\RefactoringServer\docs\reviews\001_networklib\006_packet-container-support-review.md)
 
